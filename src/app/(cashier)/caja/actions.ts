@@ -1,0 +1,403 @@
+"use server";
+
+import { CashMovementType, CashSessionStatus, PaymentMethod, Prisma, Role } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import { calculateCashSessionSummary } from "@/lib/cash-session";
+import { parseLocalizedDecimal } from "@/lib/money";
+import { prisma } from "@/lib/prisma";
+import { confirmSale, type ConfirmSaleInput } from "@/lib/sale-engine";
+
+export type CashProductResult = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  sku: string | null;
+  salePrice: string;
+  stock: string;
+  unitType: string;
+  allowsDecimalQuantity: boolean;
+  categoryName: string;
+  quickAccess: boolean;
+};
+
+export type ProductSearchResult = {
+  products: CashProductResult[];
+  exactProductId: string | null;
+};
+
+export type RegisterPaymentInput = {
+  method: string;
+  amount: string;
+  receivedAmount?: string;
+  installments?: number;
+};
+
+export type RegisterSaleInput = {
+  items: Array<{
+    productId: string;
+    quantity: string;
+  }>;
+  payments: RegisterPaymentInput[];
+};
+
+export type RegisterSaleResult = {
+  ok: boolean;
+  error?: string;
+  saleId?: string;
+  saleNumber?: number;
+  suggestedProducts?: CashProductResult[];
+};
+
+export type CashSessionFormState = {
+  error?: string;
+  success?: string;
+};
+
+export async function getSuggestedCashProductsAction() {
+  await requireCashierUser();
+
+  const products = await prisma.product.findMany({
+    where: {
+      active: true,
+      deletedAt: null,
+      stock: { gt: 0 }
+    },
+    include: {
+      category: {
+        select: { name: true }
+      }
+    },
+    orderBy: [{ quickAccess: "desc" }, { updatedAt: "desc" }],
+    take: 12
+  });
+
+  return products.map(mapCashProduct);
+}
+
+export async function searchCashProductsAction(query: string): Promise<ProductSearchResult> {
+  await requireCashierUser();
+
+  const search = query.trim();
+  if (!search) {
+    return { products: [], exactProductId: null };
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      active: true,
+      deletedAt: null,
+      stock: { gt: 0 },
+      OR: [
+        { name: { contains: search } },
+        { barcode: { contains: search } },
+        { sku: { contains: search } },
+        { brand: { contains: search } },
+        { category: { name: { contains: search } } }
+      ]
+    },
+    include: {
+      category: {
+        select: { name: true }
+      }
+    },
+    orderBy: [{ quickAccess: "desc" }, { name: "asc" }],
+    take: 16
+  });
+
+  const normalizedSearch = search.toLowerCase();
+  const exactProduct = products.find(
+    (product) =>
+      product.barcode?.toLowerCase() === normalizedSearch ||
+      product.sku?.toLowerCase() === normalizedSearch
+  );
+
+  return {
+    exactProductId: exactProduct?.id ?? null,
+    products: products.map(mapCashProduct)
+  };
+}
+
+export async function confirmRegisterSaleAction(
+  input: RegisterSaleInput
+): Promise<RegisterSaleResult> {
+  const user = await requireCashierUser();
+
+  try {
+    if (input.items.length === 0) {
+      throw new Error("Agrega al menos un producto.");
+    }
+
+    if (input.payments.length === 0) {
+      throw new Error("Agrega al menos un pago.");
+    }
+
+    const items = input.items.map((item) => ({
+      productId: item.productId,
+      quantity: parseLocalizedDecimal(item.quantity)
+    }));
+    const payments = buildPayments(input.payments);
+    const sale = await confirmSale({
+      userId: user.id,
+      items,
+      payments
+    });
+
+    revalidatePath("/caja");
+    revalidatePath("/productos");
+    revalidatePath("/stock");
+    revalidatePath("/ventas");
+
+    return {
+      ok: true,
+      saleId: sale.id,
+      saleNumber: sale.saleNumber,
+      suggestedProducts: await getSuggestedCashProductsAction()
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo confirmar la venta."
+    };
+  }
+}
+
+export async function openCashSessionAction(
+  _prevState: CashSessionFormState,
+  formData: FormData
+): Promise<CashSessionFormState> {
+  const user = await requireCashierUser();
+
+  try {
+    const existingOpenSession = await prisma.cashSession.findFirst({
+      where: { status: CashSessionStatus.OPEN },
+      select: { id: true }
+    });
+
+    if (existingOpenSession) {
+      throw new Error("Ya hay una caja abierta.");
+    }
+
+    const openingAmount = parseLocalizedDecimal(formData.get("openingAmount")).toDecimalPlaces(2);
+    if (openingAmount.lt(0)) {
+      throw new Error("El monto inicial no puede ser negativo.");
+    }
+
+    await prisma.cashSession.create({
+      data: {
+        openingAmount,
+        notes: readOptionalText(formData, "notes"),
+        status: CashSessionStatus.OPEN,
+        openedById: user.id
+      }
+    });
+
+    revalidatePath("/caja");
+    revalidatePath("/admin");
+
+    return { success: "Caja abierta." };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+export async function addCashMovementAction(
+  _prevState: CashSessionFormState,
+  formData: FormData
+): Promise<CashSessionFormState> {
+  const user = await requireCashierUser();
+
+  try {
+    const openSession = await prisma.cashSession.findFirst({
+      where: { status: CashSessionStatus.OPEN },
+      select: { id: true }
+    });
+
+    if (!openSession) {
+      throw new Error("No hay caja abierta.");
+    }
+
+    const type = String(formData.get("type") ?? "");
+    if (!Object.values(CashMovementType).includes(type as CashMovementType)) {
+      throw new Error("Tipo de movimiento invalido.");
+    }
+
+    const amount = parseLocalizedDecimal(formData.get("amount")).toDecimalPlaces(2);
+    if (amount.lte(0)) {
+      throw new Error("El monto debe ser mayor a cero.");
+    }
+
+    const reason = readText(formData, "reason");
+    if (!reason) {
+      throw new Error("El motivo es obligatorio.");
+    }
+
+    await prisma.cashMovement.create({
+      data: {
+        cashSessionId: openSession.id,
+        type: type as CashMovementType,
+        amount,
+        reason,
+        userId: user.id
+      }
+    });
+
+    revalidatePath("/caja");
+    revalidatePath("/admin");
+
+    return { success: "Movimiento registrado." };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+export async function closeCashSessionAction(
+  _prevState: CashSessionFormState,
+  formData: FormData
+): Promise<CashSessionFormState> {
+  const user = await requireCashierUser();
+
+  try {
+    const openSession = await prisma.cashSession.findFirst({
+      where: { status: CashSessionStatus.OPEN },
+      select: { id: true }
+    });
+
+    if (!openSession) {
+      throw new Error("No hay caja abierta.");
+    }
+
+    const countedCashAmount = parseLocalizedDecimal(formData.get("countedCashAmount")).toDecimalPlaces(2);
+    if (countedCashAmount.lt(0)) {
+      throw new Error("El efectivo contado no puede ser negativo.");
+    }
+
+    const summary = await calculateCashSessionSummary(openSession.id);
+    const expectedCashAmount = new Prisma.Decimal(summary.expectedCash).toDecimalPlaces(2);
+    const differenceAmount = countedCashAmount.minus(expectedCashAmount).toDecimalPlaces(2);
+
+    await prisma.cashSession.update({
+      where: { id: openSession.id },
+      data: {
+        status: CashSessionStatus.CLOSED,
+        closedAt: new Date(),
+        closedById: user.id,
+        countedCashAmount,
+        expectedCashAmount,
+        differenceAmount,
+        notes: readOptionalText(formData, "notes")
+      }
+    });
+
+    revalidatePath("/caja");
+    revalidatePath("/admin");
+    revalidatePath("/reportes");
+
+    return { success: "Caja cerrada." };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+async function requireCashierUser() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+    redirect("/login");
+  }
+
+  return user;
+}
+
+function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["payments"] {
+  const creditPayments = payments.filter((payment) => payment.method === PaymentMethod.CREDIT);
+  if (creditPayments.length > 1) {
+    throw new Error("Solo se permite un pago con credito por venta.");
+  }
+
+  return payments.map((payment) => {
+    if (!Object.values(PaymentMethod).includes(payment.method as PaymentMethod)) {
+      throw new Error("Medio de pago invalido.");
+    }
+
+    const method = payment.method as PaymentMethod;
+    const amount = parseLocalizedDecimal(payment.amount).toDecimalPlaces(2);
+
+    if (amount.lte(0)) {
+      throw new Error("El importe del pago debe ser mayor a cero.");
+    }
+
+    if (method === PaymentMethod.CASH) {
+      const receivedAmount =
+        payment.receivedAmount === undefined || payment.receivedAmount === ""
+          ? amount
+          : parseLocalizedDecimal(payment.receivedAmount).toDecimalPlaces(2);
+
+      if (receivedAmount.lt(amount)) {
+        throw new Error("El monto recibido no puede ser menor al importe aplicado.");
+      }
+
+      return {
+        method,
+        amount,
+        receivedAmount
+      };
+    }
+
+    if (method === PaymentMethod.CREDIT) {
+      return {
+        method,
+        amount,
+        installments: Number(payment.installments ?? 1)
+      };
+    }
+
+    return {
+      method,
+      amount
+    };
+  });
+}
+
+function readText(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+function readOptionalText(formData: FormData, key: string) {
+  return readText(formData, key) || null;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "No se pudo completar la operacion.";
+}
+
+function mapCashProduct(product: {
+  id: string;
+  name: string;
+  barcode: string | null;
+  sku: string | null;
+  salePrice: Prisma.Decimal;
+  stock: Prisma.Decimal;
+  unitType: string;
+  allowsDecimalQuantity: boolean;
+  category: { name: string };
+  quickAccess: boolean;
+}): CashProductResult {
+  return {
+    id: product.id,
+    name: product.name,
+    barcode: product.barcode,
+    sku: product.sku,
+    salePrice: product.salePrice.toString(),
+    stock: product.stock.toString(),
+    unitType: product.unitType,
+    allowsDecimalQuantity: product.allowsDecimalQuantity,
+    categoryName: product.category.name,
+    quickAccess: product.quickAccess
+  };
+}

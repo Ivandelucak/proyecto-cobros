@@ -1,0 +1,289 @@
+import { PaymentMethod, Prisma, Role, SaleStatus } from "@prisma/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input, Select } from "@/components/ui/input";
+import { LinkButton } from "@/components/ui/link-button";
+import { PageHeader } from "@/components/ui/page-header";
+import { getCurrentUser } from "@/lib/auth";
+import { formatARS } from "@/lib/money";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+type VentasPageProps = {
+  searchParams: Promise<{
+    q?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+    method?: string;
+  }>;
+};
+
+const paymentLabels: Record<PaymentMethod, string> = {
+  CASH: "Efectivo",
+  DEBIT: "Debito",
+  CREDIT: "Credito",
+  TRANSFER: "Transferencia",
+  MERCADOPAGO: "MercadoPago",
+  CURRENT_ACCOUNT: "Cuenta corriente"
+};
+
+export default async function VentasPage({ searchParams }: VentasPageProps) {
+  const user = await getCurrentUser();
+  const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const from = params.from ?? "";
+  const to = params.to ?? "";
+  const status = parseSaleStatus(params.status);
+  const method = parsePaymentMethod(params.method);
+  const where = buildSaleWhere({
+    q,
+    from,
+    to,
+    status,
+    method,
+    userId: user?.role === Role.CASHIER ? user.id : null
+  });
+
+  const sales = await prisma.sale.findMany({
+    where,
+    include: {
+      user: {
+        select: {
+          name: true,
+          email: true
+        }
+      },
+      cashSession: {
+        select: {
+          id: true,
+          openedAt: true
+        }
+      },
+      payments: {
+        orderBy: { createdAt: "asc" }
+      },
+      _count: {
+        select: { items: true }
+      }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  return (
+    <section className="space-y-5">
+      <PageHeader
+        title="Ventas"
+        description="Listado de ventas, pagos usados, caja asociada y acceso a detalle o ticket."
+      />
+
+      <Card className="p-4">
+        <form className="grid gap-3 lg:grid-cols-[1fr_150px_150px_170px_220px_auto]">
+          <Input
+            name="q"
+            placeholder="Buscar por numero, cajero o producto"
+            defaultValue={q}
+          />
+          <Input name="from" type="date" defaultValue={from} />
+          <Input name="to" type="date" defaultValue={to} />
+          <Select name="status" defaultValue={status ?? ""}>
+            <option value="">Todos los estados</option>
+            <option value="PAID">Pagadas</option>
+            <option value="CANCELLED">Anuladas</option>
+          </Select>
+          <Select name="method" defaultValue={method ?? ""}>
+            <option value="">Todos los pagos</option>
+            {Object.entries(paymentLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <Button type="submit" variant="primary">
+            Filtrar
+          </Button>
+        </form>
+      </Card>
+
+      {sales.length === 0 ? (
+        <EmptyState
+          title="No hay ventas para mostrar"
+          description="Ajusta los filtros o registra una venta desde caja."
+        />
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Venta</th>
+                  <th className="px-4 py-3 font-medium">Fecha</th>
+                  <th className="px-4 py-3 font-medium">Cajero</th>
+                  <th className="px-4 py-3 font-medium">Caja</th>
+                  <th className="px-4 py-3 font-medium">Items</th>
+                  <th className="px-4 py-3 font-medium">Pagos</th>
+                  <th className="px-4 py-3 font-medium">Total</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
+                {sales.map((sale) => (
+                  <tr
+                    key={sale.id}
+                    className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      #{sale.saleNumber}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {formatDateTime(sale.createdAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-950 dark:text-gray-50">
+                        {sale.user.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {sale.user.email}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {sale.cashSession ? sale.cashSession.id.slice(-6) : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {sale._count.items}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {sale.payments
+                        .map((payment) => paymentLabels[payment.method])
+                        .join(" + ")}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
+                      {formatARS(sale.total)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
+                        {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <LinkButton href={`/ventas/${sale.id}`} size="sm">
+                          Detalle
+                        </LinkButton>
+                        <LinkButton href={`/ventas/${sale.id}/ticket`} size="sm">
+                          Ticket
+                        </LinkButton>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function buildSaleWhere({
+  q,
+  from,
+  to,
+  status,
+  method,
+  userId
+}: {
+  q: string;
+  from: string;
+  to: string;
+  status: SaleStatus | null;
+  method: PaymentMethod | null;
+  userId: string | null;
+}) {
+  const filters: Prisma.SaleWhereInput[] = [];
+
+  if (userId) {
+    filters.push({ userId });
+  }
+
+  if (from || to) {
+    filters.push({
+      createdAt: {
+        ...(from ? { gte: startOfDay(from) } : {}),
+        ...(to ? { lt: nextDay(to) } : {})
+      }
+    });
+  }
+
+  if (status) {
+    filters.push({ status });
+  }
+
+  if (method) {
+    filters.push({
+      payments: {
+        some: { method }
+      }
+    });
+  }
+
+  if (q) {
+    const numberQuery = Number(q.replace("#", ""));
+    const searchFilters: Prisma.SaleWhereInput[] = [
+      { user: { name: { contains: q } } },
+      { user: { email: { contains: q } } },
+      { items: { some: { productNameSnapshot: { contains: q } } } }
+    ];
+
+    if (Number.isInteger(numberQuery) && numberQuery > 0) {
+      searchFilters.unshift({ saleNumber: numberQuery });
+    }
+
+    filters.push({ OR: searchFilters });
+  }
+
+  return filters.length > 0 ? { AND: filters } : {};
+}
+
+function parsePaymentMethod(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return Object.values(PaymentMethod).includes(value as PaymentMethod)
+    ? (value as PaymentMethod)
+    : null;
+}
+
+function parseSaleStatus(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return Object.values(SaleStatus).includes(value as SaleStatus)
+    ? (value as SaleStatus)
+    : null;
+}
+
+function startOfDay(value: string) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function nextDay(value: string) {
+  const date = startOfDay(value);
+  date.setDate(date.getDate() + 1);
+  return date;
+}
+
+function formatDateTime(value: Date) {
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(value);
+}

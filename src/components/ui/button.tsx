@@ -1,0 +1,42 @@
+import type { ButtonHTMLAttributes } from "react";
+import { cn } from "@/lib/ui";
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md";
+};
+
+const variants = {
+  primary:
+    "border-brand-600 bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.99]",
+  secondary:
+    "border-gray-200 bg-white text-gray-800 hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800",
+  ghost:
+    "border-transparent bg-transparent text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-neutral-800",
+  danger:
+    "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 active:scale-[0.99] dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950"
+};
+
+const sizes = {
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm"
+};
+
+export function Button({
+  className,
+  variant = "secondary",
+  size = "md",
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center rounded-md border font-medium shadow-sm transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-neutral-950",
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      {...props}
+    />
+  );
+}

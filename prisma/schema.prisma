@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+enum BusinessType {
+  KIOSK
+  GROCERY
+  SUPERMARKET
+  BUTCHER
+  GREENGROCER
+  BEVERAGE_STORE
+  HARDWARE_STORE
+  PET_SHOP
+  BOOKSTORE
+  CLOTHING_STORE
+  BAZAAR
+  OTHER
+}
+
+enum UnitType {
+  UNIT
+  KG
+  GR
+  LITER
+  METER
+  PACK
+  BOX
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  DEBIT
+  CREDIT
+  TRANSFER
+  MERCADOPAGO
+  CURRENT_ACCOUNT
+}
+
+enum SaleStatus {
+  PAID
+  CANCELLED
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  INCOME
+  EXPENSE
+  CASH_WITHDRAWAL
+  CASH_ADJUSTMENT
+}
+
+enum StockMovementType {
+  SALE
+  MANUAL_ADJUSTMENT
+  PURCHASE
+  WASTE
+  INITIAL_IMPORT
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  name               String
+  email              String          @unique
+  passwordHash       String
+  role               Role
+  active             Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  sales              Sale[]          @relation("SaleUser")
+  cancelledSales     Sale[]          @relation("SaleCancelledBy")
+  openedCashSessions CashSession[]   @relation("CashSessionOpenedBy")
+  closedCashSessions CashSession[]   @relation("CashSessionClosedBy")
+  cashMovements      CashMovement[]
+  stockMovements     StockMovement[]
+
+  @@index([role])
+}
+
+model BusinessProfile {
+  id             String       @id
+  name           String
+  businessType   BusinessType @default(KIOSK)
+  cuit           String?
+  address        String?
+  phone          String?
+  currency       String       @default("ARS")
+  preferredTheme String?
+  logoUrl        String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryHierarchy")
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  products  Product[]
+
+  @@index([active])
+  @@index([parentId])
+}
+
+model Product {
+  id                    String          @id @default(cuid())
+  name                  String
+  barcode               String?         @unique
+  sku                   String?         @unique
+  brand                 String?
+  categoryId            String
+  category              Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  salePrice             Decimal         @db.Decimal(12, 2)
+  cost                  Decimal?        @db.Decimal(12, 2)
+  stock                 Decimal         @default(0) @db.Decimal(12, 3)
+  minStock              Decimal         @default(0) @db.Decimal(12, 3)
+  unitType              UnitType        @default(UNIT)
+  allowsDecimalQuantity Boolean         @default(false)
+  quickAccess           Boolean         @default(false)
+  active                Boolean         @default(true)
+  deletedAt             DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  saleItems             SaleItem[]
+  stockMovements        StockMovement[]
+
+  @@index([categoryId])
+  @@index([active, deletedAt])
+  @@index([name])
+}
+
+model Sale {
+  id                 String       @id @default(cuid())
+  saleNumber         Int          @unique @default(autoincrement())
+  total              Decimal      @db.Decimal(12, 2)
+  subtotal           Decimal      @db.Decimal(12, 2)
+  discountTotal      Decimal      @default(0) @db.Decimal(12, 2)
+  surchargeTotal     Decimal      @default(0) @db.Decimal(12, 2)
+  status             SaleStatus   @default(PAID)
+  userId             String
+  user               User         @relation("SaleUser", fields: [userId], references: [id], onDelete: Restrict)
+  cashSessionId      String?
+  cashSession        CashSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancelledBy        User?        @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationReason String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  items              SaleItem[]
+  payments           Payment[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([userId])
+  @@index([cashSessionId])
+  @@index([cancelledById])
+}
+
+model CashSession {
+  id                 String            @id @default(cuid())
+  openedAt           DateTime          @default(now())
+  closedAt           DateTime?
+  openingAmount      Decimal           @db.Decimal(12, 2)
+  expectedCashAmount Decimal?          @db.Decimal(12, 2)
+  countedCashAmount  Decimal?          @db.Decimal(12, 2)
+  differenceAmount   Decimal?          @db.Decimal(12, 2)
+  notes              String?
+  status             CashSessionStatus @default(OPEN)
+  openedById         String
+  openedBy           User              @relation("CashSessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedById         String?
+  closedBy           User?             @relation("CashSessionClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  movements          CashMovement[]
+  sales              Sale[]
+
+  @@index([status])
+  @@index([openedAt])
+  @@index([openedById])
+  @@index([closedById])
+}
+
+model CashMovement {
+  id            String           @id @default(cuid())
+  cashSessionId String
+  cashSession   CashSession      @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(12, 2)
+  reason        String
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt     DateTime         @default(now())
+
+  @@index([cashSessionId])
+  @@index([type])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id                  String   @id @default(cuid())
+  saleId              String
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productNameSnapshot String
+  unitPrice           Decimal  @db.Decimal(12, 2)
+  quantity            Decimal  @db.Decimal(12, 3)
+  subtotal            Decimal  @db.Decimal(12, 2)
+  unitTypeSnapshot    UnitType
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  saleId            String
+  sale              Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  method            PaymentMethod
+  amount            Decimal       @db.Decimal(12, 2)
+  receivedAmount    Decimal?      @db.Decimal(12, 2)
+  changeAmount      Decimal?      @db.Decimal(12, 2)
+  installments      Int?
+  surchargeRate     Decimal?      @db.Decimal(5, 2)
+  surchargeAmount   Decimal?      @db.Decimal(12, 2)
+  externalId        String?
+  externalReference String?
+  providerStatus    String?
+  createdAt         DateTime      @default(now())
+
+  @@index([saleId])
+  @@index([method])
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  productId     String
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  type          StockMovementType
+  quantity      Decimal           @db.Decimal(12, 3)
+  previousStock Decimal           @db.Decimal(12, 3)
+  newStock      Decimal           @db.Decimal(12, 3)
+  reason        String?
+  referenceId   String?
+  userId        String?
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt     DateTime          @default(now())
+
+  @@index([createdAt])
+  @@index([productId])
+  @@index([type])
+  @@index([userId])
+}
