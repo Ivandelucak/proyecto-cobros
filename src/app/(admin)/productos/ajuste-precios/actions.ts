@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireAdminPage } from "@/lib/admin-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 
@@ -52,7 +53,7 @@ export async function confirmPriceAdjustmentAction(
   _state: PriceAdjustmentState,
   formData: FormData
 ): Promise<PriceAdjustmentState> {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
     const payload = JSON.parse(String(formData.get("payload") ?? "{}")) as PricePayload;
@@ -73,6 +74,16 @@ export async function confirmPriceAdjustmentAction(
     revalidatePath("/productos");
     revalidatePath("/productos/ajuste-precios");
     revalidatePath("/caja");
+    await createAuditLog({
+      userId: user.id,
+      action: "BULK_PRICE_UPDATE",
+      entity: "Product",
+      description: "Aplico ajuste masivo de precios.",
+      metadata: {
+        count: preview.length,
+        payload
+      }
+    });
     return { success: `Se actualizaron ${preview.length} productos.` };
   } catch (error) {
     return { error: getErrorMessage(error) };

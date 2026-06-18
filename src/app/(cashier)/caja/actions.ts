@@ -3,6 +3,7 @@
 import { CashMovementType, CashSessionStatus, PaymentMethod, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { calculateCashSessionSummary } from "@/lib/cash-session";
 import { parseLocalizedDecimal } from "@/lib/money";
@@ -204,6 +205,15 @@ export async function confirmRegisterSaleAction(
       payments
     });
 
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Sale",
+      entityId: sale.id,
+      description: `Registro venta #${sale.saleNumber}.`,
+      metadata: { total: sale.total.toString() }
+    });
+
     revalidatePath("/caja");
     revalidatePath("/productos");
     revalidatePath("/stock");
@@ -245,13 +255,22 @@ export async function openCashSessionAction(
       throw new Error("El monto inicial no puede ser negativo.");
     }
 
-    await prisma.cashSession.create({
+    const cashSession = await prisma.cashSession.create({
       data: {
         openingAmount,
         notes: readOptionalText(formData, "notes"),
         status: CashSessionStatus.OPEN,
         openedById: user.id
       }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "OPEN",
+      entity: "CashSession",
+      entityId: cashSession.id,
+      description: "Abrio caja.",
+      metadata: { openingAmount: openingAmount.toString() }
     });
 
     revalidatePath("/caja");
@@ -294,13 +313,26 @@ export async function addCashMovementAction(
       throw new Error("El motivo es obligatorio.");
     }
 
-    await prisma.cashMovement.create({
+    const movement = await prisma.cashMovement.create({
       data: {
         cashSessionId: openSession.id,
         type: type as CashMovementType,
         amount,
         reason,
         userId: user.id
+      }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "CashMovement",
+      entityId: movement.id,
+      description: "Registro movimiento de caja.",
+      metadata: {
+        type,
+        amount: amount.toString(),
+        reason
       }
     });
 
@@ -348,6 +380,19 @@ export async function closeCashSessionAction(
         expectedCashAmount,
         differenceAmount,
         notes: readOptionalText(formData, "notes")
+      }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "CLOSE",
+      entity: "CashSession",
+      entityId: openSession.id,
+      description: "Cerro caja.",
+      metadata: {
+        countedCashAmount: countedCashAmount.toString(),
+        expectedCashAmount: expectedCashAmount.toString(),
+        differenceAmount: differenceAmount.toString()
       }
     });
 

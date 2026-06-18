@@ -4,6 +4,7 @@ import { CustomerAccountMovementType, PaymentMethod } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { createCustomerAccountMovement, getCustomerBalance } from "@/lib/customer-account";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -19,11 +20,18 @@ export async function createCustomerAction(
   _state: CustomerFormState,
   formData: FormData
 ): Promise<CustomerFormState> {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
-    await prisma.customer.create({
+    const customer = await prisma.customer.create({
       data: parseCustomerForm(formData)
+    });
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Customer",
+      entityId: customer.id,
+      description: `Creo el cliente ${customer.name}.`
     });
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -38,12 +46,19 @@ export async function updateCustomerAction(
   _state: CustomerFormState,
   formData: FormData
 ): Promise<CustomerFormState> {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
-    await prisma.customer.update({
+    const customer = await prisma.customer.update({
       where: { id: customerId },
       data: parseCustomerForm(formData)
+    });
+    await createAuditLog({
+      userId: user.id,
+      action: "UPDATE",
+      entity: "Customer",
+      entityId: customer.id,
+      description: `Actualizo el cliente ${customer.name}.`
     });
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -55,11 +70,19 @@ export async function updateCustomerAction(
 }
 
 export async function setCustomerActiveAction(customerId: string, active: boolean) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
-  await prisma.customer.update({
+  const customer = await prisma.customer.update({
     where: { id: customerId },
     data: { active }
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: active ? "REACTIVATE" : "DEACTIVATE",
+    entity: "Customer",
+    entityId: customer.id,
+    description: `${active ? "Reactivo" : "Desactivo"} el cliente ${customer.name}.`
   });
 
   revalidatePath(initialPath);
@@ -96,6 +119,15 @@ export async function registerCustomerPaymentAction(
       });
     });
 
+    await createAuditLog({
+      userId: user.id,
+      action: "PAYMENT",
+      entity: "Customer",
+      entityId: customerId,
+      description: "Registro pago de cuenta corriente.",
+      metadata: { amount: amount.toString(), paymentMethod: method }
+    });
+
     revalidatePath(initialPath);
     revalidatePath(`/clientes/${customerId}`);
     revalidatePath("/reportes");
@@ -127,6 +159,15 @@ export async function adjustCustomerBalanceAction(
         reason,
         userId: user.id
       });
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "ADJUST",
+      entity: "Customer",
+      entityId: customerId,
+      description: "Ajusto saldo de cuenta corriente.",
+      metadata: { amount: amount.toString(), reason }
     });
 
     revalidatePath(initialPath);

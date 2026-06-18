@@ -3,6 +3,7 @@
 import { Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -20,13 +21,20 @@ export async function createCategoryAction(
   _prevState: CategoryFormState,
   formData: FormData
 ): Promise<CategoryFormState> {
-  await requireAdminUser();
+  const user = await requireAdminUser();
 
   try {
     const data = await parseCategoryForm(formData);
     await validateCategoryName(data.name);
 
-    await prisma.category.create({ data });
+    const category = await prisma.category.create({ data });
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Category",
+      entityId: category.id,
+      description: `Creo la categoria ${category.name}.`
+    });
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
@@ -40,15 +48,22 @@ export async function updateCategoryAction(
   _prevState: CategoryFormState,
   formData: FormData
 ): Promise<CategoryFormState> {
-  await requireAdminUser();
+  const user = await requireAdminUser();
 
   try {
     const data = await parseCategoryForm(formData, categoryId);
     await validateCategoryName(data.name, categoryId);
 
-    await prisma.category.update({
+    const category = await prisma.category.update({
       where: { id: categoryId },
       data
+    });
+    await createAuditLog({
+      userId: user.id,
+      action: "UPDATE",
+      entity: "Category",
+      entityId: category.id,
+      description: `Actualizo la categoria ${category.name}.`
     });
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -60,11 +75,19 @@ export async function updateCategoryAction(
 }
 
 export async function setCategoryActiveAction(categoryId: string, active: boolean) {
-  await requireAdminUser();
+  const user = await requireAdminUser();
 
-  await prisma.category.update({
+  const category = await prisma.category.update({
     where: { id: categoryId },
     data: { active }
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: active ? "REACTIVATE" : "DEACTIVATE",
+    entity: "Category",
+    entityId: category.id,
+    description: `${active ? "Reactivo" : "Desactivo"} la categoria ${category.name}.`
   });
 
   revalidatePath("/categorias");

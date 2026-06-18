@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { cancelSale } from "@/lib/sale-cancellation";
 
@@ -25,6 +26,15 @@ export async function cancelSaleAction(
       saleId,
       userId: user.id,
       reason: String(formData.get("reason") ?? "")
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "CANCEL",
+      entity: "Sale",
+      entityId: saleId,
+      description: "Anulo una venta.",
+      metadata: { reason: String(formData.get("reason") ?? "").trim() }
     });
 
     revalidatePath(`/ventas/${saleId}`);

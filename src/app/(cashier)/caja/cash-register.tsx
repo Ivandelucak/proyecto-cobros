@@ -15,10 +15,10 @@ import { TrashIcon } from "@/components/ui/icons";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { formatARS } from "@/lib/money";
-import {
-  CREDIT_INSTALLMENT_OPTIONS,
-  getCreditInstallmentOption
-} from "@/lib/payment-options";
+import type {
+  CreditInstallmentPlanView,
+  PaymentMethodSettingView
+} from "@/lib/payment-settings";
 import { cn } from "@/lib/ui";
 import {
   confirmRegisterSaleAction,
@@ -62,9 +62,11 @@ type Message = {
 
 type CashRegisterProps = {
   initialSuggestedProducts: CashProductResult[];
+  paymentMethods: PaymentMethodSettingView[];
+  creditPlans: CreditInstallmentPlanView[];
 };
 
-const paymentLabels: Record<PaymentMethodValue, string> = {
+const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
   CASH: "Efectivo",
   DEBIT: "Debito",
   CREDIT: "Credito",
@@ -75,15 +77,34 @@ const paymentLabels: Record<PaymentMethodValue, string> = {
 
 const decimalUnits = new Set(["KG", "GR", "LITER", "METER"]);
 
-export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
+export function CashRegister({
+  initialSuggestedProducts,
+  paymentMethods,
+  creditPlans
+}: CashRegisterProps) {
+  const defaultPaymentMethod =
+    (paymentMethods[0]?.method as PaymentMethodValue | undefined) ?? "CASH";
+  const defaultInstallments = creditPlans[0]?.installments ?? 1;
+  const paymentLabels = useMemo(
+    () =>
+      paymentMethods.reduce(
+        (labels, method) => ({
+          ...labels,
+          [method.method]: method.label
+        }),
+        { ...fallbackPaymentLabels }
+      ),
+    [paymentMethods]
+  );
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CashProductResult[]>([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const [suggestedProducts, setSuggestedProducts] = useState(initialSuggestedProducts);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue>("CASH");
-  const [installments, setInstallments] = useState(1);
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethodValue>(defaultPaymentMethod);
+  const [installments, setInstallments] = useState(defaultInstallments);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [cashReceived, setCashReceived] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
@@ -108,8 +129,11 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
   const selectedCreditOption =
     activeCreditInstallments === null
       ? null
-      : getCreditInstallmentOption(activeCreditInstallments);
-  const surchargeRate = selectedCreditOption?.surchargeRate ?? 0;
+      : creditPlans.find((option) => option.installments === activeCreditInstallments) ??
+        creditPlans[0] ??
+        null;
+  const effectiveInstallments = selectedCreditOption?.installments ?? installments;
+  const surchargeRate = safeNumber(selectedCreditOption?.surchargeRate ?? 0);
   const surchargeAmount =
     activeCreditInstallments === null ? 0 : roundMoney((subtotal * surchargeRate) / 100);
   const total = roundMoney(subtotal + surchargeAmount);
@@ -352,7 +376,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       return;
     }
 
-    const option = paymentMethod === "CREDIT" ? getCreditInstallmentOption(installments) : null;
+    const option = paymentMethod === "CREDIT" ? selectedCreditOption : null;
     if (paymentMethod === "CREDIT" && !option) {
       showMessage("Cantidad de cuotas invalida.", "error");
       return;
@@ -403,7 +427,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
         id: createPaymentId(),
         method: paymentMethod,
         amount: String(amount),
-        installments: paymentMethod === "CREDIT" ? installments : undefined,
+        installments: paymentMethod === "CREDIT" ? option?.installments : undefined,
         customerId:
           paymentMethod === "CURRENT_ACCOUNT" ? selectedCustomer?.id : undefined,
         customerName:
@@ -428,8 +452,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
     setPayments([]);
     setPaymentAmount("");
     setCashReceived("");
-    setInstallments(1);
-    setPaymentMethod("CASH");
+    setInstallments(defaultInstallments);
+    setPaymentMethod(defaultPaymentMethod);
     setMessage(null);
     setSaleSuccess(null);
     clearSearch();
@@ -486,8 +510,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       setPayments([]);
       setPaymentAmount("");
       setCashReceived("");
-      setInstallments(1);
-      setPaymentMethod("CASH");
+      setInstallments(defaultInstallments);
+      setPaymentMethod(defaultPaymentMethod);
       setCustomerQuery("");
       setCustomerResults([]);
       setSelectedCustomer(null);
@@ -509,7 +533,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       onKeyDown={handlePanelKeyDown}
     >
       <div className="space-y-4">
-        <Card className="p-4">
+        <Card className="border-slate-300 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
           <form
             className="flex gap-3"
             onSubmit={(event) => {
@@ -560,10 +584,10 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
           )}
         </Card>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border-slate-300 shadow-md shadow-slate-200/70 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-slate-300 bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Producto</th>
                   <th className="px-4 py-2.5 font-medium">Cantidad</th>
@@ -572,7 +596,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                   <th className="px-4 py-2.5 text-right font-medium">Accion</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
+              <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
                 {cart.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
@@ -589,7 +613,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                     return (
                       <tr
                         key={item.id}
-                        className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
+                        className="transition-colors hover:bg-slate-50 dark:hover:bg-neutral-800/60"
                       >
                         <td className="px-4 py-2.5">
                           <div className="font-medium text-gray-950 dark:text-gray-50">
@@ -642,16 +666,16 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                           {formatARS(subtotalItem)}
                         </td>
                         <td className="px-4 py-2.5 text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-9 w-9 border-red-100 px-0 text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-200 dark:hover:bg-red-950/40"
-                            aria-label="Quitar producto"
-                            title="Quitar producto"
-                            onClick={() => removeItem(item.id)}
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-9 w-10 border-slate-300 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-neutral-700 dark:text-gray-300 dark:hover:border-red-900/60 dark:hover:bg-red-950/30 dark:hover:text-red-200"
+                              aria-label="Quitar producto"
+                              title="Quitar producto"
+                              onClick={() => removeItem(item.id)}
                           >
-                            <TrashIcon className="h-4 w-4" />
+                            <TrashIcon className="h-5 w-5" />
                           </Button>
                         </td>
                       </tr>
@@ -665,7 +689,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-        <Card className="p-4">
+        <Card className="border-slate-300 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
           <div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Total final
@@ -693,7 +717,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
             className={cn(
               "mt-4 rounded-lg border px-3 py-2 text-sm font-medium",
               paymentsDisabled
-                ? "border-gray-200 bg-gray-50 text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400"
+                ? "border-slate-300 bg-slate-50 text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400"
                 : remaining === 0 && overpaid === 0
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
                   : overpaid > 0
@@ -721,34 +745,32 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                 onChange={(event) => {
                   const nextMethod = event.target.value as PaymentMethodValue;
                   setPaymentMethod(nextMethod);
-                  if (nextMethod !== "CREDIT") {
-                    setInstallments(1);
-                  }
+                  setInstallments(defaultInstallments);
                   if (nextMethod !== "CURRENT_ACCOUNT") {
                     setCustomerResults([]);
                   }
                 }}
               >
-                {Object.entries(paymentLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+                {paymentMethods.map((method) => (
+                  <option key={method.method} value={method.method}>
+                    {method.label}
                   </option>
                 ))}
               </Select>
             </label>
 
             {paymentMethod === "CREDIT" ? (
-              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+              <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
                 <label className="space-y-2">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                     Cuotas
                   </span>
                   <Select
-                    value={installments}
-                    disabled={paymentsDisabled || Boolean(creditPayment)}
+                    value={effectiveInstallments}
+                    disabled={paymentsDisabled || Boolean(creditPayment) || creditPlans.length === 0}
                     onChange={(event) => setInstallments(Number(event.target.value))}
                   >
-                    {CREDIT_INSTALLMENT_OPTIONS.map((option) => (
+                    {creditPlans.map((option) => (
                       <option key={option.installments} value={option.installments}>
                         {option.installments} cuota{option.installments > 1 ? "s" : ""} -{" "}
                         {option.surchargeRate}% recargo
@@ -761,7 +783,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                   <p>
                     Valor por cuota estimado:{" "}
                     {formatARS(
-                      installments > 0 ? roundMoney(total / installments) : total
+                      effectiveInstallments > 0 ? roundMoney(total / effectiveInstallments) : total
                     )}
                   </p>
                 </div>
@@ -908,7 +930,11 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
               type="button"
               variant="secondary"
               className="w-full"
-              disabled={isPending || paymentsDisabled}
+              disabled={
+                isPending ||
+                paymentsDisabled ||
+                (paymentMethod === "CREDIT" && creditPlans.length === 0)
+              }
               onClick={addPayment}
             >
               Agregar pago
@@ -923,7 +949,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
               {payments.map((payment) => (
                 <div
                   key={payment.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none"
                 >
                   <div>
                     <p className="font-medium text-gray-950 dark:text-gray-50">
@@ -1039,7 +1065,7 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "rounded-lg border border-gray-200 bg-gray-50 text-left transition duration-150 hover:bg-white active:scale-[0.995] dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900",
+              "rounded-lg border border-slate-300 bg-white text-left shadow-sm transition duration-150 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md active:scale-[0.995] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900",
               compact ? "p-2.5" : "p-3",
               selectedIndex === index &&
                 "border-brand-500 bg-brand-50 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
@@ -1076,7 +1102,7 @@ function SummaryValue({
   tone?: "default" | "ok" | "error";
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+    <div className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
       <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label}
       </p>
@@ -1103,7 +1129,7 @@ function PaymentPreview({
   hint: string;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+    <div className="rounded-lg border border-slate-300 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
       <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
         {value}

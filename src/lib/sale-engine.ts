@@ -7,10 +7,13 @@ import {
   SaleStatus,
   StockMovementType
 } from "@prisma/client";
-import { getCreditInstallmentOption } from "@/lib/payment-options";
-import { prisma } from "@/lib/prisma";
-import { assertRole } from "@/lib/permissions";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
+import {
+  getActiveCreditInstallmentPlans,
+  getEnabledPaymentMethodSettings
+} from "@/lib/payment-settings";
+import { assertRole } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
 
 type SaleItemInput = {
   productId: string;
@@ -33,6 +36,11 @@ export type ConfirmSaleInput = {
   customerId?: string | null;
   items: SaleItemInput[];
   payments: PaymentInput[];
+};
+
+type ActiveCreditInstallmentPlan = {
+  installments: number;
+  surchargeRate: string;
 };
 
 export async function confirmSale(input: ConfirmSaleInput) {
@@ -113,8 +121,26 @@ export async function confirmSale(input: ConfirmSaleInput) {
       };
     });
 
+    const [enabledPaymentMethods, activeCreditPlans] = await Promise.all([
+      getEnabledPaymentMethodSettings(tx),
+      getActiveCreditInstallmentPlans(tx)
+    ]);
+    const enabledMethodCodes = new Set(
+      enabledPaymentMethods.map((setting) => setting.method)
+    );
+
+    for (const payment of input.payments) {
+      if (!enabledMethodCodes.has(payment.method)) {
+        throw new Error("El medio de pago seleccionado no esta habilitado.");
+      }
+    }
+
     const discountTotal = new Prisma.Decimal(0);
-    const { paymentRecords, surchargeTotal } = buildPaymentRecords(input.payments, subtotal);
+    const { paymentRecords, surchargeTotal } = buildPaymentRecords(
+      input.payments,
+      subtotal,
+      activeCreditPlans
+    );
     const total = subtotal.plus(surchargeTotal).minus(discountTotal).toDecimalPlaces(2);
     const currentAccountTotal = paymentRecords
       .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
@@ -211,7 +237,11 @@ export async function confirmSale(input: ConfirmSaleInput) {
   });
 }
 
-function buildPaymentRecords(payments: PaymentInput[], subtotal: Prisma.Decimal) {
+function buildPaymentRecords(
+  payments: PaymentInput[],
+  subtotal: Prisma.Decimal,
+  activeCreditPlans: ActiveCreditInstallmentPlan[]
+) {
   const creditPayments = payments.filter((payment) => payment.method === PaymentMethod.CREDIT);
   if (creditPayments.length > 1) {
     throw new Error("Solo se permite un pago con crédito por venta.");
@@ -224,12 +254,14 @@ function buildPaymentRecords(payments: PaymentInput[], subtotal: Prisma.Decimal)
 
   if (creditPayments.length === 1) {
     creditInstallments = Number(creditPayments[0].installments ?? 1);
-    const option = getCreditInstallmentOption(creditInstallments);
-    if (!option) {
+    const plan = activeCreditPlans.find(
+      (option) => option.installments === creditInstallments
+    );
+    if (!plan) {
       throw new Error("Cantidad de cuotas inválida.");
     }
 
-    creditSurchargeRate = new Prisma.Decimal(option.surchargeRate);
+    creditSurchargeRate = new Prisma.Decimal(plan.surchargeRate);
     creditSurchargeAmount = subtotal
       .mul(creditSurchargeRate)
       .div(100)

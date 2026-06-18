@@ -1,5 +1,6 @@
 import {
   BusinessType,
+  PaymentMethod,
   Prisma,
   PrismaClient,
   StockMovementType,
@@ -234,6 +235,38 @@ const quickAccessProductNames = new Set([
   "Cerveza lata"
 ]);
 
+const paymentMethodSettings = [
+  { method: PaymentMethod.CASH, label: "Efectivo", enabled: true, sortOrder: 10 },
+  { method: PaymentMethod.DEBIT, label: "Debito", enabled: true, sortOrder: 20 },
+  { method: PaymentMethod.CREDIT, label: "Credito", enabled: true, sortOrder: 30 },
+  {
+    method: PaymentMethod.TRANSFER,
+    label: "Transferencia",
+    enabled: true,
+    sortOrder: 40
+  },
+  {
+    method: PaymentMethod.MERCADOPAGO,
+    label: "MercadoPago",
+    enabled: true,
+    sortOrder: 50
+  },
+  {
+    method: PaymentMethod.CURRENT_ACCOUNT,
+    label: "Cuenta corriente",
+    enabled: true,
+    sortOrder: 60
+  }
+];
+
+const creditInstallmentPlans = [
+  { installments: 1, surchargeRate: "0.00", active: true },
+  { installments: 2, surchargeRate: "10.00", active: true },
+  { installments: 3, surchargeRate: "15.00", active: true },
+  { installments: 6, surchargeRate: "25.00", active: true },
+  { installments: 12, surchargeRate: "45.00", active: true }
+];
+
 async function main() {
   const passwordHashAdmin = await bcrypt.hash("admin123", 12);
   const passwordHashCashier = await bcrypt.hash("cajero123", 12);
@@ -288,6 +321,33 @@ async function main() {
       preferredTheme: "light"
     }
   });
+
+  for (const setting of paymentMethodSettings) {
+    await prisma.paymentMethodSetting.upsert({
+      where: { method: setting.method },
+      update: {
+        label: setting.label,
+        enabled: setting.enabled,
+        sortOrder: setting.sortOrder
+      },
+      create: setting
+    });
+  }
+
+  for (const plan of creditInstallmentPlans) {
+    await prisma.creditInstallmentPlan.upsert({
+      where: { installments: plan.installments },
+      update: {
+        surchargeRate: new Prisma.Decimal(plan.surchargeRate),
+        active: plan.active
+      },
+      create: {
+        installments: plan.installments,
+        surchargeRate: new Prisma.Decimal(plan.surchargeRate),
+        active: plan.active
+      }
+    });
+  }
 
   const categories = new Map<string, { id: string }>();
   for (const name of categoryNames) {

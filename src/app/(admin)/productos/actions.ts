@@ -3,6 +3,7 @@
 import { Prisma, Role, StockMovementType, UnitType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -38,11 +39,13 @@ export async function createProductAction(
   try {
     const data = await parseProductForm(formData);
     await validateUniqueProductFields(data);
+    let productId = "";
 
     await prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data
       });
+      productId = product.id;
 
       if (!data.stock.equals(0)) {
         await tx.stockMovement.create({
@@ -57,6 +60,14 @@ export async function createProductAction(
           }
         });
       }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Product",
+      entityId: productId,
+      description: `Creo el producto ${data.name}.`
     });
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -106,6 +117,14 @@ export async function updateProductAction(
         });
       }
     });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "UPDATE",
+      entity: "Product",
+      entityId: productId,
+      description: `Actualizo el producto ${data.name}.`
+    });
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
@@ -116,11 +135,19 @@ export async function updateProductAction(
 }
 
 export async function setProductActiveAction(productId: string, active: boolean) {
-  await requireAdminUser();
+  const user = await requireAdminUser();
 
-  await prisma.product.update({
+  const product = await prisma.product.update({
     where: { id: productId },
     data: { active }
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: active ? "REACTIVATE" : "DEACTIVATE",
+    entity: "Product",
+    entityId: product.id,
+    description: `${active ? "Reactivo" : "Desactivo"} el producto ${product.name}.`
   });
 
   revalidatePath("/productos");

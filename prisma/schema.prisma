@@ -101,6 +101,7 @@ model User {
   stockMovements     StockMovement[]
   customerMovements  CustomerAccountMovement[]
   purchases          Purchase[]
+  auditLogs          AuditLog[]
 
   @@index([role])
 }
@@ -117,6 +118,45 @@ model BusinessProfile {
   logoUrl        String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model PaymentMethodSetting {
+  method    PaymentMethod @id
+  label     String
+  enabled   Boolean       @default(true)
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([enabled])
+  @@index([sortOrder])
+}
+
+model CreditInstallmentPlan {
+  id            String   @id @default(cuid())
+  installments  Int      @unique
+  surchargeRate Decimal  @db.Decimal(5, 2)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  entity      String
+  entityId    String?
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
 }
 
 model Category {

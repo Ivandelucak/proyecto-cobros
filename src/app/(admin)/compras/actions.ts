@@ -4,6 +4,7 @@ import { Prisma, PurchaseStatus, StockMovementType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 
@@ -120,6 +121,14 @@ export async function createPurchaseAction(
     revalidatePath("/productos");
     revalidatePath("/admin");
     purchaseId = purchase.id;
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Purchase",
+      entityId: purchase.id,
+      description: `Registro compra #${purchase.purchaseNumber}.`,
+      metadata: { total: purchase.total.toString() }
+    });
   } catch (error) {
     return { error: getErrorMessage(error) };
   }

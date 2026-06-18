@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 export type SupplierFormState = {
@@ -13,10 +14,17 @@ export async function createSupplierAction(
   _state: SupplierFormState,
   formData: FormData
 ): Promise<SupplierFormState> {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
-    await prisma.supplier.create({ data: parseSupplierForm(formData) });
+    const supplier = await prisma.supplier.create({ data: parseSupplierForm(formData) });
+    await createAuditLog({
+      userId: user.id,
+      action: "CREATE",
+      entity: "Supplier",
+      entityId: supplier.id,
+      description: `Creo el proveedor ${supplier.name}.`
+    });
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
@@ -30,12 +38,19 @@ export async function updateSupplierAction(
   _state: SupplierFormState,
   formData: FormData
 ): Promise<SupplierFormState> {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
-    await prisma.supplier.update({
+    const supplier = await prisma.supplier.update({
       where: { id: supplierId },
       data: parseSupplierForm(formData)
+    });
+    await createAuditLog({
+      userId: user.id,
+      action: "UPDATE",
+      entity: "Supplier",
+      entityId: supplier.id,
+      description: `Actualizo el proveedor ${supplier.name}.`
     });
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -47,11 +62,19 @@ export async function updateSupplierAction(
 }
 
 export async function setSupplierActiveAction(supplierId: string, active: boolean) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
-  await prisma.supplier.update({
+  const supplier = await prisma.supplier.update({
     where: { id: supplierId },
     data: { active }
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: active ? "REACTIVATE" : "DEACTIVATE",
+    entity: "Supplier",
+    entityId: supplier.id,
+    description: `${active ? "Reactivo" : "Desactivo"} el proveedor ${supplier.name}.`
   });
 
   revalidatePath("/proveedores");

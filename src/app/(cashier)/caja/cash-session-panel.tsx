@@ -83,7 +83,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
 
   if (!cashSession) {
     return (
-      <Card className="p-3">
+      <Card className="border-slate-300 p-3 shadow-md shadow-slate-200/70 dark:shadow-none">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -106,7 +106,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
         {mode === "open" ? (
           <form
             action={openAction}
-            className="mt-3 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950 md:grid-cols-[180px_1fr_auto]"
+            className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-[180px_1fr_auto]"
           >
             <Input
               name="openingAmount"
@@ -128,7 +128,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
   const recentMovements = cashSession.movements.slice(0, 3);
 
   return (
-    <Card className="p-3">
+    <Card className="border-slate-300 p-3 shadow-md shadow-slate-200/70 dark:shadow-none">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone="green">Caja abierta</Badge>
@@ -154,7 +154,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
       </div>
 
       {detailsVisible ? (
-        <div className="mt-3 border-t border-gray-200 pt-3 dark:border-neutral-800">
+        <div className="mt-3 border-t border-slate-300 pt-3 dark:border-neutral-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -203,7 +203,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
               {recentMovements.map((movement) => (
                 <span
                   key={movement.id}
-                  className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300"
+                  className="rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-slate-700 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:shadow-none"
                   title={movement.reason}
                 >
                   {movementLabels[movement.type]} {formatARS(movement.amount)} -{" "}
@@ -216,7 +216,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
           {mode === "movement" ? (
             <form
               action={movementAction}
-              className="mt-3 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950 lg:grid-cols-[160px_140px_1fr_auto]"
+              className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none lg:grid-cols-[160px_140px_1fr_auto]"
             >
               <Select name="type" defaultValue="EXPENSE">
                 {Object.entries(movementLabels).map(([value, label]) => (
@@ -268,7 +268,7 @@ function Summary({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+    <div className="rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
       <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label}
       </p>

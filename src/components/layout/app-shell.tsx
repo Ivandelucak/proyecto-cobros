@@ -30,7 +30,7 @@ export function AppShell({ user, children, compactSidebar = false }: AppShellPro
       >
         <aside
           className={cn(
-            "border-r border-gray-200 bg-white transition-colors duration-200 dark:border-neutral-800 dark:bg-neutral-900",
+            "border-r border-gray-300/80 bg-white shadow-[1px_0_0_rgba(15,23,42,0.03)] transition-colors duration-200 dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none",
             compactSidebar ? "px-2 py-4" : "px-4 py-5"
           )}
         >
@@ -48,7 +48,7 @@ export function AppShell({ user, children, compactSidebar = false }: AppShellPro
         </aside>
 
         <div className="flex min-w-0 flex-col">
-          <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-5 py-3 transition-colors duration-200 dark:border-neutral-800 dark:bg-neutral-900">
+          <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-gray-300/80 bg-white px-5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors duration-200 dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
             <div>
               <p className="text-sm font-medium text-gray-950 dark:text-gray-50">
                 {user.name}

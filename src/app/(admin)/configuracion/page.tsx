@@ -1,17 +1,26 @@
 import { BusinessType } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
+import {
+  getCreditInstallmentPlans,
+  getPaymentMethodSettings
+} from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 import { BusinessProfileForm } from "./business-profile-form";
+import { PaymentSettingsForm } from "./payment-settings-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionPage() {
   await requireAdminPage();
 
-  const profile = await prisma.businessProfile.findUnique({
-    where: { id: "default" }
-  });
+  const [profile, paymentMethods, creditPlans] = await Promise.all([
+    prisma.businessProfile.findUnique({
+      where: { id: "default" }
+    }),
+    getPaymentMethodSettings(),
+    getCreditInstallmentPlans()
+  ]);
 
   return (
     <section className="space-y-5">
@@ -31,6 +40,7 @@ export default async function ConfiguracionPage() {
           logoUrl: profile?.logoUrl ?? null
         }}
       />
+      <PaymentSettingsForm methods={paymentMethods} creditPlans={creditPlans} />
     </section>
   );
 }

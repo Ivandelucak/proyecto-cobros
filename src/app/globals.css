@@ -4,10 +4,17 @@
 
 :root {
   color-scheme: light;
+  background: #f3f4f6;
 }
 
 .dark {
   color-scheme: dark;
+  background: #0a0a0a;
+}
+
+html:not([data-theme-ready]) body {
+  opacity: 0;
+  transition: none;
 }
 
 body {

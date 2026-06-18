@@ -4,11 +4,18 @@ export function TrashIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M9.5 4.75h5M6.75 8h10.5M8.25 8l.55 10.1a2 2 0 0 0 2 1.9h2.4a2 2 0 0 0 2-1.9L15.75 8M10.5 11v5.5M13.5 11v5.5"
+        d="M9.25 5h5.5M6.5 8h11M8.25 8l.55 9.9a2.1 2.1 0 0 0 2.1 1.98h2.2a2.1 2.1 0 0 0 2.1-1.98L15.75 8"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
+      />
+      <path
+        d="M10.5 11.25v5.25M13.5 11.25v5.25"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
       />
     </svg>
   );
