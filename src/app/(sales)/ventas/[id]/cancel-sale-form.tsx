@@ -14,8 +14,16 @@ export function CancelSaleForm({ saleId }: { saleId: string }) {
   );
 
   return (
-    <form action={formAction} className="space-y-3">
-      <Input name="reason" placeholder="Motivo de anulacion" required />
+    <form
+      action={formAction}
+      className="space-y-3"
+      onSubmit={(event) => {
+        if (!window.confirm("Confirmar anulacion de la venta?")) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <Input name="reason" placeholder="Motivo obligatorio de anulacion" required />
       {state.error ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
           {state.error}

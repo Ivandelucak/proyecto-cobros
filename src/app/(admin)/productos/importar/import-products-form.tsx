@@ -14,6 +14,25 @@ import {
 } from "./actions";
 
 const initialState: ImportProductsState = {};
+const acceptedColumns = [
+  "nombre",
+  "codigo_barras",
+  "sku",
+  "categoria",
+  "marca",
+  "precio_venta",
+  "costo",
+  "stock",
+  "stock_minimo",
+  "unidad",
+  "activo",
+  "acceso_rapido"
+];
+const importRules = [
+  "No se eliminan productos existentes.",
+  "Si el codigo de barras o SKU ya existe, se actualiza.",
+  "Las categorias inexistentes se crean automaticamente."
+];
 
 export function ImportProductsForm() {
   const [previewState, previewAction, previewPending] = useActionState(
@@ -29,6 +48,39 @@ export function ImportProductsForm() {
 
   return (
     <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[1fr_420px]">
+        <Card className="p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+                Importacion segura
+              </h2>
+              <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                {importRules.map((rule) => (
+                  <p key={rule}>{rule}</p>
+                ))}
+              </div>
+            </div>
+            <LinkButton href="/productos/plantilla" variant="primary">
+              Descargar plantilla
+            </LinkButton>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            Columnas aceptadas
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {acceptedColumns.map((column) => (
+              <Badge key={column} tone="blue">
+                {column}
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       <Card className="p-5">
         <form action={previewAction} className="grid gap-4 md:grid-cols-[1fr_auto]">
           <label className="space-y-2">
@@ -47,7 +99,7 @@ export function ImportProductsForm() {
             <Button type="submit" variant="primary" disabled={previewPending}>
               {previewPending ? "Leyendo..." : "Previsualizar"}
             </Button>
-            <LinkButton href="/productos/plantilla">Descargar plantilla</LinkButton>
+            <LinkButton href="/productos/plantilla">Plantilla</LinkButton>
           </div>
         </form>
       </Card>

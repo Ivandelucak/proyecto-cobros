@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
+import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
+import { getCustomerBalanceMap } from "@/lib/customer-account";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { formatStock } from "@/lib/stock-format";
@@ -36,6 +38,18 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
   const from = params.from ?? dateInput(daysAgo(7));
   const to = params.to ?? dateInput(new Date());
   const method = parsePaymentMethod(params.method);
+  const today = dateInput(new Date());
+  const quickRanges = [
+    { label: "Hoy", href: `/reportes?from=${today}&to=${today}` },
+    {
+      label: "Esta semana",
+      href: `/reportes?from=${dateInput(startOfCurrentWeek())}&to=${today}`
+    },
+    {
+      label: "Este mes",
+      href: `/reportes?from=${dateInput(startOfCurrentMonth())}&to=${today}`
+    }
+  ];
   const dateWhere = {
     gte: startOfDay(from),
     lt: nextDay(to)
@@ -46,7 +60,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
     ...(method ? { payments: { some: { method } } } : {})
   } satisfies Prisma.SaleWhereInput;
 
-  const [sales, cancelledSales, stockLowProducts, recentSales] = await Promise.all([
+  const [sales, cancelledSales, stockLowProducts, recentSales, purchases, customers] = await Promise.all([
     prisma.sale.findMany({
       where: saleWhere,
       include: {
@@ -90,6 +104,17 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
       },
       orderBy: { createdAt: "desc" },
       take: 10
+    }),
+    prisma.purchase.findMany({
+      where: {
+        createdAt: dateWhere
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    }),
+    prisma.customer.findMany({
+      where: { active: true, deletedAt: null },
+      select: { id: true, name: true }
     })
   ]);
 
@@ -98,12 +123,38 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
     .slice(0, 12);
   const metrics = buildMetrics(sales, cancelledSales);
   const topProducts = buildTopProducts(sales);
+  const customerBalances = await getCustomerBalanceMap(customers.map((customer) => customer.id));
+  const allDebtors = customers
+    .map((customer) => ({
+      ...customer,
+      balance: customerBalances.get(customer.id) ?? new Prisma.Decimal(0)
+    }))
+    .filter((customer) => customer.balance.gt(0))
+    .sort((left, right) => right.balance.comparedTo(left.balance));
+  const debtors = allDebtors.slice(0, 8);
+  const pendingCustomerBalance = allDebtors.reduce(
+    (sum, customer) => sum.plus(customer.balance),
+    new Prisma.Decimal(0)
+  );
+  const purchaseTotal = purchases.reduce(
+    (sum, purchase) => sum.plus(purchase.total),
+    new Prisma.Decimal(0)
+  );
 
   return (
     <section className="space-y-5">
       <PageHeader
         title="Reportes"
         description="Resumen real de ventas, pagos, anulaciones y productos."
+        actions={
+          <>
+            {quickRanges.map((range) => (
+              <LinkButton key={range.label} href={range.href} size="sm">
+                {range.label}
+              </LinkButton>
+            ))}
+          </>
+        }
       />
 
       <Card className="p-4">
@@ -124,20 +175,42 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
         </form>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Total vendido" value={formatARS(metrics.totalSold)} />
-        <Metric label="Cantidad ventas" value={String(metrics.salesCount)} />
-        <Metric label="Ticket promedio" value={formatARS(metrics.averageTicket)} />
-        <Metric label="Total anuladas" value={formatARS(metrics.cancelledTotal)} tone="red" />
-        <Metric label="Efectivo" value={formatARS(metrics.payments.CASH)} />
-        <Metric label="Debito" value={formatARS(metrics.payments.DEBIT)} />
-        <Metric label="Credito" value={formatARS(metrics.payments.CREDIT)} />
-        <Metric label="Transferencia" value={formatARS(metrics.payments.TRANSFER)} />
-        <Metric label="MercadoPago" value={formatARS(metrics.payments.MERCADOPAGO)} />
-        <Metric label="Cuenta corriente" value={formatARS(metrics.payments.CURRENT_ACCOUNT)} />
-        <Metric label="Recargos" value={formatARS(metrics.surcharges)} />
-        <Metric label="Descuentos" value={formatARS(metrics.discounts)} />
-        <Metric label="Ganancia estimada" value={formatARS(metrics.estimatedProfit)} />
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Total vendido" value={formatARS(metrics.totalSold)} />
+          <Metric label="Cantidad ventas" value={String(metrics.salesCount)} />
+          <Metric label="Ticket promedio" value={formatARS(metrics.averageTicket)} />
+          <Metric label="Total anuladas" value={formatARS(metrics.cancelledTotal)} tone="red" />
+        </div>
+
+        <MetricSection title="Medios de pago">
+          <Metric label="Efectivo" value={formatARS(metrics.payments.CASH)} compact />
+          <Metric label="Debito" value={formatARS(metrics.payments.DEBIT)} compact />
+          <Metric label="Credito" value={formatARS(metrics.payments.CREDIT)} compact />
+          <Metric label="Transferencia" value={formatARS(metrics.payments.TRANSFER)} compact />
+          <Metric label="MercadoPago" value={formatARS(metrics.payments.MERCADOPAGO)} compact />
+          <Metric
+            label="Cuenta corriente"
+            value={formatARS(metrics.payments.CURRENT_ACCOUNT)}
+            compact
+          />
+        </MetricSection>
+
+        <MetricSection title="Totales complementarios" columns="xl:grid-cols-3">
+          <Metric label="Recargos" value={formatARS(metrics.surcharges)} compact />
+          <Metric label="Descuentos" value={formatARS(metrics.discounts)} compact />
+          <Metric label="Ganancia estimada" value={formatARS(metrics.estimatedProfit)} compact />
+        </MetricSection>
+
+        <MetricSection title="Cuenta corriente y compras" columns="xl:grid-cols-3">
+          <Metric
+            label="Ventas a cuenta corriente"
+            value={formatARS(metrics.payments.CURRENT_ACCOUNT)}
+            compact
+          />
+          <Metric label="Saldos pendientes" value={formatARS(pendingCustomerBalance)} compact />
+          <Metric label="Compras del periodo" value={formatARS(purchaseTotal)} compact />
+        </MetricSection>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -190,6 +263,34 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
                 left={`#${sale.saleNumber} - ${sale.user.name}`}
                 right={formatARS(sale.total)}
                 badge="Anulada"
+              />
+            ))
+          )}
+        </ReportTable>
+
+        <ReportTable title="Clientes con mayor deuda">
+          {debtors.length === 0 ? (
+            <EmptyLine text="Sin saldos pendientes." />
+          ) : (
+            debtors.map((customer) => (
+              <Row
+                key={customer.id}
+                left={customer.name}
+                right={formatARS(customer.balance)}
+              />
+            ))
+          )}
+        </ReportTable>
+
+        <ReportTable title="Compras recientes">
+          {purchases.length === 0 ? (
+            <EmptyLine text="Sin compras en el periodo." />
+          ) : (
+            purchases.map((purchase) => (
+              <Row
+                key={purchase.id}
+                left={`#${purchase.purchaseNumber}`}
+                right={formatARS(purchase.total)}
               />
             ))
           )}
@@ -272,19 +373,38 @@ function buildTopProducts(
 function Metric({
   label,
   value,
-  tone
+  tone,
+  compact = false
 }: {
   label: string;
   value: string;
   tone?: "red";
+  compact?: boolean;
 }) {
   return (
-    <Card className="p-5">
+    <Card className={compact ? "p-4" : "p-5"}>
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
       <p className={tone === "red" ? "mt-2 text-2xl font-semibold text-red-700 dark:text-red-300" : "mt-2 text-2xl font-semibold text-gray-950 dark:text-gray-50"}>
         {value}
       </p>
     </Card>
+  );
+}
+
+function MetricSection({
+  title,
+  children,
+  columns = "xl:grid-cols-6"
+}: {
+  title: string;
+  children: React.ReactNode;
+  columns?: string;
+}) {
+  return (
+    <div>
+      <h2 className="mb-3 text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
+      <div className={`grid gap-4 md:grid-cols-2 ${columns}`}>{children}</div>
+    </div>
   );
 }
 
@@ -342,6 +462,20 @@ function parsePaymentMethod(value: string | undefined) {
 function daysAgo(days: number) {
   const date = new Date();
   date.setDate(date.getDate() - days);
+  return date;
+}
+
+function startOfCurrentWeek() {
+  const date = new Date();
+  const day = date.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  date.setDate(date.getDate() - diff);
+  return date;
+}
+
+function startOfCurrentMonth() {
+  const date = new Date();
+  date.setDate(1);
   return date;
 }
 

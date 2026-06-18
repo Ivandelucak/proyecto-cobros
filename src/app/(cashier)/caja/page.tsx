@@ -10,9 +10,11 @@ export default async function CajaPage() {
   ]);
 
   return (
-    <section className="space-y-5">
-      <CashSessionPanel cashSession={cashSession} />
+    <section className="flex min-h-[calc(100vh-8.5rem)] flex-col gap-4">
       {cashSession ? <CashRegister initialSuggestedProducts={suggestedProducts} /> : null}
+      <div className="mt-auto">
+        <CashSessionPanel cashSession={cashSession} />
+      </div>
     </section>
   );
 }

@@ -1,4 +1,12 @@
-import { Prisma, Role, SaleStatus, StockMovementType } from "@prisma/client";
+import {
+  CustomerAccountMovementType,
+  PaymentMethod,
+  Prisma,
+  Role,
+  SaleStatus,
+  StockMovementType
+} from "@prisma/client";
+import { createCustomerAccountMovement } from "@/lib/customer-account";
 import { prisma } from "@/lib/prisma";
 import { assertRole } from "@/lib/permissions";
 
@@ -23,7 +31,8 @@ export async function cancelSale(input: {
     const sale = await tx.sale.findUnique({
       where: { id: input.saleId },
       include: {
-        items: true
+        items: true,
+        payments: true
       }
     });
 
@@ -77,6 +86,23 @@ export async function cancelSale(input: {
           referenceId: sale.id,
           userId: user.id
         }
+      });
+    }
+
+    const currentAccountAmount = sale.payments
+      .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
+      .reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0))
+      .toDecimalPlaces(2);
+
+    if (sale.customerId && currentAccountAmount.gt(0)) {
+      await createCustomerAccountMovement(tx, {
+        customerId: sale.customerId,
+        saleId: sale.id,
+        type: CustomerAccountMovementType.SALE_CANCELLED,
+        amount: currentAccountAmount,
+        reason: `Anulacion venta #${sale.saleNumber}`,
+        paymentMethod: PaymentMethod.CURRENT_ACCOUNT,
+        userId: user.id
       });
     }
 

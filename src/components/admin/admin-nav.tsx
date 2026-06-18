@@ -8,36 +8,45 @@ type RoleValue = "ADMIN" | "CASHIER";
 
 const navItems = [
   { href: "/caja", label: "Caja" },
-  { href: "/productos", label: "Productos" },
-  { href: "/categorias", label: "Categorias", adminOnly: true },
+  { href: "/clientes", label: "Clientes", adminOnly: true },
+  { href: "/productos", label: "Productos", adminOnly: true },
+  { href: "/categorias", label: "Categorías", adminOnly: true },
   { href: "/stock", label: "Stock", adminOnly: true },
-  { href: "/ventas", label: "Ventas" },
+  { href: "/proveedores", label: "Proveedores", adminOnly: true },
+  { href: "/compras", label: "Compras", adminOnly: true },
+  { href: "/ventas", label: "Ventas", cashierLabel: "Mis ventas" },
   { href: "/reportes", label: "Reportes", adminOnly: true },
-  { href: "/configuracion", label: "Configuracion", adminOnly: true }
+  { href: "/configuracion", label: "Configuración", adminOnly: true }
 ];
 
-export function AdminNav({ role }: { role: RoleValue }) {
+export function AdminNav({ role, compact = false }: { role: RoleValue; compact?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <nav className="mt-8 space-y-1">
+    <nav className={cn("space-y-1", compact ? "mt-6" : "mt-8")}>
       {navItems
         .filter((item) => role === "ADMIN" || !item.adminOnly)
         .map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const label =
+            role === "CASHIER" && item.cashierLabel ? item.cashierLabel : item.label;
 
           return (
             <Link
               key={item.href}
               href={item.href}
+              title={label}
               className={cn(
-                "block rounded-md px-3 py-2 text-sm font-medium transition duration-150",
+                "block rounded-md font-medium transition duration-150",
+                compact
+                  ? "px-2 py-2 text-sm"
+                  : "px-3 py-2 text-sm",
                 active
                   ? "bg-brand-50 text-brand-700 ring-1 ring-brand-100 dark:bg-brand-600/20 dark:text-white dark:ring-brand-500/30"
                   : "text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-white"
               )}
             >
-              {item.label}
+              {label}
             </Link>
           );
         })}

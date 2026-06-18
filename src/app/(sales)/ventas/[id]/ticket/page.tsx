@@ -1,6 +1,7 @@
 import { PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
 import { LinkButton } from "@/components/ui/link-button";
 import { PrintButton } from "@/components/ui/print-button";
+import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
@@ -74,8 +75,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
         <section>
           <Line label="Venta" value={`#${sale.saleNumber}`} />
-          <Line label="Fecha" value={formatDateTime(sale.createdAt)} />
+          <Line label="Fecha" value={formatDateTimeStable(sale.createdAt)} />
           <Line label="Cajero" value={sale.user.name} />
+          {sale.customer ? <Line label="Cliente" value={sale.customer.name} /> : null}
           {sale.cashSession ? <Line label="Caja" value={sale.cashSession.id.slice(-6)} /> : null}
         </section>
 
@@ -128,6 +130,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
                   )}`}
                 />
               ) : null}
+              {payment.method === PaymentMethod.CURRENT_ACCOUNT ? (
+                <Line label="Cuenta corriente" value="Saldo cargado al cliente" />
+              ) : null}
             </div>
           ))}
         </section>
@@ -139,7 +144,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
             <section>
               <Line
                 label="Anulada"
-                value={sale.cancelledAt ? formatDateTime(sale.cancelledAt) : "-"}
+                value={sale.cancelledAt ? formatDateTimeStable(sale.cancelledAt) : "-"}
               />
               <p className="mt-1">Motivo: {sale.cancellationReason ?? "-"}</p>
             </section>
@@ -192,11 +197,4 @@ function unitLabel(unitType: UnitType) {
   };
 
   return labels[unitType];
-}
-
-function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(value);
 }

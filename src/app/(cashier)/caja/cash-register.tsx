@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { TrashIcon } from "@/components/ui/icons";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { formatARS } from "@/lib/money";
@@ -21,7 +22,9 @@ import {
 import { cn } from "@/lib/ui";
 import {
   confirmRegisterSaleAction,
+  searchCashCustomersAction,
   type CashProductResult,
+  type CashCustomerResult,
   searchCashProductsAction
 } from "./actions";
 
@@ -43,6 +46,8 @@ type PaymentEntry = {
   amount: string;
   receivedAmount?: string;
   installments?: number;
+  customerId?: string;
+  customerName?: string;
 };
 
 type SaleSuccess = {
@@ -81,6 +86,9 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
   const [installments, setInstallments] = useState(1);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [cashReceived, setCashReceived] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerResults, setCustomerResults] = useState<CashCustomerResult[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<CashCustomerResult | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<SaleSuccess | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -123,6 +131,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
     paymentMethod === "CASH" ? Math.max(roundMoney(currentReceived - currentAmount), 0) : 0;
   const quickCashAmounts = buildQuickCashAmounts(remaining);
   const compactProducts = cart.length > 0;
+  const paymentsDisabled = cart.length === 0;
 
   useEffect(() => {
     const search = query.trim();
@@ -148,6 +157,28 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       window.clearTimeout(timer);
     };
   }, [query, startTransition]);
+
+  useEffect(() => {
+    const search = customerQuery.trim();
+    if (paymentMethod !== "CURRENT_ACCOUNT" || search.length < 2) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        const customers = await searchCashCustomersAction(search);
+        if (!cancelled) {
+          setCustomerResults(customers);
+        }
+      });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [customerQuery, paymentMethod, startTransition]);
 
   function handleQueryChange(value: string) {
     setQuery(value);
@@ -316,6 +347,11 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       return;
     }
 
+    if (paymentMethod === "CURRENT_ACCOUNT" && !selectedCustomer) {
+      showMessage("Selecciona un cliente para cargar a cuenta corriente.", "error");
+      return;
+    }
+
     const option = paymentMethod === "CREDIT" ? getCreditInstallmentOption(installments) : null;
     if (paymentMethod === "CREDIT" && !option) {
       showMessage("Cantidad de cuotas invalida.", "error");
@@ -367,11 +403,17 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
         id: createPaymentId(),
         method: paymentMethod,
         amount: String(amount),
-        installments: paymentMethod === "CREDIT" ? installments : undefined
+        installments: paymentMethod === "CREDIT" ? installments : undefined,
+        customerId:
+          paymentMethod === "CURRENT_ACCOUNT" ? selectedCustomer?.id : undefined,
+        customerName:
+          paymentMethod === "CURRENT_ACCOUNT" ? selectedCustomer?.name : undefined
       }
     ]);
     setPaymentAmount("");
     setCashReceived("");
+    setCustomerQuery("");
+    setCustomerResults([]);
     setMessage(null);
   }
 
@@ -414,6 +456,9 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
 
     setMessage(null);
     startTransition(async () => {
+      const accountPayment = payments.find(
+        (payment) => payment.method === "CURRENT_ACCOUNT"
+      );
       const result = await confirmRegisterSaleAction({
         items: cart.map((item) => ({
           productId: item.id,
@@ -424,7 +469,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
           amount: payment.amount,
           receivedAmount: payment.receivedAmount,
           installments: payment.method === "CREDIT" ? payment.installments : undefined
-        }))
+        })),
+        customerId: accountPayment?.customerId ?? null
       });
 
       if (!result.ok) {
@@ -442,6 +488,9 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
       setCashReceived("");
       setInstallments(1);
       setPaymentMethod("CASH");
+      setCustomerQuery("");
+      setCustomerResults([]);
+      setSelectedCustomer(null);
       clearSearch();
       if (result.suggestedProducts) {
         setSuggestedProducts(result.suggestedProducts);
@@ -456,11 +505,11 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
 
   return (
     <section
-      className="grid min-h-[calc(100vh-6.5rem)] gap-5 xl:grid-cols-[minmax(0,1fr)_400px]"
+      className="grid min-h-[calc(100vh-12rem)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]"
       onKeyDown={handlePanelKeyDown}
     >
-      <div className="space-y-5">
-        <Card className="p-5">
+      <div className="space-y-4">
+        <Card className="p-4">
           <form
             className="flex gap-3"
             onSubmit={(event) => {
@@ -486,7 +535,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
             </Button>
           </form>
 
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
             <Badge>F1 Buscar</Badge>
             <Badge>Enter Agregar</Badge>
             <Badge>F4 Cobrar</Badge>
@@ -513,14 +562,14 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
 
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Producto</th>
-                  <th className="px-4 py-3 font-medium">Cantidad</th>
-                  <th className="px-4 py-3 font-medium">Precio</th>
-                  <th className="px-4 py-3 font-medium">Subtotal</th>
-                  <th className="px-4 py-3 text-right font-medium">Accion</th>
+                  <th className="px-4 py-2.5 font-medium">Producto</th>
+                  <th className="px-4 py-2.5 font-medium">Cantidad</th>
+                  <th className="px-4 py-2.5 font-medium">Precio</th>
+                  <th className="px-4 py-2.5 font-medium">Subtotal</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Accion</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -542,7 +591,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                         key={item.id}
                         className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-2.5">
                           <div className="font-medium text-gray-950 dark:text-gray-50">
                             {item.name}
                           </div>
@@ -550,7 +599,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                             {item.categoryName} - {formatStock(item.stock, item.unitType)}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
@@ -588,18 +637,21 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-4 py-3">{formatARS(item.salePrice)}</td>
-                        <td className="px-4 py-3 font-medium">
+                        <td className="px-4 py-2.5">{formatARS(item.salePrice)}</td>
+                        <td className="px-4 py-2.5 font-medium">
                           {formatARS(subtotalItem)}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-2.5 text-right">
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
+                            className="h-9 w-9 border-red-100 px-0 text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-200 dark:hover:bg-red-950/40"
+                            aria-label="Quitar producto"
+                            title="Quitar producto"
                             onClick={() => removeItem(item.id)}
                           >
-                            Quitar
+                            <TrashIcon className="h-4 w-4" />
                           </Button>
                         </td>
                       </tr>
@@ -612,13 +664,13 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
         </Card>
       </div>
 
-      <aside className="space-y-5">
-        <Card className="p-5">
+      <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+        <Card className="p-4">
           <div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Total final
             </p>
-            <p className="mt-2 text-4xl font-semibold tracking-tight text-gray-950 dark:text-gray-50">
+            <p className="mt-1 text-5xl font-semibold tracking-tight text-gray-950 dark:text-gray-50">
               {formatARS(total)}
             </p>
             {surchargeAmount > 0 ? (
@@ -628,7 +680,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
             ) : null}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <SummaryValue label="Pagado" value={formatARS(totalPaid)} />
             <SummaryValue
               label={overpaid > 0 ? "Excedente" : "Pendiente"}
@@ -637,18 +689,43 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
             />
           </div>
 
-          <div className="mt-5 space-y-4">
+          <div
+            className={cn(
+              "mt-4 rounded-lg border px-3 py-2 text-sm font-medium",
+              paymentsDisabled
+                ? "border-gray-200 bg-gray-50 text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400"
+                : remaining === 0 && overpaid === 0
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  : overpaid > 0
+                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
+                    : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+            )}
+          >
+            {paymentsDisabled
+              ? "Agrega productos para cargar pagos."
+              : overpaid > 0
+                ? `Excedente ${formatARS(overpaid)}`
+                : remaining === 0
+                  ? "Pago completo"
+                  : `Pendiente ${formatARS(remaining)}`}
+          </div>
+
+          <div className={cn("mt-4 space-y-4", paymentsDisabled && "opacity-60")}>
             <label className="space-y-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                 Medio de pago
               </span>
               <Select
                 value={paymentMethod}
+                disabled={paymentsDisabled}
                 onChange={(event) => {
                   const nextMethod = event.target.value as PaymentMethodValue;
                   setPaymentMethod(nextMethod);
                   if (nextMethod !== "CREDIT") {
                     setInstallments(1);
+                  }
+                  if (nextMethod !== "CURRENT_ACCOUNT") {
+                    setCustomerResults([]);
                   }
                 }}
               >
@@ -668,7 +745,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                   </span>
                   <Select
                     value={installments}
-                    disabled={Boolean(creditPayment)}
+                    disabled={paymentsDisabled || Boolean(creditPayment)}
                     onChange={(event) => setInstallments(Number(event.target.value))}
                   >
                     {CREDIT_INSTALLMENT_OPTIONS.map((option) => (
@@ -682,7 +759,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                 <div className="text-sm text-gray-600 dark:text-gray-300">
                   <p>Recargo estimado: {formatARS(surchargeAmount)}</p>
                   <p>
-                    Total en cuotas:{" "}
+                    Valor por cuota estimado:{" "}
                     {formatARS(
                       installments > 0 ? roundMoney(total / installments) : total
                     )}
@@ -691,7 +768,80 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
               </div>
             ) : null}
 
-            {paymentMethod === "CASH" ? (
+            {paymentMethod === "CURRENT_ACCOUNT" ? (
+              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/20">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                  Esta venta se cargara a cuenta corriente.
+                </p>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Cliente
+                  </span>
+                  <Input
+                    value={customerQuery}
+                    disabled={paymentsDisabled}
+                    onChange={(event) => {
+                      setCustomerQuery(event.target.value);
+                      setSelectedCustomer(null);
+                      if (event.target.value.trim().length < 2) {
+                        setCustomerResults([]);
+                      }
+                    }}
+                    placeholder="Buscar nombre, documento o telefono"
+                  />
+                </label>
+                {customerResults.length > 0 ? (
+                  <div className="space-y-2">
+                    {customerResults.map((customer) => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+                        onClick={() => {
+                          setSelectedCustomer(customer);
+                          setCustomerQuery(customer.name);
+                          setCustomerResults([]);
+                        }}
+                      >
+                        <span className="block font-medium text-gray-950 dark:text-gray-50">
+                          {customer.name}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {[customer.document, customer.phone].filter(Boolean).join(" - ") ||
+                            "Sin documento"}
+                          {" · "}Saldo {formatARS(customer.balance)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {selectedCustomer ? (
+                  <div className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm dark:border-amber-900/60 dark:bg-neutral-950">
+                    <p className="font-medium text-gray-950 dark:text-gray-50">
+                      {selectedCustomer.name}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Saldo actual {formatARS(selectedCustomer.balance)}
+                    </p>
+                  </div>
+                ) : null}
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Importe a fiar
+                  </span>
+                  <Input
+                    value={paymentAmount}
+                    inputMode="decimal"
+                    disabled={paymentsDisabled}
+                    onChange={(event) =>
+                      setPaymentAmount(sanitizeMoneyInput(event.target.value))
+                    }
+                    placeholder={formatARS(remaining)}
+                    className="h-12 text-lg font-semibold"
+                  />
+                </label>
+              </div>
+            ) : paymentMethod === "CASH" ? (
               <>
                 <label className="space-y-2">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -700,6 +850,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                   <Input
                     value={cashReceived}
                     inputMode="decimal"
+                    disabled={paymentsDisabled}
                     onChange={(event) =>
                       setCashReceived(sanitizeMoneyInput(event.target.value))
                     }
@@ -713,6 +864,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                       key={`${amount}-${index}`}
                       type="button"
                       size="sm"
+                      disabled={paymentsDisabled}
                       onClick={() => setCashReceived(String(amount))}
                     >
                       {index === 0 ? "Exacto " : ""}
@@ -726,6 +878,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                   hint={
                     currentChange > 0
                       ? `Vuelto ${formatARS(currentChange)}`
+                      : remaining > 0 && currentAmount >= remaining
+                        ? "Pago exacto"
                       : remaining > 0
                         ? `Faltan ${formatARS(Math.max(remaining - currentAmount, 0))}`
                         : "Sin saldo pendiente"
@@ -740,6 +894,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                 <Input
                   value={paymentAmount}
                   inputMode="decimal"
+                  disabled={paymentsDisabled}
                   onChange={(event) =>
                     setPaymentAmount(sanitizeMoneyInput(event.target.value))
                   }
@@ -753,7 +908,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
               type="button"
               variant="secondary"
               className="w-full"
-              disabled={isPending || cart.length === 0}
+              disabled={isPending || paymentsDisabled}
               onClick={addPayment}
             >
               Agregar pago
@@ -781,6 +936,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                           ? `${payment.installments} cuota${
                               payment.installments > 1 ? "s" : ""
                             }`
+                          : payment.method === "CURRENT_ACCOUNT" && payment.customerName
+                            ? payment.customerName
                           : "Pago aplicado"}
                     </p>
                   </div>
@@ -788,6 +945,8 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
                     type="button"
                     size="sm"
                     variant="ghost"
+                    aria-label={`Quitar pago ${paymentLabels[payment.method]}`}
+                    title="Quitar pago"
                     onClick={() => removePayment(payment.id)}
                   >
                     Quitar
@@ -831,7 +990,7 @@ export function CashRegister({ initialSuggestedProducts }: CashRegisterProps) {
               type="button"
               variant="primary"
               disabled={!canFinish}
-              className="h-12"
+              className="h-14 text-base"
               onClick={finishSale}
             >
               {isPending ? "Confirmando..." : "Finalizar venta"}
@@ -864,12 +1023,14 @@ function ProductGrid({
   }
 
   return (
-    <div className="mt-5">
+    <div className={compact ? "mt-3" : "mt-5"}>
       <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
       <div
         className={cn(
           "mt-3 grid gap-2",
-          compact ? "sm:grid-cols-3 xl:grid-cols-6" : "sm:grid-cols-2 xl:grid-cols-4"
+          compact
+            ? "grid-cols-2 sm:grid-cols-4 2xl:grid-cols-6"
+            : "sm:grid-cols-2 xl:grid-cols-4"
         )}
       >
         {products.map((product, index) => (
@@ -878,15 +1039,21 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition duration-150 hover:bg-white active:scale-[0.995] dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900",
+              "rounded-lg border border-gray-200 bg-gray-50 text-left transition duration-150 hover:bg-white active:scale-[0.995] dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900",
+              compact ? "p-2.5" : "p-3",
               selectedIndex === index &&
                 "border-brand-500 bg-brand-50 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
             )}
           >
-            <span className="line-clamp-2 min-h-10 text-sm font-medium text-gray-950 dark:text-gray-50">
+            <span
+              className={cn(
+                "line-clamp-2 text-sm font-medium text-gray-950 dark:text-gray-50",
+                compact ? "min-h-9" : "min-h-10"
+              )}
+            >
               {product.name}
             </span>
-            <span className="mt-2 block text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <span className={cn("block text-sm font-semibold text-gray-950 dark:text-gray-50", compact ? "mt-1.5" : "mt-2")}>
               {formatARS(product.salePrice)}
             </span>
             <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">

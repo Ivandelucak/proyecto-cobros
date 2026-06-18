@@ -34,6 +34,17 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
           status: true
         }
       },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          document: true
+        }
+      },
+      accountMovements: {
+        orderBy: { createdAt: "desc" },
+        take: 1
+      },
       cancelledBy: {
         select: {
           name: true,

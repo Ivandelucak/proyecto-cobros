@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
 import { CancelSaleForm } from "./cancel-sale-form";
@@ -34,7 +35,7 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
       <section className="mx-auto max-w-6xl space-y-5">
         <PageHeader
           title={`Venta #${sale.saleNumber}`}
-          description={`Confirmada el ${formatDateTime(sale.createdAt)} por ${sale.user.name}.`}
+          description={`Confirmada el ${formatDateTimeStable(sale.createdAt)} por ${sale.user.name}.`}
           actions={
             <>
               <LinkButton href={backHref}>Volver</LinkButton>
@@ -116,27 +117,40 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
 
               <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-neutral-800">
                 <TotalRow
+                  label="Cliente"
+                  value={sale.customer ? sale.customer.name : "Consumidor final"}
+                />
+                <TotalRow
                   label="Caja"
                   value={
                     sale.cashSession
-                      ? `Abierta ${formatDateTime(sale.cashSession.openedAt)}`
+                      ? `Abierta ${formatDateTimeStable(sale.cashSession.openedAt)}`
                       : "Sin caja asociada"
                   }
                 />
-                {sale.status === SaleStatus.CANCELLED ? (
-                  <>
-                    <TotalRow
-                      label="Anulada"
-                      value={sale.cancelledAt ? formatDateTime(sale.cancelledAt) : "-"}
-                    />
-                    <TotalRow
-                      label="Motivo"
-                      value={sale.cancellationReason ?? "Sin motivo registrado"}
-                    />
-                  </>
-                ) : null}
               </div>
             </Card>
+
+            {sale.status === SaleStatus.CANCELLED ? (
+              <Card className="border-red-200 bg-red-50 p-5 dark:border-red-900/70 dark:bg-red-950/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-red-800 dark:text-red-200">
+                      Venta anulada
+                    </h2>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-200">
+                      {sale.cancelledAt
+                        ? formatDateTimeStable(sale.cancelledAt)
+                        : "Sin fecha registrada"}
+                    </p>
+                  </div>
+                  <Badge tone="red">Anulada</Badge>
+                </div>
+                <p className="mt-3 text-sm text-red-800 dark:text-red-100">
+                  {sale.cancellationReason ?? "Sin motivo registrado"}
+                </p>
+              </Card>
+            ) : null}
 
             <Card className="p-5">
               <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
@@ -164,10 +178,15 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
                   </div>
                 ))}
               </div>
+              {sale.accountMovements.length > 0 ? (
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100">
+                  Cuenta corriente generada: {formatARS(sale.accountMovements[0].amount)}
+                </div>
+              ) : null}
             </Card>
 
             {user.role === Role.ADMIN && sale.status === SaleStatus.PAID ? (
-              <Card className="p-5">
+              <Card className="border-red-200 p-5 dark:border-red-900/60">
                 <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
                   Anular venta
                 </h2>
@@ -255,11 +274,4 @@ function unitLabel(unitType: UnitType) {
   };
 
   return labels[unitType];
-}
-
-function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(value);
 }

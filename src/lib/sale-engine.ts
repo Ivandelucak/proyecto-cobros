@@ -1,5 +1,6 @@
 import {
   CashSessionStatus,
+  CustomerAccountMovementType,
   PaymentMethod,
   Prisma,
   Role,
@@ -9,6 +10,7 @@ import {
 import { getCreditInstallmentOption } from "@/lib/payment-options";
 import { prisma } from "@/lib/prisma";
 import { assertRole } from "@/lib/permissions";
+import { createCustomerAccountMovement } from "@/lib/customer-account";
 
 type SaleItemInput = {
   productId: string;
@@ -28,6 +30,7 @@ type PaymentInput = {
 
 export type ConfirmSaleInput = {
   userId: string;
+  customerId?: string | null;
   items: SaleItemInput[];
   payments: PaymentInput[];
 };
@@ -113,6 +116,29 @@ export async function confirmSale(input: ConfirmSaleInput) {
     const discountTotal = new Prisma.Decimal(0);
     const { paymentRecords, surchargeTotal } = buildPaymentRecords(input.payments, subtotal);
     const total = subtotal.plus(surchargeTotal).minus(discountTotal).toDecimalPlaces(2);
+    const currentAccountTotal = paymentRecords
+      .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
+      .reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0))
+      .toDecimalPlaces(2);
+
+    let customerId: string | null = null;
+    if (currentAccountTotal.gt(0)) {
+      if (!input.customerId) {
+        throw new Error("Selecciona un cliente para cuenta corriente.");
+      }
+
+      const customer = await tx.customer.findFirst({
+        where: { id: input.customerId, active: true, deletedAt: null },
+        select: { id: true }
+      });
+
+      if (!customer) {
+        throw new Error("Cliente invalido para cuenta corriente.");
+      }
+
+      customerId = customer.id;
+    }
+
     const paymentTotal = paymentRecords.reduce(
       (sum, payment) => sum.plus(payment.amount),
       new Prisma.Decimal(0)
@@ -130,6 +156,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
         discountTotal,
         surchargeTotal,
         status: SaleStatus.PAID,
+        customerId,
         cashSessionId: cashSession.id,
         items: {
           create: saleItems.map((item) => item.data)
@@ -165,6 +192,18 @@ export async function confirmSale(input: ConfirmSaleInput) {
           userId: user.id,
           reason: `Venta #${sale.saleNumber}`
         }
+      });
+    }
+
+    if (customerId && currentAccountTotal.gt(0)) {
+      await createCustomerAccountMovement(tx, {
+        customerId,
+        saleId: sale.id,
+        type: CustomerAccountMovementType.DEBIT,
+        amount: currentAccountTotal,
+        reason: `Venta #${sale.saleNumber} a cuenta corriente`,
+        paymentMethod: PaymentMethod.CURRENT_ACCOUNT,
+        userId: user.id
       });
     }
 

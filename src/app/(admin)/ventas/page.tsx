@@ -7,6 +7,7 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { getCurrentUser } from "@/lib/auth";
+import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 
@@ -62,6 +63,9 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
           id: true,
           openedAt: true
         }
+      },
+      customer: {
+        select: { name: true }
       },
       payments: {
         orderBy: { createdAt: "asc" }
@@ -123,6 +127,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                   <th className="px-4 py-3 font-medium">Venta</th>
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Cajero</th>
+                  <th className="px-4 py-3 font-medium">Cliente</th>
                   <th className="px-4 py-3 font-medium">Caja</th>
                   <th className="px-4 py-3 font-medium">Items</th>
                   <th className="px-4 py-3 font-medium">Pagos</th>
@@ -141,7 +146,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                       #{sale.saleNumber}
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
-                      {formatDateTime(sale.createdAt)}
+                      {formatDateTimeStable(sale.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-950 dark:text-gray-50">
@@ -152,15 +157,31 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
-                      {sale.cashSession ? sale.cashSession.id.slice(-6) : "-"}
+                      {sale.customer?.name ?? "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {sale.cashSession ? (
+                        <div>
+                          <Badge tone="blue">Caja {sale.cashSession.id.slice(-6)}</Badge>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {formatDateTimeStable(sale.cashSession.openedAt)}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-400">Sin caja</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
                       {sale._count.items}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
-                      {sale.payments
-                        .map((payment) => paymentLabels[payment.method])
-                        .join(" + ")}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {sale.payments.map((payment) => (
+                          <Badge key={payment.id} tone="gray">
+                            {paymentLabels[payment.method]}
+                          </Badge>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
                       {formatARS(sale.total)}
@@ -279,11 +300,4 @@ function nextDay(value: string) {
   const date = startOfDay(value);
   date.setDate(date.getDate() + 1);
   return date;
-}
-
-function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(value);
 }

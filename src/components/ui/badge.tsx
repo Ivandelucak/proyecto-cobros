@@ -15,7 +15,7 @@ const tones = {
   gray:
     "border-gray-200 bg-gray-50 text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-200",
   blue:
-    "border-brand-100 bg-brand-50 text-brand-700 dark:border-brand-900/70 dark:bg-brand-950/40 dark:text-brand-100"
+    "border-brand-100 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/15 dark:text-brand-100"
 };
 
 export function Badge({ className, tone = "gray", ...props }: BadgeProps) {

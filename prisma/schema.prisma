@@ -64,12 +64,24 @@ enum CashMovementType {
   CASH_ADJUSTMENT
 }
 
+enum CustomerAccountMovementType {
+  DEBIT
+  PAYMENT
+  ADJUSTMENT
+  SALE_CANCELLED
+}
+
 enum StockMovementType {
   SALE
   MANUAL_ADJUSTMENT
   PURCHASE
   WASTE
   INITIAL_IMPORT
+}
+
+enum PurchaseStatus {
+  RECEIVED
+  CANCELLED
 }
 
 model User {
@@ -87,6 +99,8 @@ model User {
   closedCashSessions CashSession[]   @relation("CashSessionClosedBy")
   cashMovements      CashMovement[]
   stockMovements     StockMovement[]
+  customerMovements  CustomerAccountMovement[]
+  purchases          Purchase[]
 
   @@index([role])
 }
@@ -141,10 +155,32 @@ model Product {
   updatedAt             DateTime        @updatedAt
   saleItems             SaleItem[]
   stockMovements        StockMovement[]
+  purchaseItems         PurchaseItem[]
 
   @@index([categoryId])
   @@index([active, deletedAt])
   @@index([name])
+}
+
+model Customer {
+  id               String                    @id @default(cuid())
+  name             String
+  document         String?
+  phone            String?
+  email            String?
+  address          String?
+  notes            String?
+  active           Boolean                   @default(true)
+  deletedAt        DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  sales            Sale[]
+  accountMovements CustomerAccountMovement[]
+
+  @@index([name])
+  @@index([document])
+  @@index([phone])
+  @@index([active, deletedAt])
 }
 
 model Sale {
@@ -157,6 +193,8 @@ model Sale {
   status             SaleStatus   @default(PAID)
   userId             String
   user               User         @relation("SaleUser", fields: [userId], references: [id], onDelete: Restrict)
+  customerId         String?
+  customer           Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   cashSessionId      String?
   cashSession        CashSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
   cancelledAt        DateTime?
@@ -167,12 +205,37 @@ model Sale {
   updatedAt          DateTime     @updatedAt
   items              SaleItem[]
   payments           Payment[]
+  accountMovements   CustomerAccountMovement[]
 
   @@index([createdAt])
   @@index([status])
   @@index([userId])
+  @@index([customerId])
   @@index([cashSessionId])
   @@index([cancelledById])
+}
+
+model CustomerAccountMovement {
+  id              String                      @id @default(cuid())
+  customerId      String
+  customer        Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  saleId          String?
+  sale            Sale?                       @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  type            CustomerAccountMovementType
+  amount          Decimal                     @db.Decimal(12, 2)
+  previousBalance Decimal                     @db.Decimal(12, 2)
+  newBalance      Decimal                     @db.Decimal(12, 2)
+  reason          String
+  paymentMethod   PaymentMethod?
+  userId          String
+  user            User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt       DateTime                    @default(now())
+
+  @@index([customerId])
+  @@index([saleId])
+  @@index([type])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model CashSession {
@@ -271,4 +334,58 @@ model StockMovement {
   @@index([productId])
   @@index([type])
   @@index([userId])
+}
+
+model Supplier {
+  id        String     @id @default(cuid())
+  name      String
+  cuit      String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@index([name])
+  @@index([cuit])
+  @@index([phone])
+  @@index([active])
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  purchaseNumber Int            @unique @default(autoincrement())
+  supplierId     String?
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  total          Decimal        @db.Decimal(12, 2)
+  notes          String?
+  status         PurchaseStatus @default(RECEIVED)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  items          PurchaseItem[]
+
+  @@index([supplierId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PurchaseItem {
+  id                  String   @id @default(cuid())
+  purchaseId          String
+  purchase            Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productNameSnapshot String
+  quantity            Decimal  @db.Decimal(12, 3)
+  unitCost            Decimal  @db.Decimal(12, 2)
+  subtotal            Decimal  @db.Decimal(12, 2)
+
+  @@index([purchaseId])
+  @@index([productId])
 }

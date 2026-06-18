@@ -5,6 +5,7 @@ import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { getOpenCashSessionSnapshot } from "@/lib/cash-session";
+import { getCustomerBalanceMap } from "@/lib/customer-account";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 
@@ -18,7 +19,7 @@ export default async function AdminPage() {
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
 
-  const [cashSession, todaySales, stockLowProducts, latestSales] = await Promise.all([
+  const [cashSession, todaySales, stockLowProducts, latestSales, customers, latestPurchases] = await Promise.all([
     getOpenCashSessionSnapshot(),
     prisma.sale.findMany({
       where: {
@@ -42,6 +43,15 @@ export default async function AdminPage() {
       },
       orderBy: { createdAt: "desc" },
       take: 6
+    }),
+    prisma.customer.findMany({
+      where: { active: true, deletedAt: null },
+      select: { id: true }
+    }),
+    prisma.purchase.findMany({
+      include: { supplier: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 6
     })
   ]);
 
@@ -50,6 +60,11 @@ export default async function AdminPage() {
     .slice(0, 8);
   const todayTotal = todaySales.reduce(
     (sum, sale) => sum.plus(sale.total),
+    new Prisma.Decimal(0)
+  );
+  const customerBalances = await getCustomerBalanceMap(customers.map((customer) => customer.id));
+  const pendingCustomerBalance = [...customerBalances.values()].reduce(
+    (sum, balance) => sum.plus(balance.gt(0) ? balance : 0),
     new Prisma.Decimal(0)
   );
   const topProducts = buildTopProducts(todaySales);
@@ -70,7 +85,7 @@ export default async function AdminPage() {
           detail={cashSession ? `Esperado ${formatARS(cashSession.summary.expectedCash)}` : "Sin caja abierta"}
         />
         <Metric label="Stock bajo" value={String(lowProducts.length)} />
-        <Metric label="Cantidad de ventas" value={String(todaySales.length)} />
+        <Metric label="Cuentas corrientes" value={formatARS(pendingCustomerBalance)} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -119,6 +134,35 @@ export default async function AdminPage() {
                   </span>
                   <span className="text-gray-700 dark:text-gray-200">
                     {formatARS(product.total)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            Compras recientes
+          </h2>
+          <div className="mt-4 divide-y divide-gray-100 dark:divide-neutral-800">
+            {latestPurchases.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                Sin compras registradas.
+              </p>
+            ) : (
+              latestPurchases.map((purchase) => (
+                <div key={purchase.id} className="flex justify-between gap-3 py-2 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-950 dark:text-gray-50">
+                      Compra #{purchase.purchaseNumber}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {purchase.supplier?.name ?? "Sin proveedor"}
+                    </p>
+                  </div>
+                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                    {formatARS(purchase.total)}
                   </span>
                 </div>
               ))

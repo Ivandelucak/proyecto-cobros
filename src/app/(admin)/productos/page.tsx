@@ -1,4 +1,4 @@
-import { Role, UnitType } from "@prisma/client";
+import { UnitType } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { formatStock, shouldUseDecimalQuantity } from "@/lib/stock-format";
 import { setProductActiveAction } from "./actions";
@@ -20,17 +20,19 @@ type ProductsPageProps = {
     categoryId?: string;
     status?: string;
     quickAccess?: string;
+    stock?: string;
   }>;
 };
 
 export default async function ProductosPage({ searchParams }: ProductsPageProps) {
+  await requireAdminPage();
+
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const categoryId = params.categoryId ?? "";
   const status = params.status ?? "active";
   const quickAccess = params.quickAccess ?? "all";
-  const user = await getCurrentUser();
-  const canManage = user?.role === Role.ADMIN;
+  const stockFilter = params.stock ?? "all";
 
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
@@ -63,6 +65,21 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
       orderBy: [{ active: "desc" }, { updatedAt: "desc" }]
     })
   ]);
+  const visibleProducts = products.filter((product) => {
+    if (stockFilter === "low") {
+      return product.stock.lte(product.minStock);
+    }
+
+    if (stockFilter === "out") {
+      return product.stock.lte(0);
+    }
+
+    if (stockFilter === "noBarcode") {
+      return !product.barcode;
+    }
+
+    return true;
+  });
 
   return (
     <section className="space-y-5">
@@ -70,21 +87,20 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
         title="Productos"
         description="Listado y administracion de productos, precios, unidades y estado."
         actions={
-          canManage ? (
-            <>
+          <>
+            <LinkButton href="/productos/plantilla">Plantilla</LinkButton>
             <LinkButton href="/productos/importar">Importar Excel</LinkButton>
-            <LinkButton href="/productos/exportar">Exportar productos</LinkButton>
-            <LinkButton href="/productos/plantilla">Descargar plantilla</LinkButton>
+            <LinkButton href="/productos/exportar">Exportar</LinkButton>
+            <LinkButton href="/productos/ajuste-precios">Ajuste de precios</LinkButton>
             <LinkButton href="/productos/nuevo" variant="primary">
               Nuevo producto
             </LinkButton>
-            </>
-          ) : null
+          </>
         }
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_220px_160px_180px_auto]">
+        <form className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_210px_150px_170px_170px_auto]">
           <Input
             name="q"
             placeholder="Buscar por nombre, codigo o SKU"
@@ -108,13 +124,19 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
             <option value="yes">Acceso rapido</option>
             <option value="no">Sin acceso rapido</option>
           </Select>
+          <Select name="stock" defaultValue={stockFilter}>
+            <option value="all">Todo stock</option>
+            <option value="low">Stock bajo</option>
+            <option value="out">Sin stock</option>
+            <option value="noBarcode">Sin codigo</option>
+          </Select>
           <Button type="submit" variant="primary">
             Filtrar
           </Button>
         </form>
       </Card>
 
-      {products.length === 0 ? (
+      {visibleProducts.length === 0 ? (
         <EmptyState
           title="No hay productos para mostrar"
           description="Ajusta los filtros o carga un nuevo producto."
@@ -131,14 +153,13 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                   <th className="px-4 py-3 font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Unidad</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
-                  {canManage ? (
-                    <th className="px-4 py-3 text-right font-medium">Acciones</th>
-                  ) : null}
+                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
-                {products.map((product) => {
+                {visibleProducts.map((product) => {
                   const stockLow = product.stock.lte(product.minStock);
+                  const stockOut = product.stock.lte(0);
                   const isWeighted =
                     product.allowsDecimalQuantity || shouldUseDecimalQuantity(product.unitType);
 
@@ -159,7 +180,8 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                           {product.quickAccess ? (
                             <Badge tone="blue">Acceso rapido</Badge>
                           ) : null}
-                          {isWeighted ? <Badge tone="amber">Por peso</Badge> : null}
+                          {isWeighted ? <Badge tone="amber">Venta decimal</Badge> : null}
+                          {!product.barcode ? <Badge tone="gray">Sin codigo</Badge> : null}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
@@ -173,7 +195,11 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                           <span className="text-gray-800 dark:text-gray-100">
                             {formatStock(product.stock, product.unitType)}
                           </span>
-                          {stockLow ? <Badge tone="amber">Bajo</Badge> : null}
+                          {stockOut ? (
+                            <Badge tone="red">Sin stock</Badge>
+                          ) : stockLow ? (
+                            <Badge tone="amber">Bajo</Badge>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
@@ -184,30 +210,28 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                           {product.active ? "Activo" : "Inactivo"}
                         </Badge>
                       </td>
-                      {canManage ? (
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-2">
-                            <LinkButton href={`/productos/${product.id}/editar`} size="sm">
-                              Editar
-                            </LinkButton>
-                            <form
-                              action={setProductActiveAction.bind(
-                                null,
-                                product.id,
-                                !product.active
-                              )}
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <LinkButton href={`/productos/${product.id}/editar`} size="sm">
+                            Editar
+                          </LinkButton>
+                          <form
+                            action={setProductActiveAction.bind(
+                              null,
+                              product.id,
+                              !product.active
+                            )}
+                          >
+                            <Button
+                              type="submit"
+                              size="sm"
+                              variant={product.active ? "danger" : "secondary"}
                             >
-                              <Button
-                                type="submit"
-                                size="sm"
-                                variant={product.active ? "danger" : "secondary"}
-                              >
-                                {product.active ? "Desactivar" : "Reactivar"}
-                              </Button>
-                            </form>
-                          </div>
-                        </td>
-                      ) : null}
+                              {product.active ? "Desactivar" : "Reactivar"}
+                            </Button>
+                          </form>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

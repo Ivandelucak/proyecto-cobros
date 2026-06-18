@@ -33,6 +33,7 @@ export async function createProductAction(
   formData: FormData
 ): Promise<ProductFormState> {
   const user = await requireAdminUser();
+  const submitIntent = readString(formData, "submitIntent");
 
   try {
     const data = await parseProductForm(formData);
@@ -62,7 +63,7 @@ export async function createProductAction(
   }
 
   revalidatePath("/productos");
-  redirect("/productos");
+  redirect(submitIntent === "createAnother" ? "/productos/nuevo" : "/productos");
 }
 
 export async function updateProductAction(

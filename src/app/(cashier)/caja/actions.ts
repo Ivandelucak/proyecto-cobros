@@ -22,6 +22,14 @@ export type CashProductResult = {
   quickAccess: boolean;
 };
 
+export type CashCustomerResult = {
+  id: string;
+  name: string;
+  document: string | null;
+  phone: string | null;
+  balance: string;
+};
+
 export type ProductSearchResult = {
   products: CashProductResult[];
   exactProductId: string | null;
@@ -40,6 +48,7 @@ export type RegisterSaleInput = {
     quantity: string;
   }>;
   payments: RegisterPaymentInput[];
+  customerId?: string | null;
 };
 
 export type RegisterSaleResult = {
@@ -119,6 +128,56 @@ export async function searchCashProductsAction(query: string): Promise<ProductSe
   };
 }
 
+export async function searchCashCustomersAction(query: string): Promise<CashCustomerResult[]> {
+  await requireCashierUser();
+
+  const search = query.trim();
+  if (search.length < 2) {
+    return [];
+  }
+
+  const customers = await prisma.customer.findMany({
+    where: {
+      active: true,
+      deletedAt: null,
+      OR: [
+        { name: { contains: search } },
+        { document: { contains: search } },
+        { phone: { contains: search } }
+      ]
+    },
+    orderBy: { name: "asc" },
+    take: 8
+  });
+
+  const balances = await Promise.all(
+    customers.map(async (customer) => ({
+      customer,
+      balance: await prisma.customerAccountMovement.findMany({
+        where: { customerId: customer.id },
+        select: { type: true, amount: true }
+      })
+    }))
+  );
+
+  return balances.map(({ customer, balance }) => {
+    const total = balance.reduce((sum, movement) => {
+      const amount = movement.amount;
+      return movement.type === "PAYMENT" || movement.type === "SALE_CANCELLED"
+        ? sum.minus(amount)
+        : sum.plus(amount);
+    }, new Prisma.Decimal(0));
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      document: customer.document,
+      phone: customer.phone,
+      balance: total.toDecimalPlaces(2).toString()
+    };
+  });
+}
+
 export async function confirmRegisterSaleAction(
   input: RegisterSaleInput
 ): Promise<RegisterSaleResult> {
@@ -140,6 +199,7 @@ export async function confirmRegisterSaleAction(
     const payments = buildPayments(input.payments);
     const sale = await confirmSale({
       userId: user.id,
+      customerId: input.customerId ?? null,
       items,
       payments
     });
@@ -148,6 +208,7 @@ export async function confirmRegisterSaleAction(
     revalidatePath("/productos");
     revalidatePath("/stock");
     revalidatePath("/ventas");
+    revalidatePath("/clientes");
 
     return {
       ok: true,

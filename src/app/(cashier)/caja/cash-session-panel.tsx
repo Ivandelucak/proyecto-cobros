@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 import { Input, Select } from "@/components/ui/input";
+import { formatDateTimeStable, formatTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import {
   addCashMovementAction,
@@ -14,6 +16,7 @@ import {
 } from "./actions";
 
 type CashMovementTypeValue = "INCOME" | "EXPENSE" | "CASH_WITHDRAWAL" | "CASH_ADJUSTMENT";
+type PanelMode = "open" | "movement" | "close" | null;
 
 type CashSessionPanelProps = {
   cashSession: CashSessionSnapshot | null;
@@ -54,6 +57,8 @@ const movementLabels: Record<CashMovementTypeValue, string> = {
 const initialState: CashSessionFormState = {};
 
 export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
+  const [mode, setMode] = useState<PanelMode>(null);
+  const [detailsVisible, setDetailsVisible] = useState(false);
   const [openState, openAction, opening] = useActionState(
     openCashSessionAction,
     initialState
@@ -67,20 +72,42 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
     initialState
   );
 
+  function toggleDetails() {
+    setDetailsVisible((current) => {
+      if (current) {
+        setMode(null);
+      }
+      return !current;
+    });
+  }
+
   if (!cashSession) {
     return (
-      <Card className="p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <Badge tone="red">Caja cerrada</Badge>
-            <h2 className="mt-3 text-lg font-semibold text-gray-950 dark:text-gray-50">
-              Abri la caja para vender
-            </h2>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              Las ventas quedan bloqueadas hasta registrar el monto inicial.
-            </p>
+      <Card className="p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="red">Caja cerrada</Badge>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Las ventas estan bloqueadas.
+              </span>
+            </div>
           </div>
-          <form action={openAction} className="grid gap-3 sm:grid-cols-[160px_1fr_auto]">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => setMode(mode === "open" ? null : "open")}
+            aria-expanded={mode === "open"}
+          >
+            {mode === "open" ? "Ocultar apertura" : "Abrir caja"}
+          </Button>
+        </div>
+
+        {mode === "open" ? (
+          <form
+            action={openAction}
+            className="mt-3 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950 md:grid-cols-[180px_1fr_auto]"
+          >
             <Input
               name="openingAmount"
               inputMode="decimal"
@@ -89,91 +116,144 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
             />
             <Input name="notes" placeholder="Observacion opcional" />
             <Button type="submit" variant="primary" disabled={opening}>
-              {opening ? "Abriendo..." : "Abrir caja"}
+              {opening ? "Abriendo..." : "Confirmar apertura"}
             </Button>
           </form>
-        </div>
+        ) : null}
         <StateMessage state={openState} />
       </Card>
     );
   }
 
+  const recentMovements = cashSession.movements.slice(0, 3);
+
   return (
-    <Card className="p-5">
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="green">Caja abierta</Badge>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              Desde {formatDateTime(cashSession.openedAt)} por {cashSession.openedByName}
-            </span>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Summary label="Inicial" value={formatARS(cashSession.openingAmount)} />
-            <Summary label="Efectivo ventas" value={formatARS(cashSession.summary.cashSales)} />
-            <Summary label="Movimientos" value={formatARS(netMovements(cashSession.summary))} />
-            <Summary label="Esperado" value={formatARS(cashSession.summary.expectedCash)} strong />
+    <Card className="p-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge tone="green">Caja abierta</Badge>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            Abierta desde {formatTimeStable(cashSession.openedAt)}
+          </span>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="gap-2"
+          onClick={toggleDetails}
+          aria-expanded={detailsVisible}
+        >
+          {detailsVisible ? (
+            <EyeOffIcon className="h-4 w-4" />
+          ) : (
+            <EyeIcon className="h-4 w-4" />
+          )}
+          {detailsVisible ? "Ocultar" : "Mostrar"}
+        </Button>
+      </div>
+
+      {detailsVisible ? (
+        <div className="mt-3 border-t border-gray-200 pt-3 dark:border-neutral-800">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Abierta por {cashSession.openedByName} el{" "}
+                {formatDateTimeStable(cashSession.openedAt)}
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <Summary label="Inicial" value={formatARS(cashSession.openingAmount)} />
+                <Summary
+                  label="Ventas efectivo"
+                  value={formatARS(cashSession.summary.cashSales)}
+                />
+                <Summary
+                  label="Movimientos"
+                  value={formatARS(netMovements(cashSession.summary))}
+                />
+                <Summary
+                  label="Efectivo esperado"
+                  value={formatARS(cashSession.summary.expectedCash)}
+                  strong
+                />
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => setMode(mode === "movement" ? null : "movement")}
+                aria-expanded={mode === "movement"}
+              >
+                Movimiento
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => setMode(mode === "close" ? null : "close")}
+                aria-expanded={mode === "close"}
+              >
+                Cerrar caja
+              </Button>
+            </div>
           </div>
 
-          <form action={movementAction} className="mt-5 grid gap-3 lg:grid-cols-[160px_140px_1fr_auto]">
-            <Select name="type" defaultValue="EXPENSE">
-              {Object.entries(movementLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-            <Input name="amount" inputMode="decimal" placeholder="Monto" required />
-            <Input name="reason" placeholder="Motivo obligatorio" required />
-            <Button type="submit" disabled={moving}>
-              {moving ? "Guardando..." : "Movimiento"}
-            </Button>
-          </form>
-          <StateMessage state={movementState} />
-
-          {cashSession.movements.length > 0 ? (
-            <div className="mt-4 grid gap-2 text-sm lg:grid-cols-2">
-              {cashSession.movements.map((movement) => (
-                <div
+          {recentMovements.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {recentMovements.map((movement) => (
+                <span
                   key={movement.id}
-                  className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-950"
+                  className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300"
+                  title={movement.reason}
                 >
-                  <div className="flex justify-between gap-3">
-                    <span className="font-medium text-gray-950 dark:text-gray-50">
-                      {movementLabels[movement.type]} - {formatARS(movement.amount)}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatTime(movement.createdAt)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {movement.reason}
-                  </p>
-                </div>
+                  {movementLabels[movement.type]} {formatARS(movement.amount)} -{" "}
+                  {formatTimeStable(movement.createdAt)}
+                </span>
               ))}
             </div>
           ) : null}
-        </div>
 
-        <form action={closeAction} className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
-            Cerrar caja
-          </h2>
-          <div className="mt-3 space-y-3">
-            <Input
-              name="countedCashAmount"
-              inputMode="decimal"
-              placeholder="Efectivo contado"
-              required
-            />
-            <Input name="notes" placeholder="Observacion opcional" />
-            <Button type="submit" variant="primary" className="w-full" disabled={closing}>
-              {closing ? "Cerrando..." : "Cerrar caja"}
-            </Button>
-          </div>
-          <StateMessage state={closeState} />
-        </form>
-      </div>
+          {mode === "movement" ? (
+            <form
+              action={movementAction}
+              className="mt-3 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950 lg:grid-cols-[160px_140px_1fr_auto]"
+            >
+              <Select name="type" defaultValue="EXPENSE">
+                {Object.entries(movementLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              <Input name="amount" inputMode="decimal" placeholder="Monto" required />
+              <Input name="reason" placeholder="Motivo obligatorio" required />
+              <Button type="submit" disabled={moving}>
+                {moving ? "Guardando..." : "Guardar movimiento"}
+              </Button>
+            </form>
+          ) : null}
+          {mode === "movement" ? <StateMessage state={movementState} /> : null}
+
+          {mode === "close" ? (
+            <form
+              action={closeAction}
+              className="mt-3 grid gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/70 dark:bg-red-950/20 lg:grid-cols-[180px_1fr_auto]"
+            >
+              <Input
+                name="countedCashAmount"
+                inputMode="decimal"
+                placeholder="Efectivo contado"
+                required
+              />
+              <Input name="notes" placeholder="Observacion opcional" />
+              <Button type="submit" variant="danger" disabled={closing}>
+                {closing ? "Cerrando..." : "Confirmar cierre"}
+              </Button>
+            </form>
+          ) : null}
+          {mode === "close" ? <StateMessage state={closeState} /> : null}
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -188,9 +268,17 @@ function Summary({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
-      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
-      <p className={strong ? "mt-1 text-lg font-semibold text-gray-950 dark:text-gray-50" : "mt-1 font-medium text-gray-950 dark:text-gray-50"}>
+    <div className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+      <p
+        className={
+          strong
+            ? "mt-0.5 text-lg font-semibold text-gray-950 dark:text-gray-50"
+            : "mt-0.5 text-sm font-semibold text-gray-950 dark:text-gray-50"
+        }
+      >
         {value}
       </p>
     </div>
@@ -222,18 +310,4 @@ function netMovements(summary: CashSessionSummary) {
     Number(summary.cashWithdrawals) +
     Number(summary.cashAdjustments)
   );
-}
-
-function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(value);
-}
-
-function formatTime(value: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(value);
 }

@@ -62,7 +62,11 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
   return (
     <form action={formAction} className="space-y-5">
       <Card className="p-5">
-        <div className="grid gap-4 md:grid-cols-2">
+        <SectionTitle
+          title="Datos del comercio"
+          description="Identidad principal del local dentro del sistema."
+        />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Nombre del comercio">
             <Input name="name" defaultValue={initialValues.name} required />
           </Field>
@@ -78,15 +82,33 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
           <Field label="CUIT">
             <Input name="cuit" defaultValue={initialValues.cuit ?? ""} />
           </Field>
+          <Field label="Moneda">
+            <Input name="currency" defaultValue={initialValues.currency} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle
+          title="Datos para ticket"
+          description="Nombre, direccion y telefono se usan en los tickets impresos."
+        />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Telefono">
             <Input name="phone" defaultValue={initialValues.phone ?? ""} />
           </Field>
           <Field label="Direccion">
             <Input name="address" defaultValue={initialValues.address ?? ""} />
           </Field>
-          <Field label="Moneda">
-            <Input name="currency" defaultValue={initialValues.currency} />
-          </Field>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle
+          title="Preferencias visuales"
+          description="Ajustes livianos de apariencia. La carga de imagenes queda preparada para una etapa futura."
+        />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Tema preferido">
             <Select name="preferredTheme" defaultValue={initialValues.preferredTheme ?? ""}>
               <option value="">Sin preferencia</option>
@@ -95,7 +117,11 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
             </Select>
           </Field>
           <Field label="Logo URL">
-            <Input name="logoUrl" defaultValue={initialValues.logoUrl ?? ""} />
+            <Input
+              name="logoUrl"
+              defaultValue={initialValues.logoUrl ?? ""}
+              placeholder="Preparado para uso futuro"
+            />
           </Field>
         </div>
       </Card>
@@ -112,11 +138,26 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
       ) : null}
 
       <div className="flex justify-end">
-        <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Guardando..." : "Guardar configuracion"}
+        <Button type="submit" variant="primary" className="min-w-44" disabled={pending}>
+          {pending ? "Guardando..." : "Guardar datos"}
         </Button>
       </div>
     </form>
+  );
+}
+
+function SectionTitle({
+  title,
+  description
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{description}</p>
+    </div>
   );
 }
 
