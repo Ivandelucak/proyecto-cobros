@@ -83,7 +83,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
 
   if (!cashSession) {
     return (
-      <Card className="border-slate-300 p-3 shadow-md shadow-slate-200/70 dark:shadow-none">
+      <Card className="border-slate-300 border-l-4 border-l-red-500 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +128,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
   const recentMovements = cashSession.movements.slice(0, 3);
 
   return (
-    <Card className="border-slate-300 p-3 shadow-md shadow-slate-200/70 dark:shadow-none">
+    <Card className="border-slate-300 border-l-4 border-l-emerald-500 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone="green">Caja abierta</Badge>

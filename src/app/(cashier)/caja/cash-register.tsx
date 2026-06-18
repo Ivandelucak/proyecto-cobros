@@ -533,7 +533,7 @@ export function CashRegister({
       onKeyDown={handlePanelKeyDown}
     >
       <div className="space-y-4">
-        <Card className="border-slate-300 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
+        <Card className="border-slate-200/95 p-4 shadow-md shadow-slate-200/40 dark:shadow-none">
           <form
             className="flex gap-3"
             onSubmit={(event) => {
@@ -584,16 +584,16 @@ export function CashRegister({
           )}
         </Card>
 
-        <Card className="overflow-hidden border-slate-300 shadow-md shadow-slate-200/70 dark:shadow-none">
+        <Card className="overflow-hidden border-slate-200/95 shadow-md shadow-slate-200/40 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b border-slate-300 bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b-2 border-slate-300 bg-slate-200/80 text-xs uppercase tracking-wide text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">Producto</th>
-                  <th className="px-4 py-2.5 font-medium">Cantidad</th>
-                  <th className="px-4 py-2.5 font-medium">Precio</th>
-                  <th className="px-4 py-2.5 font-medium">Subtotal</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Accion</th>
+                  <th className="px-4 py-3 font-semibold">Producto</th>
+                  <th className="px-4 py-3 font-semibold">Cantidad</th>
+                  <th className="px-4 py-3 font-semibold">Precio</th>
+                  <th className="px-4 py-3 font-semibold">Subtotal</th>
+                  <th className="px-4 py-3 text-right font-semibold">Accion</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
@@ -615,7 +615,7 @@ export function CashRegister({
                         key={item.id}
                         className="transition-colors hover:bg-slate-50 dark:hover:bg-neutral-800/60"
                       >
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-3.5">
                           <div className="font-medium text-gray-950 dark:text-gray-50">
                             {item.name}
                           </div>
@@ -623,7 +623,7 @@ export function CashRegister({
                             {item.categoryName} - {formatStock(item.stock, item.unitType)}
                           </div>
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
@@ -661,22 +661,20 @@ export function CashRegister({
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-4 py-2.5">{formatARS(item.salePrice)}</td>
-                        <td className="px-4 py-2.5 font-medium">
+                        <td className="px-4 py-3.5">{formatARS(item.salePrice)}</td>
+                        <td className="px-4 py-3.5 font-medium">
                           {formatARS(subtotalItem)}
                         </td>
-                        <td className="px-4 py-2.5 text-right">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-9 w-10 border-slate-300 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-neutral-700 dark:text-gray-300 dark:hover:border-red-900/60 dark:hover:bg-red-950/30 dark:hover:text-red-200"
-                              aria-label="Quitar producto"
-                              title="Quitar producto"
-                              onClick={() => removeItem(item.id)}
+                        <td className="px-4 py-3.5 text-right">
+                          <button
+                            type="button"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-red-50 hover:border-red-300 hover:text-red-600 dark:border-neutral-800 dark:text-neutral-400 dark:bg-neutral-900 dark:hover:bg-red-950/35 dark:hover:border-red-900/50 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-colors duration-150"
+                            aria-label="Quitar producto"
+                            title="Quitar producto"
+                            onClick={() => removeItem(item.id)}
                           >
                             <TrashIcon className="h-5 w-5" />
-                          </Button>
+                          </button>
                         </td>
                       </tr>
                     );
@@ -689,12 +687,12 @@ export function CashRegister({
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-        <Card className="border-slate-300 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
+        <Card className="border-slate-300/90 p-5 shadow-xl shadow-slate-200/60 dark:shadow-none border-t-4 border-t-brand-500">
           <div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Total final
             </p>
-            <p className="mt-1 text-5xl font-semibold tracking-tight text-gray-950 dark:text-gray-50">
+            <p className="mt-1 text-5xl font-extrabold tracking-tight text-slate-900 dark:text-gray-50">
               {formatARS(total)}
             </p>
             {surchargeAmount > 0 ? (
@@ -705,7 +703,7 @@ export function CashRegister({
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <SummaryValue label="Pagado" value={formatARS(totalPaid)} />
+            <SummaryValue label="Pagado" value={formatARS(totalPaid)} tone="ok" />
             <SummaryValue
               label={overpaid > 0 ? "Excedente" : "Pendiente"}
               value={formatARS(overpaid > 0 ? overpaid : remaining)}
@@ -715,7 +713,7 @@ export function CashRegister({
 
           <div
             className={cn(
-              "mt-4 rounded-lg border px-3 py-2 text-sm font-medium",
+              "mt-4 rounded-lg border px-3 py-2.5 text-sm font-semibold text-center transition-colors duration-150",
               paymentsDisabled
                 ? "border-slate-300 bg-slate-50 text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400"
                 : remaining === 0 && overpaid === 0
@@ -1016,12 +1014,17 @@ export function CashRegister({
               type="button"
               variant="primary"
               disabled={!canFinish}
-              className="h-14 text-base"
+              className="h-14 text-base font-bold tracking-wide w-full shadow-md shadow-brand-600/10 hover:shadow-brand-600/20 active:scale-[0.99] transition-all duration-200 disabled:shadow-none"
               onClick={finishSale}
             >
               {isPending ? "Confirmando..." : "Finalizar venta"}
             </Button>
-            <Button type="button" variant="secondary" onClick={cancelSale}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="border-slate-200 hover:bg-slate-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+              onClick={cancelSale}
+            >
               Cancelar venta
             </Button>
           </div>
@@ -1065,21 +1068,21 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "rounded-lg border border-slate-300 bg-white text-left shadow-sm transition duration-150 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md active:scale-[0.995] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900",
+              "group rounded-lg border border-slate-300/90 bg-white text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
               compact ? "p-2.5" : "p-3",
               selectedIndex === index &&
-                "border-brand-500 bg-brand-50 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
+                "border-brand-500 bg-brand-50/50 border-l-brand-600 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
             )}
           >
             <span
               className={cn(
-                "line-clamp-2 text-sm font-medium text-gray-950 dark:text-gray-50",
+                "line-clamp-2 text-sm font-semibold text-slate-800 dark:text-gray-200 group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors",
                 compact ? "min-h-9" : "min-h-10"
               )}
             >
               {product.name}
             </span>
-            <span className={cn("block text-sm font-semibold text-gray-950 dark:text-gray-50", compact ? "mt-1.5" : "mt-2")}>
+            <span className={cn("block text-base font-bold text-brand-600 dark:text-brand-400", compact ? "mt-1.5" : "mt-2")}>
               {formatARS(product.salePrice)}
             </span>
             <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
@@ -1102,15 +1105,23 @@ function SummaryValue({
   tone?: "default" | "ok" | "error";
 }) {
   return (
-    <div className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+    <div
+      className={cn(
+        "rounded-lg border p-3 shadow-sm transition-colors duration-200",
+        tone === "default" && "border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-neutral-950",
+        tone === "ok" && "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/60 dark:bg-neutral-950",
+        tone === "error" && "border-red-200 bg-red-50/50 dark:border-red-900/60 dark:bg-neutral-950"
+      )}
+    >
       <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label}
       </p>
       <p
         className={cn(
-          "mt-1 text-lg font-semibold text-gray-950 dark:text-gray-50",
-          tone === "ok" && "text-emerald-700 dark:text-emerald-300",
-          tone === "error" && "text-red-700 dark:text-red-300"
+          "mt-1 text-lg font-semibold",
+          tone === "default" && "text-amber-800 dark:text-amber-200",
+          tone === "ok" && "text-emerald-800 dark:text-emerald-300",
+          tone === "error" && "text-red-800 dark:text-red-300"
         )}
       >
         {value}

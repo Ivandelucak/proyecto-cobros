@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  background: #f3f4f6;
+  background: #f1f5f9;
 }
 
 .dark {
@@ -19,7 +19,7 @@ html:not([data-theme-ready]) body {
 
 body {
   min-height: 100vh;
-  background: #f3f4f6;
+  background: #f1f5f9;
   color: #111827;
   transition: background-color 180ms ease, color 180ms ease;
 }

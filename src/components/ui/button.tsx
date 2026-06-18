@@ -10,7 +10,7 @@ const variants = {
   primary:
     "border-brand-600 bg-brand-600 text-white shadow-brand-700/10 hover:bg-brand-700 active:scale-[0.99]",
   secondary:
-    "border-gray-300 bg-white text-gray-900 hover:border-gray-400 hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-neutral-600 dark:hover:bg-neutral-800",
+    "border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-100/60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-neutral-600 dark:hover:bg-neutral-800",
   outline:
     "border-gray-300 bg-transparent text-gray-800 hover:bg-gray-100 dark:border-neutral-700 dark:text-gray-100 dark:hover:bg-neutral-800",
   ghost:

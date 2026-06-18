@@ -42,8 +42,8 @@ export function AdminNav({ role, compact = false }: { role: RoleValue; compact?:
                 "block rounded-md font-medium transition duration-150",
                 compact ? "px-2 py-2 text-sm" : "px-3 py-2 text-sm",
                 active
-                  ? "bg-brand-50 text-brand-700 ring-1 ring-brand-100 dark:bg-brand-600/20 dark:text-white dark:ring-brand-500/30"
-                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-white"
+                  ? "bg-brand-100/70 text-brand-800 font-semibold ring-1 ring-brand-200/80 dark:bg-brand-600/20 dark:text-white dark:ring-brand-500/30"
+                  : "text-gray-700 hover:bg-slate-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-white"
               )}
             >
               {label}
