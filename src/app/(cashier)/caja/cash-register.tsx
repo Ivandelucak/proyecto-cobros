@@ -14,11 +14,14 @@ import { Card } from "@/components/ui/card";
 import { TrashIcon } from "@/components/ui/icons";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
+import { PrintButton } from "@/components/ui/print-button";
+import { recordTicketPrintAction } from "@/app/(sales)/ventas/print-actions";
 import { formatARS } from "@/lib/money";
 import type {
   CreditInstallmentPlanView,
   PaymentMethodSettingView
 } from "@/lib/payment-settings";
+import type { PrintSettingView } from "@/lib/print-settings";
 import { cn } from "@/lib/ui";
 import {
   confirmRegisterSaleAction,
@@ -50,6 +53,14 @@ type PaymentEntry = {
   customerName?: string;
 };
 
+type FinalPaymentsResult =
+  | { ok: true; payments: PaymentEntry[] }
+  | { ok: false; error: string };
+
+type AutomaticPaymentResult =
+  | { ok: true; payment: PaymentEntry }
+  | { ok: false; error: string };
+
 type SaleSuccess = {
   saleId: string;
   saleNumber: number;
@@ -64,6 +75,7 @@ type CashRegisterProps = {
   initialSuggestedProducts: CashProductResult[];
   paymentMethods: PaymentMethodSettingView[];
   creditPlans: CreditInstallmentPlanView[];
+  printSetting: PrintSettingView;
 };
 
 const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
@@ -75,12 +87,14 @@ const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
   CURRENT_ACCOUNT: "Cuenta corriente"
 };
 
+const AUTO_PAYMENT_AMOUNT = "__AUTO_PENDING__";
 const decimalUnits = new Set(["KG", "GR", "LITER", "METER"]);
 
 export function CashRegister({
   initialSuggestedProducts,
   paymentMethods,
-  creditPlans
+  creditPlans,
+  printSetting
 }: CashRegisterProps) {
   const defaultPaymentMethod =
     (paymentMethods[0]?.method as PaymentMethodValue | undefined) ?? "CASH";
@@ -145,7 +159,7 @@ export function CashRegister({
   const overpaid = Math.max(-balance, 0);
   const paymentsMatch = cart.length > 0 && Math.abs(balance) < 0.01;
   const hasInvalidCart = cart.some((item) => !isValidQuantity(item.quantity, item));
-  const canFinish = cart.length > 0 && !hasInvalidCart && paymentsMatch && !isPending;
+  const canFinish = cart.length > 0 && !hasInvalidCart && !isPending;
   const currentReceived = safeNumber(cashReceived);
   const currentAmount =
     paymentMethod === "CASH"
@@ -153,6 +167,12 @@ export function CashRegister({
       : safeNumber(paymentAmount || remaining);
   const currentChange =
     paymentMethod === "CASH" ? Math.max(roundMoney(currentReceived - currentAmount), 0) : 0;
+  const displayedPaymentAmount =
+    paymentAmount === AUTO_PAYMENT_AMOUNT
+      ? remaining > 0
+        ? String(remaining)
+        : ""
+      : paymentAmount;
   const quickCashAmounts = buildQuickCashAmounts(remaining);
   const compactProducts = cart.length > 0;
   const paymentsDisabled = cart.length === 0;
@@ -410,7 +430,7 @@ export function CashRegister({
       return;
     }
 
-    const amount = roundMoney(safeNumber(paymentAmount || remaining));
+    const amount = roundMoney(safeNumber(displayedPaymentAmount || remaining));
     if (amount <= 0) {
       showMessage("Ingresa un importe para el pago.", "error");
       return;
@@ -434,7 +454,7 @@ export function CashRegister({
           paymentMethod === "CURRENT_ACCOUNT" ? selectedCustomer?.name : undefined
       }
     ]);
-    setPaymentAmount("");
+    setPaymentAmount(shouldAutofillPaymentAmount(paymentMethod) ? AUTO_PAYMENT_AMOUNT : "");
     setCashReceived("");
     setCustomerQuery("");
     setCustomerResults([]);
@@ -467,20 +487,30 @@ export function CashRegister({
   }
 
   function finishSale() {
-    if (!canFinish) {
-      if (hasInvalidCart) {
-        showMessage("Revisa las cantidades del carrito.", "error");
-      } else if (payments.length === 0 || remaining > 0) {
-        showMessage("Completa los pagos antes de finalizar.", "error");
-      } else if (overpaid > 0) {
-        showMessage("Los pagos superan el total de la venta.", "error");
-      }
+    if (cart.length === 0) {
+      showMessage("Agrega productos antes de finalizar.", "error");
+      return;
+    }
+
+    if (hasInvalidCart) {
+      showMessage("Revisa las cantidades del carrito.", "error");
+      return;
+    }
+
+    if (overpaid > 0) {
+      showMessage("Los pagos superan el total de la venta.", "error");
+      return;
+    }
+
+    const finalPayments = buildFinalPayments();
+    if (!finalPayments.ok) {
+      showMessage(finalPayments.error, "error");
       return;
     }
 
     setMessage(null);
     startTransition(async () => {
-      const accountPayment = payments.find(
+      const accountPayment = finalPayments.payments.find(
         (payment) => payment.method === "CURRENT_ACCOUNT"
       );
       const result = await confirmRegisterSaleAction({
@@ -488,7 +518,7 @@ export function CashRegister({
           productId: item.id,
           quantity: item.quantity
         })),
-        payments: payments.map((payment) => ({
+        payments: finalPayments.payments.map((payment) => ({
           method: payment.method,
           amount: payment.amount,
           receivedAmount: payment.receivedAmount,
@@ -502,9 +532,13 @@ export function CashRegister({
         return;
       }
 
-      setSaleSuccess({
+      const confirmedSale = {
         saleId: result.saleId ?? "",
         saleNumber: result.saleNumber ?? 0
+      };
+      setSaleSuccess({
+        saleId: confirmedSale.saleId,
+        saleNumber: confirmedSale.saleNumber
       });
       setCart([]);
       setPayments([]);
@@ -520,11 +554,156 @@ export function CashRegister({
         setSuggestedProducts(result.suggestedProducts);
       }
       inputRef.current?.focus();
+      void maybeAutoPrintTicket(confirmedSale.saleId);
     });
   }
 
   function showMessage(text: string, tone: "ok" | "error") {
     setMessage({ text, tone });
+  }
+
+  async function maybeAutoPrintTicket(saleId: string) {
+    if (!printSetting.autoPrintTicket || !saleId) {
+      return;
+    }
+
+    if (!window.posElectron?.isElectron) {
+      showMessage(
+        "Venta confirmada. La impresion automatica esta disponible en Electron.",
+        "ok"
+      );
+      return;
+    }
+
+    if (printSetting.silentPrint && !printSetting.printerName) {
+      const error = "La impresion silenciosa requiere una impresora seleccionada.";
+      showMessage(`Venta confirmada, pero ${error}`, "error");
+      await recordTicketPrintAction({ saleId, ok: false, error });
+      return;
+    }
+
+    const result = await window.posElectron.printTicket(saleId, {
+      printerName: printSetting.printerName,
+      paperSize: printSetting.paperSize,
+      silent: printSetting.silentPrint,
+      copies: printSetting.copies,
+      marginMm: printSetting.marginMm
+    });
+
+    if (result.ok) {
+      showMessage("Venta confirmada e impresion enviada.", "ok");
+      await recordTicketPrintAction({ saleId, ok: true });
+      return;
+    }
+
+    const error = result.error || "No se pudo imprimir el ticket";
+    showMessage(`Venta confirmada, pero ${error}`, "error");
+    await recordTicketPrintAction({ saleId, ok: false, error });
+  }
+
+  function fillPendingAmount() {
+    const value = String(roundMoney(remaining));
+    if (paymentMethod === "CASH") {
+      setCashReceived(value);
+    } else {
+      setPaymentAmount(shouldAutofillPaymentAmount(paymentMethod) ? AUTO_PAYMENT_AMOUNT : value);
+    }
+    setMessage(null);
+  }
+
+  function buildFinalPayments(): FinalPaymentsResult {
+    if (paymentsMatch) {
+      return { ok: true, payments };
+    }
+
+    if (remaining <= 0) {
+      return { ok: false, error: "Los pagos no coinciden con el total de la venta." };
+    }
+
+    const automaticPayment = buildAutomaticPayment();
+    if (!automaticPayment.ok) {
+      return automaticPayment;
+    }
+
+    return {
+      ok: true,
+      payments: [...payments, automaticPayment.payment]
+    };
+  }
+
+  function buildAutomaticPayment(): AutomaticPaymentResult {
+    const amount = roundMoney(remaining);
+
+    if (paymentMethod === "CASH") {
+      const receivedAmount = roundMoney(safeNumber(cashReceived));
+      if (receivedAmount <= 0) {
+        return { ok: false, error: "Ingresa el efectivo recibido." };
+      }
+      if (receivedAmount < amount) {
+        return {
+          ok: false,
+          error: `El efectivo recibido no cubre el pendiente de ${formatARS(amount)}.`
+        };
+      }
+
+      return {
+        ok: true,
+        payment: {
+          id: createPaymentId(),
+          method: "CASH",
+          amount: String(amount),
+          receivedAmount: String(receivedAmount)
+        }
+      };
+    }
+
+    if (paymentMethod === "CREDIT") {
+      if (creditPayment) {
+        return { ok: false, error: "Solo se permite un pago con credito por venta." };
+      }
+      if (!selectedCreditOption) {
+        return { ok: false, error: "Cantidad de cuotas invalida." };
+      }
+
+      return {
+        ok: true,
+        payment: {
+          id: createPaymentId(),
+          method: "CREDIT",
+          amount: String(amount),
+          installments: selectedCreditOption.installments
+        }
+      };
+    }
+
+    if (paymentMethod === "CURRENT_ACCOUNT") {
+      if (!selectedCustomer) {
+        return {
+          ok: false,
+          error: "Selecciona un cliente para cargar a cuenta corriente."
+        };
+      }
+
+      return {
+        ok: true,
+        payment: {
+          id: createPaymentId(),
+          method: "CURRENT_ACCOUNT",
+          amount: String(amount),
+          customerId: selectedCustomer.id,
+          customerName: selectedCustomer.name
+        }
+      };
+    }
+
+    return {
+      ok: true,
+      payment: {
+        id: createPaymentId(),
+        method: paymentMethod,
+        amount: String(amount)
+      }
+    };
   }
 
   return (
@@ -533,7 +712,7 @@ export function CashRegister({
       onKeyDown={handlePanelKeyDown}
     >
       <div className="space-y-4">
-        <Card className="border-slate-200/95 p-4 shadow-md shadow-slate-200/40 dark:shadow-none">
+        <Card className="border-slate-300 bg-gradient-to-b from-white to-slate-50/50 p-4 shadow-lg shadow-slate-300/30 ring-1 ring-white/70 dark:bg-none dark:shadow-none dark:ring-0">
           <form
             className="flex gap-3"
             onSubmit={(event) => {
@@ -548,7 +727,7 @@ export function CashRegister({
               onChange={(event) => handleQueryChange(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Escanear codigo o buscar producto"
-              className="h-12 text-base"
+              className="h-12 border-slate-400/80 bg-white text-base shadow-inner shadow-slate-100/70 focus:border-brand-600 focus:ring-brand-100 dark:shadow-none"
             />
             <Button
               type="submit"
@@ -584,10 +763,10 @@ export function CashRegister({
           )}
         </Card>
 
-        <Card className="overflow-hidden border-slate-200/95 shadow-md shadow-slate-200/40 dark:shadow-none">
+        <Card className="overflow-hidden border-slate-300 shadow-lg shadow-slate-300/25 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b-2 border-slate-300 bg-slate-200/80 text-xs uppercase tracking-wide text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b-2 border-slate-300 bg-slate-200 text-xs uppercase tracking-wide text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Producto</th>
                   <th className="px-4 py-3 font-semibold">Cantidad</th>
@@ -661,14 +840,14 @@ export function CashRegister({
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-4 py-3.5">{formatARS(item.salePrice)}</td>
-                        <td className="px-4 py-3.5 font-medium">
+                        <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-gray-200">{formatARS(item.salePrice)}</td>
+                        <td className="px-4 py-3.5 font-semibold text-slate-900 dark:text-gray-50">
                           {formatARS(subtotalItem)}
                         </td>
                         <td className="px-4 py-3.5 text-right">
                           <button
                             type="button"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-red-50 hover:border-red-300 hover:text-red-600 dark:border-neutral-800 dark:text-neutral-400 dark:bg-neutral-900 dark:hover:bg-red-950/35 dark:hover:border-red-900/50 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-colors duration-150"
+                            className="inline-flex h-9 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-colors duration-150 hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:shadow dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300 dark:shadow-none dark:hover:border-red-900/50 dark:hover:bg-red-950/35 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                             aria-label="Quitar producto"
                             title="Quitar producto"
                             onClick={() => removeItem(item.id)}
@@ -687,12 +866,12 @@ export function CashRegister({
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-        <Card className="border-slate-300/90 p-5 shadow-xl shadow-slate-200/60 dark:shadow-none border-t-4 border-t-brand-500">
+        <Card className="border-slate-300/90 bg-gradient-to-b from-white to-slate-50/70 p-5 shadow-xl shadow-slate-300/40 ring-1 ring-white/80 dark:bg-none dark:shadow-none dark:ring-0 border-t-4 border-t-brand-500">
           <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">
               Total final
             </p>
-            <p className="mt-1 text-5xl font-extrabold tracking-tight text-slate-900 dark:text-gray-50">
+            <p className="mt-1 text-5xl font-extrabold tracking-tight text-slate-950 dark:text-gray-50">
               {formatARS(total)}
             </p>
             {surchargeAmount > 0 ? (
@@ -732,6 +911,16 @@ export function CashRegister({
                   : `Pendiente ${formatARS(remaining)}`}
           </div>
 
+          <p className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+            {paymentsDisabled
+              ? "Agrega productos para elegir el medio de pago."
+              : payments.length === 0
+                ? `Se cobrara el total con ${paymentLabels[paymentMethod]}.`
+                : paymentsMatch
+                  ? "Pago completo con los pagos cargados."
+                  : `Pagos parciales cargados. Pendiente ${formatARS(remaining)}.`}
+          </p>
+
           <div className={cn("mt-4 space-y-4", paymentsDisabled && "opacity-60")}>
             <label className="space-y-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -744,6 +933,11 @@ export function CashRegister({
                   const nextMethod = event.target.value as PaymentMethodValue;
                   setPaymentMethod(nextMethod);
                   setInstallments(defaultInstallments);
+                  setPaymentAmount(
+                    shouldAutofillPaymentAmount(nextMethod)
+                      ? AUTO_PAYMENT_AMOUNT
+                      : ""
+                  );
                   if (nextMethod !== "CURRENT_ACCOUNT") {
                     setCustomerResults([]);
                   }
@@ -860,6 +1054,16 @@ export function CashRegister({
                     className="h-12 text-lg font-semibold"
                   />
                 </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="border-amber-200 bg-white text-amber-800 hover:bg-amber-50 dark:border-amber-900/60 dark:bg-neutral-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                  disabled={paymentsDisabled || remaining <= 0}
+                  onClick={fillPendingAmount}
+                >
+                  Completar con pendiente
+                </Button>
               </div>
             ) : paymentMethod === "CASH" ? (
               <>
@@ -884,6 +1088,7 @@ export function CashRegister({
                       key={`${amount}-${index}`}
                       type="button"
                       size="sm"
+                      className="border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
                       disabled={paymentsDisabled}
                       onClick={() => setCashReceived(String(amount))}
                     >
@@ -907,27 +1112,39 @@ export function CashRegister({
                 />
               </>
             ) : (
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Importe
-                </span>
-                <Input
-                  value={paymentAmount}
-                  inputMode="decimal"
-                  disabled={paymentsDisabled}
-                  onChange={(event) =>
-                    setPaymentAmount(sanitizeMoneyInput(event.target.value))
-                  }
-                  placeholder={formatARS(remaining)}
-                  className="h-12 text-lg font-semibold"
-                />
-              </label>
+              <div className="space-y-3">
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Importe
+                  </span>
+                  <Input
+                    value={displayedPaymentAmount}
+                    inputMode="decimal"
+                    disabled={paymentsDisabled}
+                    onChange={(event) =>
+                      setPaymentAmount(sanitizeMoneyInput(event.target.value))
+                    }
+                    placeholder={formatARS(remaining)}
+                    className="h-12 text-lg font-semibold"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                  disabled={paymentsDisabled || remaining <= 0}
+                  onClick={fillPendingAmount}
+                >
+                  Completar con pendiente
+                </Button>
+              </div>
             )}
 
             <Button
               type="button"
               variant="secondary"
-              className="w-full"
+              className="w-full border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
               disabled={
                 isPending ||
                 paymentsDisabled ||
@@ -935,7 +1152,7 @@ export function CashRegister({
               }
               onClick={addPayment}
             >
-              Agregar pago
+              Agregar pago parcial
             </Button>
           </div>
 
@@ -990,6 +1207,7 @@ export function CashRegister({
                 <LinkButton size="sm" href={`/ventas/${saleSuccess.saleId}/ticket`}>
                   Ver ticket
                 </LinkButton>
+                <PrintButton saleId={saleSuccess.saleId} setting={printSetting} />
                 <LinkButton size="sm" href={`/ventas/${saleSuccess.saleId}`}>
                   Ver venta
                 </LinkButton>
@@ -1053,7 +1271,7 @@ function ProductGrid({
 
   return (
     <div className={compact ? "mt-3" : "mt-5"}>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
+      <h2 className="text-sm font-bold text-slate-800 dark:text-gray-50">{title}</h2>
       <div
         className={cn(
           "mt-3 grid gap-2",
@@ -1068,7 +1286,7 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "group rounded-lg border border-slate-300/90 bg-white text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
+              "group cursor-pointer rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
               compact ? "p-2.5" : "p-3",
               selectedIndex === index &&
                 "border-brand-500 bg-brand-50/50 border-l-brand-600 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
@@ -1076,13 +1294,13 @@ function ProductGrid({
           >
             <span
               className={cn(
-                "line-clamp-2 text-sm font-semibold text-slate-800 dark:text-gray-200 group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors",
+                "line-clamp-2 text-sm font-semibold text-slate-800 transition-colors group-hover:text-brand-700 dark:text-gray-200 dark:group-hover:text-brand-400",
                 compact ? "min-h-9" : "min-h-10"
               )}
             >
               {product.name}
             </span>
-            <span className={cn("block text-base font-bold text-brand-600 dark:text-brand-400", compact ? "mt-1.5" : "mt-2")}>
+            <span className={cn("block text-base font-extrabold text-brand-700 dark:text-brand-400", compact ? "mt-1.5" : "mt-2")}>
               {formatARS(product.salePrice)}
             </span>
             <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
@@ -1140,7 +1358,7 @@ function PaymentPreview({
   hint: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-300 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+    <div className="rounded-lg border border-brand-200 bg-brand-50/30 p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
       <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
         {value}
@@ -1244,6 +1462,10 @@ function roundMoney(value: number) {
 
 function roundQuantity(value: number) {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
+}
+
+function shouldAutofillPaymentAmount(method: PaymentMethodValue) {
+  return ["MERCADOPAGO", "TRANSFER", "DEBIT", "CREDIT"].includes(method);
 }
 
 function createPaymentId() {

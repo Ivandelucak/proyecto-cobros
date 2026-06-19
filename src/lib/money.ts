@@ -7,11 +7,15 @@ export function toDecimal(value: MoneyInput) {
 }
 
 export function formatARS(value: MoneyInput) {
+  return formatMoney(value, "ARS", "es-AR");
+}
+
+export function formatMoney(value: MoneyInput, currency = "ARS", locale = "es-AR") {
   const amount = Number(value.toString());
 
-  return new Intl.NumberFormat("es-AR", {
+  return new Intl.NumberFormat(locale || "es-AR", {
     style: "currency",
-    currency: "ARS",
+    currency: currency || "ARS",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);

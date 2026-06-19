@@ -3,8 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
+import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
 import { CancelSaleForm } from "./cancel-sale-form";
 
@@ -16,19 +18,20 @@ type VentaDetallePageProps = {
   }>;
 };
 
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  DEBIT: "Debito",
-  CREDIT: "Credito",
-  TRANSFER: "Transferencia",
-  MERCADOPAGO: "MercadoPago",
-  CURRENT_ACCOUNT: "Cuenta corriente"
-};
-
 export default async function VentaDetallePage({ params }: VentaDetallePageProps) {
   const { id } = await params;
-  const { sale, user } = await getAccessibleSaleOrRedirect(id);
+  const [{ sale, user }, paymentMethods, cashSetting] = await Promise.all([
+    getAccessibleSaleOrRedirect(id),
+    getPaymentMethodSettings(),
+    getCashRegisterSetting()
+  ]);
   const backHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
+  const canCancelSale =
+    sale.status === SaleStatus.PAID &&
+    (user.role === Role.ADMIN || cashSetting.allowCashierCancelSale);
+  const paymentLabels = Object.fromEntries(
+    paymentMethods.map((method) => [method.method, method.label])
+  ) as Record<PaymentMethod, string>;
 
   return (
     <main className="min-h-screen bg-gray-100 p-6 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
@@ -185,7 +188,7 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
               ) : null}
             </Card>
 
-            {user.role === Role.ADMIN && sale.status === SaleStatus.PAID ? (
+            {canCancelSale ? (
               <Card className="border-red-200 p-5 dark:border-red-900/60">
                 <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
                   Anular venta

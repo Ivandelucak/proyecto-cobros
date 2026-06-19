@@ -25,3 +25,4 @@ pnpm-debug.log*
 # generated
 /coverage
 tsconfig.tsbuildinfo
+/backups

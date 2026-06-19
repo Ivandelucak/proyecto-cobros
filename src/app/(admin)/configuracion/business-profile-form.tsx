@@ -30,9 +30,17 @@ type BusinessProfileFormProps = {
     cuit: string | null;
     address: string | null;
     phone: string | null;
+    email: string | null;
+    fiscalCondition: string | null;
+    grossIncome: string | null;
+    activityStartDate: Date | null;
     currency: string;
+    locale: string;
+    timezone: string;
     preferredTheme: string | null;
     logoUrl: string | null;
+    website: string | null;
+    generalFooterText: string | null;
   };
 };
 
@@ -85,6 +93,12 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
           <Field label="Moneda">
             <Input name="currency" defaultValue={initialValues.currency} />
           </Field>
+          <Field label="Locale">
+            <Input name="locale" defaultValue={initialValues.locale} />
+          </Field>
+          <Field label="Zona horaria">
+            <Input name="timezone" defaultValue={initialValues.timezone} />
+          </Field>
         </div>
       </Card>
 
@@ -97,8 +111,36 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
           <Field label="Telefono">
             <Input name="phone" defaultValue={initialValues.phone ?? ""} />
           </Field>
+          <Field label="Email">
+            <Input name="email" type="email" defaultValue={initialValues.email ?? ""} />
+          </Field>
           <Field label="Direccion">
             <Input name="address" defaultValue={initialValues.address ?? ""} />
+          </Field>
+          <Field label="Condicion fiscal">
+            <Input
+              name="fiscalCondition"
+              defaultValue={initialValues.fiscalCondition ?? ""}
+            />
+          </Field>
+          <Field label="Ingresos brutos">
+            <Input name="grossIncome" defaultValue={initialValues.grossIncome ?? ""} />
+          </Field>
+          <Field label="Inicio de actividades">
+            <Input
+              name="activityStartDate"
+              type="date"
+              defaultValue={dateInput(initialValues.activityStartDate)}
+            />
+          </Field>
+          <Field label="Sitio web">
+            <Input name="website" defaultValue={initialValues.website ?? ""} />
+          </Field>
+          <Field label="Texto pie general">
+            <Input
+              name="generalFooterText"
+              defaultValue={initialValues.generalFooterText ?? ""}
+            />
           </Field>
         </div>
       </Card>
@@ -144,6 +186,22 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
       </div>
     </form>
   );
+}
+
+function dateInput(date: Date | null) {
+  if (!date || Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate())
+  ].join("-");
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }
 
 function SectionTitle({

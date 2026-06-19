@@ -7,6 +7,7 @@ import {
   SaleStatus,
   StockMovementType
 } from "@prisma/client";
+import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
 import {
   getActiveCreditInstallmentPlans,
@@ -60,12 +61,13 @@ export async function confirmSale(input: ConfirmSaleInput) {
   }
 
   return prisma.$transaction(async (tx) => {
+    const cashSetting = await getCashRegisterSetting(tx);
     const cashSession = await tx.cashSession.findFirst({
       where: { status: CashSessionStatus.OPEN },
       select: { id: true }
     });
 
-    if (!cashSession) {
+    if (cashSetting.requireOpenSession && !cashSession) {
       throw new Error("No hay caja abierta para registrar la venta.");
     }
 
@@ -100,7 +102,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
         throw new Error(`${product.name} no permite cantidades decimales.`);
       }
 
-      if (product.stock.lt(item.quantity)) {
+      if (!cashSetting.allowNegativeStock && product.stock.lt(item.quantity)) {
         throw new Error(`Stock insuficiente para ${product.name}.`);
       }
 
@@ -183,7 +185,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
         surchargeTotal,
         status: SaleStatus.PAID,
         customerId,
-        cashSessionId: cashSession.id,
+        cashSessionId: cashSession?.id ?? null,
         items: {
           create: saleItems.map((item) => item.data)
         },

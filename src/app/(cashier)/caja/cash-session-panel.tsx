@@ -20,6 +20,8 @@ type PanelMode = "open" | "movement" | "close" | null;
 
 type CashSessionPanelProps = {
   cashSession: CashSessionSnapshot | null;
+  requireOpenSession: boolean;
+  showExpectedCash: boolean;
 };
 
 type CashSessionSnapshot = {
@@ -56,7 +58,11 @@ const movementLabels: Record<CashMovementTypeValue, string> = {
 
 const initialState: CashSessionFormState = {};
 
-export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
+export function CashSessionPanel({
+  cashSession,
+  requireOpenSession,
+  showExpectedCash
+}: CashSessionPanelProps) {
   const [mode, setMode] = useState<PanelMode>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [openState, openAction, opening] = useActionState(
@@ -83,13 +89,15 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
 
   if (!cashSession) {
     return (
-      <Card className="border-slate-300 border-l-4 border-l-red-500 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
+      <Card className="border-slate-300 border-l-4 border-l-red-500 bg-white p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="red">Caja cerrada</Badge>
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Las ventas estan bloqueadas.
+                {requireOpenSession
+                  ? "Las ventas estan bloqueadas."
+                  : "Ventas habilitadas sin apertura obligatoria."}
               </span>
             </div>
           </div>
@@ -128,7 +136,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
   const recentMovements = cashSession.movements.slice(0, 3);
 
   return (
-    <Card className="border-slate-300 border-l-4 border-l-emerald-500 p-4 shadow-md shadow-slate-200/70 dark:shadow-none">
+    <Card className="border-slate-300 border-l-4 border-l-emerald-500 bg-white p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone="green">Caja abierta</Badge>
@@ -140,7 +148,7 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
           type="button"
           size="sm"
           variant="secondary"
-          className="gap-2"
+          className="gap-2 border-slate-300 bg-slate-50 hover:bg-white dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
           onClick={toggleDetails}
           aria-expanded={detailsVisible}
         >
@@ -171,11 +179,13 @@ export function CashSessionPanel({ cashSession }: CashSessionPanelProps) {
                   label="Movimientos"
                   value={formatARS(netMovements(cashSession.summary))}
                 />
-                <Summary
-                  label="Efectivo esperado"
-                  value={formatARS(cashSession.summary.expectedCash)}
-                  strong
-                />
+                {showExpectedCash ? (
+                  <Summary
+                    label="Efectivo esperado"
+                    value={formatARS(cashSession.summary.expectedCash)}
+                    strong
+                  />
+                ) : null}
               </div>
             </div>
 

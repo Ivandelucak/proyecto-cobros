@@ -4,9 +4,16 @@ import { BusinessType, PaymentMethod } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { createAuditLog } from "@/lib/audit-log";
+import { BUSINESS_PROFILE_ID } from "@/lib/business-profile";
+import {
+  CASH_REGISTER_SETTING_ID,
+  normalizeQuickProductsLimit
+} from "@/lib/cash-register-settings";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { DEFAULT_PAYMENT_METHOD_SETTINGS } from "@/lib/payment-options";
 import { prisma } from "@/lib/prisma";
+import { STOCK_SETTING_ID, parseOptionalStockDecimal } from "@/lib/stock-settings";
+import { TICKET_SETTING_ID } from "@/lib/ticket-settings";
 
 export type BusinessProfileState = {
   error?: string;
@@ -14,6 +21,16 @@ export type BusinessProfileState = {
 };
 
 export type PaymentSettingsState = {
+  error?: string;
+  success?: string;
+};
+
+export type TicketSettingsState = {
+  error?: string;
+  success?: string;
+};
+
+export type OperationalSettingsState = {
   error?: string;
   success?: string;
 };
@@ -35,28 +52,49 @@ export async function updateBusinessProfileAction(
       throw new Error("Rubro invalido.");
     }
 
+    const activityStartDate = parseOptionalDate(
+      formData.get("activityStartDate"),
+      "Inicio de actividades"
+    );
+
     await prisma.businessProfile.upsert({
-      where: { id: "default" },
+      where: { id: BUSINESS_PROFILE_ID },
       update: {
         name,
         businessType: businessType as BusinessType,
         cuit: readOptionalText(formData, "cuit"),
         address: readOptionalText(formData, "address"),
         phone: readOptionalText(formData, "phone"),
+        email: readOptionalText(formData, "email"),
+        fiscalCondition: readOptionalText(formData, "fiscalCondition"),
+        grossIncome: readOptionalText(formData, "grossIncome"),
+        activityStartDate,
         currency: readText(formData, "currency") || "ARS",
+        locale: readText(formData, "locale") || "es-AR",
+        timezone: readText(formData, "timezone") || "America/Argentina/Buenos_Aires",
         preferredTheme: readOptionalText(formData, "preferredTheme"),
-        logoUrl: readOptionalText(formData, "logoUrl")
+        logoUrl: readOptionalText(formData, "logoUrl"),
+        website: readOptionalText(formData, "website"),
+        generalFooterText: readOptionalText(formData, "generalFooterText")
       },
       create: {
-        id: "default",
+        id: BUSINESS_PROFILE_ID,
         name,
         businessType: businessType as BusinessType,
         cuit: readOptionalText(formData, "cuit"),
         address: readOptionalText(formData, "address"),
         phone: readOptionalText(formData, "phone"),
+        email: readOptionalText(formData, "email"),
+        fiscalCondition: readOptionalText(formData, "fiscalCondition"),
+        grossIncome: readOptionalText(formData, "grossIncome"),
+        activityStartDate,
         currency: readText(formData, "currency") || "ARS",
+        locale: readText(formData, "locale") || "es-AR",
+        timezone: readText(formData, "timezone") || "America/Argentina/Buenos_Aires",
         preferredTheme: readOptionalText(formData, "preferredTheme"),
-        logoUrl: readOptionalText(formData, "logoUrl")
+        logoUrl: readOptionalText(formData, "logoUrl"),
+        website: readOptionalText(formData, "website"),
+        generalFooterText: readOptionalText(formData, "generalFooterText")
       }
     });
 
@@ -67,7 +105,7 @@ export async function updateBusinessProfileAction(
       userId: user.id,
       action: "UPDATE",
       entity: "BusinessProfile",
-      entityId: "default",
+      entityId: BUSINESS_PROFILE_ID,
       description: "Actualizo la configuracion del comercio."
     });
 
@@ -75,6 +113,155 @@ export async function updateBusinessProfileAction(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "No se pudo guardar la configuracion."
+    };
+  }
+}
+
+export async function updateTicketSettingsAction(
+  _prevState: TicketSettingsState,
+  formData: FormData
+): Promise<TicketSettingsState> {
+  const user = await requireAdminPage();
+
+  try {
+    const ticketTitle = readText(formData, "ticketTitle") || "Ticket no fiscal";
+    const nonFiscalLegend = readText(formData, "nonFiscalLegend") || "Ticket no fiscal";
+    const thankYouText = readText(formData, "thankYouText") || "Gracias por su compra";
+
+    await prisma.ticketSetting.upsert({
+      where: { id: TICKET_SETTING_ID },
+      update: {
+        ticketTitle,
+        headerText: readOptionalText(formData, "headerText"),
+        footerText: readOptionalText(formData, "footerText"),
+        thankYouText,
+        nonFiscalLegend,
+        showNonFiscalLegend: isChecked(formData, "showNonFiscalLegend"),
+        showBusinessName: isChecked(formData, "showBusinessName"),
+        showCuit: isChecked(formData, "showCuit"),
+        showAddress: isChecked(formData, "showAddress"),
+        showPhone: isChecked(formData, "showPhone"),
+        showEmail: isChecked(formData, "showEmail"),
+        showSeller: isChecked(formData, "showSeller"),
+        showCustomer: isChecked(formData, "showCustomer"),
+        showPaymentDetails: isChecked(formData, "showPaymentDetails"),
+        showStockUnit: isChecked(formData, "showStockUnit"),
+        showBarcode: isChecked(formData, "showBarcode")
+      },
+      create: {
+        id: TICKET_SETTING_ID,
+        ticketTitle,
+        headerText: readOptionalText(formData, "headerText"),
+        footerText: readOptionalText(formData, "footerText"),
+        thankYouText,
+        nonFiscalLegend,
+        showNonFiscalLegend: isChecked(formData, "showNonFiscalLegend"),
+        showBusinessName: isChecked(formData, "showBusinessName"),
+        showCuit: isChecked(formData, "showCuit"),
+        showAddress: isChecked(formData, "showAddress"),
+        showPhone: isChecked(formData, "showPhone"),
+        showEmail: isChecked(formData, "showEmail"),
+        showSeller: isChecked(formData, "showSeller"),
+        showCustomer: isChecked(formData, "showCustomer"),
+        showPaymentDetails: isChecked(formData, "showPaymentDetails"),
+        showStockUnit: isChecked(formData, "showStockUnit"),
+        showBarcode: isChecked(formData, "showBarcode")
+      }
+    });
+
+    revalidatePath("/configuracion");
+    revalidatePath("/ventas");
+
+    await createAuditLog({
+      userId: user.id,
+      action: "TICKET_SETTINGS_UPDATED",
+      entity: "TicketSetting",
+      entityId: TICKET_SETTING_ID,
+      description: "Actualizo la configuracion de ticket."
+    });
+
+    return { success: "Configuracion de ticket guardada." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la configuracion de ticket."
+    };
+  }
+}
+
+export async function updateOperationalSettingsAction(
+  _prevState: OperationalSettingsState,
+  formData: FormData
+): Promise<OperationalSettingsState> {
+  const user = await requireAdminPage();
+
+  try {
+    const quickProductsLimit = normalizeQuickProductsLimit(
+      readPositiveInt(formData, "quickProductsLimit", 12)
+    );
+    const defaultMinStock = parseOptionalStockDecimal(formData.get("defaultMinStock"));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.cashRegisterSetting.upsert({
+        where: { id: CASH_REGISTER_SETTING_ID },
+        update: {
+          requireOpenSession: isChecked(formData, "requireOpenSession"),
+          showExpectedCashToCashier: isChecked(formData, "showExpectedCashToCashier"),
+          allowCashierCancelSale: isChecked(formData, "allowCashierCancelSale"),
+          allowNegativeStock: isChecked(formData, "allowNegativeStock"),
+          defaultSearchMode: readOptionalText(formData, "defaultSearchMode"),
+          quickProductsLimit
+        },
+        create: {
+          id: CASH_REGISTER_SETTING_ID,
+          requireOpenSession: isChecked(formData, "requireOpenSession"),
+          showExpectedCashToCashier: isChecked(formData, "showExpectedCashToCashier"),
+          allowCashierCancelSale: isChecked(formData, "allowCashierCancelSale"),
+          allowNegativeStock: isChecked(formData, "allowNegativeStock"),
+          defaultSearchMode: readOptionalText(formData, "defaultSearchMode"),
+          quickProductsLimit
+        }
+      });
+
+      await tx.stockSetting.upsert({
+        where: { id: STOCK_SETTING_ID },
+        update: {
+          lowStockEnabled: isChecked(formData, "lowStockEnabled"),
+          defaultMinStock,
+          allowManualStockAdjustment: isChecked(formData, "allowManualStockAdjustment"),
+          showLowStockWarnings: isChecked(formData, "showLowStockWarnings")
+        },
+        create: {
+          id: STOCK_SETTING_ID,
+          lowStockEnabled: isChecked(formData, "lowStockEnabled"),
+          defaultMinStock,
+          allowManualStockAdjustment: isChecked(formData, "allowManualStockAdjustment"),
+          showLowStockWarnings: isChecked(formData, "showLowStockWarnings")
+        }
+      });
+    });
+
+    revalidatePath("/configuracion");
+    revalidatePath("/caja");
+    revalidatePath("/stock");
+
+    await createAuditLog({
+      userId: user.id,
+      action: "OPERATIONAL_SETTINGS_UPDATED",
+      entity: "SystemSettings",
+      description: "Actualizo configuracion de caja y stock.",
+      metadata: { quickProductsLimit }
+    });
+
+    return { success: "Configuracion operativa guardada." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la configuracion operativa."
     };
   }
 }
@@ -200,7 +387,11 @@ export async function updatePaymentSettingsAction(
         });
       }
 
-      if (methodSettings.some((setting) => setting.method === PaymentMethod.CREDIT && setting.enabled)) {
+      if (
+        methodSettings.some(
+          (setting) => setting.method === PaymentMethod.CREDIT && setting.enabled
+        )
+      ) {
         const activeCreditPlans = await tx.creditInstallmentPlan.count({
           where: { active: true }
         });
@@ -238,6 +429,43 @@ function readText(formData: FormData, key: string) {
 
 function readOptionalText(formData: FormData, key: string) {
   return readText(formData, key) || null;
+}
+
+function parseOptionalDate(value: FormDataEntryValue | null, label: string) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    throw new Error(`${label} debe tener formato AAAA-MM-DD.`);
+  }
+
+  const [, rawYear, rawMonth, rawDay] = match;
+  const year = Number(rawYear);
+  const month = Number(rawMonth);
+  const day = Number(rawDay);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new Error(`${label} no es una fecha valida.`);
+  }
+
+  return date;
+}
+
+function isChecked(formData: FormData, key: string) {
+  return formData.get(key) === "on";
 }
 
 function readPositiveInt(formData: FormData, key: string, fallback: number) {

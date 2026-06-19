@@ -1,6 +1,7 @@
 import {
   BusinessType,
   PaymentMethod,
+  PrintPaperSize,
   Prisma,
   PrismaClient,
   StockMovementType,
@@ -310,7 +311,19 @@ async function main() {
     update: {
       name: "POS Universal Demo",
       businessType: BusinessType.KIOSK,
+      cuit: null,
+      address: null,
+      phone: null,
+      email: null,
+      fiscalCondition: null,
+      grossIncome: null,
+      activityStartDate: null,
       currency: "ARS",
+      locale: "es-AR",
+      timezone: "America/Argentina/Buenos_Aires",
+      logoUrl: null,
+      website: null,
+      generalFooterText: null,
       preferredTheme: "light"
     },
     create: {
@@ -318,7 +331,107 @@ async function main() {
       name: "POS Universal Demo",
       businessType: BusinessType.KIOSK,
       currency: "ARS",
+      locale: "es-AR",
+      timezone: "America/Argentina/Buenos_Aires",
       preferredTheme: "light"
+    }
+  });
+
+  await prisma.printSetting.upsert({
+    where: { id: "default" },
+    update: {
+      paperSize: PrintPaperSize.TICKET_80,
+      silentPrint: false,
+      autoPrintTicket: false,
+      copies: 1,
+      marginMm: 2
+    },
+    create: {
+      id: "default",
+      paperSize: PrintPaperSize.TICKET_80,
+      silentPrint: false,
+      autoPrintTicket: false,
+      copies: 1,
+      marginMm: 2
+    }
+  });
+
+  await prisma.ticketSetting.upsert({
+    where: { id: "default" },
+    update: {
+      showBusinessName: true,
+      showCuit: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: false,
+      showSeller: true,
+      showCustomer: true,
+      showPaymentDetails: true,
+      showStockUnit: true,
+      showBarcode: false,
+      footerText: null,
+      headerText: null,
+      ticketTitle: "Ticket no fiscal",
+      thankYouText: "Gracias por su compra",
+      showNonFiscalLegend: true,
+      nonFiscalLegend: "Ticket no fiscal"
+    },
+    create: {
+      id: "default",
+      showBusinessName: true,
+      showCuit: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: false,
+      showSeller: true,
+      showCustomer: true,
+      showPaymentDetails: true,
+      showStockUnit: true,
+      showBarcode: false,
+      footerText: null,
+      headerText: null,
+      ticketTitle: "Ticket no fiscal",
+      thankYouText: "Gracias por su compra",
+      showNonFiscalLegend: true,
+      nonFiscalLegend: "Ticket no fiscal"
+    }
+  });
+
+  await prisma.cashRegisterSetting.upsert({
+    where: { id: "default" },
+    update: {
+      requireOpenSession: true,
+      showExpectedCashToCashier: false,
+      allowCashierCancelSale: false,
+      allowNegativeStock: false,
+      defaultSearchMode: null,
+      quickProductsLimit: 12
+    },
+    create: {
+      id: "default",
+      requireOpenSession: true,
+      showExpectedCashToCashier: false,
+      allowCashierCancelSale: false,
+      allowNegativeStock: false,
+      defaultSearchMode: null,
+      quickProductsLimit: 12
+    }
+  });
+
+  await prisma.stockSetting.upsert({
+    where: { id: "default" },
+    update: {
+      lowStockEnabled: true,
+      defaultMinStock: null,
+      allowManualStockAdjustment: true,
+      showLowStockWarnings: true
+    },
+    create: {
+      id: "default",
+      lowStockEnabled: true,
+      defaultMinStock: null,
+      allowManualStockAdjustment: true,
+      showLowStockWarnings: true
     }
   });
 

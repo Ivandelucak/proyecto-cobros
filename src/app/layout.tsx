@@ -16,11 +16,7 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="light dark" />
-        <Script
-          id="theme-init"
-          src="/theme.js"
-          strategy="beforeInteractive"
-        />
+        <Script id="theme-init" src="/theme.js" strategy="beforeInteractive" />
       </head>
       <body className="bg-gray-100 text-gray-950 antialiased dark:bg-neutral-950 dark:text-gray-50">
         {children}

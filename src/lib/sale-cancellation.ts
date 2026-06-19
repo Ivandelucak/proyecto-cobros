@@ -6,6 +6,7 @@ import {
   SaleStatus,
   StockMovementType
 } from "@prisma/client";
+import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
 import { prisma } from "@/lib/prisma";
 import { assertRole } from "@/lib/permissions";
@@ -25,7 +26,11 @@ export async function cancelSale(input: {
     throw new Error("Usuario invalido.");
   }
 
-  assertRole(user.role, [Role.ADMIN], "anular ventas");
+  const cashSetting = await getCashRegisterSetting();
+  const allowedRoles = cashSetting.allowCashierCancelSale
+    ? [Role.ADMIN, Role.CASHIER]
+    : [Role.ADMIN];
+  assertRole(user.role, allowedRoles, "anular ventas");
 
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findUnique({

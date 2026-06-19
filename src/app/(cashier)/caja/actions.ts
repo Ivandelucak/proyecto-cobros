@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
+import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { calculateCashSessionSummary } from "@/lib/cash-session";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -67,12 +68,13 @@ export type CashSessionFormState = {
 
 export async function getSuggestedCashProductsAction() {
   await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting();
 
   const products = await prisma.product.findMany({
     where: {
       active: true,
       deletedAt: null,
-      stock: { gt: 0 }
+      ...(cashSetting.allowNegativeStock ? {} : { stock: { gt: 0 } })
     },
     include: {
       category: {
@@ -80,7 +82,7 @@ export async function getSuggestedCashProductsAction() {
       }
     },
     orderBy: [{ quickAccess: "desc" }, { updatedAt: "desc" }],
-    take: 12
+    take: cashSetting.quickProductsLimit
   });
 
   return products.map(mapCashProduct);
@@ -88,6 +90,7 @@ export async function getSuggestedCashProductsAction() {
 
 export async function searchCashProductsAction(query: string): Promise<ProductSearchResult> {
   await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting();
 
   const search = query.trim();
   if (!search) {
@@ -98,7 +101,7 @@ export async function searchCashProductsAction(query: string): Promise<ProductSe
     where: {
       active: true,
       deletedAt: null,
-      stock: { gt: 0 },
+      ...(cashSetting.allowNegativeStock ? {} : { stock: { gt: 0 } }),
       OR: [
         { name: { contains: search } },
         { barcode: { contains: search } },

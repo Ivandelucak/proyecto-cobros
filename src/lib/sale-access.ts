@@ -21,7 +21,15 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
         }
       },
       items: {
-        orderBy: { productNameSnapshot: "asc" }
+        orderBy: { productNameSnapshot: "asc" },
+        include: {
+          product: {
+            select: {
+              barcode: true,
+              sku: true
+            }
+          }
+        }
       },
       payments: {
         orderBy: { createdAt: "asc" }
