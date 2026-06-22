@@ -9,7 +9,7 @@ export async function issueFiscalDocumentPlaceholder(
 ): Promise<FiscalIssueResult> {
   return {
     success: false,
-    documentType: input.documentType ?? FiscalDocumentType.TICKET,
+    documentType: input.documentType ?? FiscalDocumentType.INVOICE,
     message: "ARCA no esta integrado en esta etapa."
   };
 }

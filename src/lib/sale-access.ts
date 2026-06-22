@@ -53,6 +53,20 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
         orderBy: { createdAt: "desc" },
         take: 1
       },
+      fiscalDocument: {
+        select: {
+          id: true,
+          type: true,
+          letter: true,
+          status: true,
+          environment: true,
+          pointOfSale: true,
+          number: true,
+          cae: true,
+          issueDate: true,
+          errorMessage: true
+        }
+      },
       cancelledBy: {
         select: {
           name: true,

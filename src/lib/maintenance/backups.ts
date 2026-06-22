@@ -14,6 +14,7 @@ const backupTables = [
   "ticketSettings",
   "cashRegisterSettings",
   "stockSettings",
+  "fiscalSettings",
   "users",
   "paymentMethodSettings",
   "creditInstallmentPlans",
@@ -26,6 +27,9 @@ const backupTables = [
   "purchases",
   "saleItems",
   "payments",
+  "fiscalDocuments",
+  "fiscalDocumentItems",
+  "fiscalEvents",
   "stockMovements",
   "cashMovements",
   "customerAccountMovements",
@@ -223,6 +227,7 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
     ticketSettings,
     cashRegisterSettings,
     stockSettings,
+    fiscalSettings,
     users,
     paymentMethodSettings,
     creditInstallmentPlans,
@@ -235,6 +240,9 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
     purchases,
     saleItems,
     payments,
+    fiscalDocuments,
+    fiscalDocumentItems,
+    fiscalEvents,
     stockMovements,
     cashMovements,
     customerAccountMovements,
@@ -246,6 +254,7 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
     prisma.ticketSetting.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.cashRegisterSetting.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.stockSetting.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.fiscalSetting.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.paymentMethodSetting.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.creditInstallmentPlan.findMany({ orderBy: { installments: "asc" } }),
@@ -258,6 +267,9 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
     prisma.purchase.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.saleItem.findMany({ orderBy: { id: "asc" } }),
     prisma.payment.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.fiscalDocument.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.fiscalDocumentItem.findMany({ orderBy: { id: "asc" } }),
+    prisma.fiscalEvent.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.stockMovement.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.cashMovement.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.customerAccountMovement.findMany({ orderBy: { createdAt: "asc" } }),
@@ -278,6 +290,7 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
       ticketSettings,
       cashRegisterSettings,
       stockSettings,
+      fiscalSettings,
       users,
       paymentMethodSettings,
       creditInstallmentPlans,
@@ -290,6 +303,9 @@ async function buildBackupPayload(userId: string): Promise<BackupPayload> {
       purchases,
       saleItems,
       payments,
+      fiscalDocuments,
+      fiscalDocumentItems,
+      fiscalEvents,
       stockMovements,
       cashMovements,
       customerAccountMovements,
@@ -329,12 +345,15 @@ function validateBackupPayload(payload: BackupPayload) {
 async function deleteCurrentData(tx: Prisma.TransactionClient) {
   await tx.auditLog.deleteMany();
   await tx.customerAccountMovement.deleteMany();
+  await tx.fiscalEvent.deleteMany();
+  await tx.fiscalDocumentItem.deleteMany();
   await tx.stockMovement.deleteMany();
   await tx.payment.deleteMany();
   await tx.saleItem.deleteMany();
   await tx.cashMovement.deleteMany();
   await tx.purchaseItem.deleteMany();
   await tx.sale.deleteMany();
+  await tx.fiscalDocument.deleteMany();
   await tx.purchase.deleteMany();
   await tx.cashSession.deleteMany();
   await tx.product.deleteMany();
@@ -345,6 +364,7 @@ async function deleteCurrentData(tx: Prisma.TransactionClient) {
   await tx.creditInstallmentPlan.deleteMany();
   await tx.paymentMethodSetting.deleteMany();
   await tx.stockSetting.deleteMany();
+  await tx.fiscalSetting.deleteMany();
   await tx.cashRegisterSetting.deleteMany();
   await tx.ticketSetting.deleteMany();
   await tx.printSetting.deleteMany();
@@ -396,6 +416,14 @@ async function restoreBackupData(tx: Prisma.TransactionClient, payload: BackupPa
   );
   if (stockSettings.length > 0) {
     await tx.stockSetting.createMany({ data: stockSettings });
+  }
+
+  const fiscalSettings = rows<Prisma.FiscalSettingCreateManyInput>(
+    payload,
+    "fiscalSettings"
+  );
+  if (fiscalSettings.length > 0) {
+    await tx.fiscalSetting.createMany({ data: fiscalSettings });
   }
 
   const paymentMethodSettings = rows<Prisma.PaymentMethodSettingCreateManyInput>(
@@ -457,7 +485,12 @@ async function restoreBackupData(tx: Prisma.TransactionClient, payload: BackupPa
 
   const sales = rows<Prisma.SaleCreateManyInput>(payload, "sales");
   if (sales.length > 0) {
-    await tx.sale.createMany({ data: sales });
+    await tx.sale.createMany({
+      data: sales.map((sale) => ({
+        ...sale,
+        fiscalDocumentId: null
+      }))
+    });
   }
 
   const purchases = rows<Prisma.PurchaseCreateManyInput>(payload, "purchases");
@@ -473,6 +506,44 @@ async function restoreBackupData(tx: Prisma.TransactionClient, payload: BackupPa
   const payments = rows<Prisma.PaymentCreateManyInput>(payload, "payments");
   if (payments.length > 0) {
     await tx.payment.createMany({ data: payments });
+  }
+
+  const fiscalDocuments = rows<Prisma.FiscalDocumentCreateManyInput>(
+    payload,
+    "fiscalDocuments"
+  );
+  if (fiscalDocuments.length > 0) {
+    await tx.fiscalDocument.createMany({ data: fiscalDocuments });
+  }
+
+  for (const document of fiscalDocuments) {
+    if (document.id) {
+      const sale = rows<Prisma.SaleCreateManyInput>(payload, "sales").find(
+        (item) => item.fiscalDocumentId === document.id
+      );
+      if (sale?.id) {
+        await tx.sale.update({
+          where: { id: sale.id },
+          data: { fiscalDocumentId: document.id }
+        });
+      }
+    }
+  }
+
+  const fiscalDocumentItems = rows<Prisma.FiscalDocumentItemCreateManyInput>(
+    payload,
+    "fiscalDocumentItems"
+  );
+  if (fiscalDocumentItems.length > 0) {
+    await tx.fiscalDocumentItem.createMany({ data: fiscalDocumentItems });
+  }
+
+  const fiscalEvents = rows<Prisma.FiscalEventCreateManyInput>(
+    payload,
+    "fiscalEvents"
+  );
+  if (fiscalEvents.length > 0) {
+    await tx.fiscalEvent.createMany({ data: fiscalEvents });
   }
 
   const stockMovements = rows<Prisma.StockMovementCreateManyInput>(
@@ -525,7 +596,11 @@ function isOptionalSettingsTable(table: BackupTable) {
     table === "printSettings" ||
     table === "ticketSettings" ||
     table === "cashRegisterSettings" ||
-    table === "stockSettings"
+    table === "stockSettings" ||
+    table === "fiscalSettings" ||
+    table === "fiscalDocuments" ||
+    table === "fiscalDocumentItems" ||
+    table === "fiscalEvents"
   );
 }
 

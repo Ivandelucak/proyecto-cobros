@@ -22,11 +22,32 @@ export async function cancelSaleAction(
   }
 
   try {
-    await cancelSale({
+    const result = await cancelSale({
       saleId,
       userId: user.id,
       reason: String(formData.get("reason") ?? "")
     });
+
+    if (result.status === "credit_note_required") {
+      await createAuditLog({
+        userId: user.id,
+        action: "FISCAL_CREDIT_NOTE_REQUIRED",
+        entity: "Sale",
+        entityId: saleId,
+        description: "Marco una venta emitida como pendiente de nota de credito.",
+        metadata: { reason: String(formData.get("reason") ?? "").trim() }
+      });
+
+      revalidatePath(`/ventas/${saleId}`);
+      revalidatePath(`/ventas/${saleId}/ticket`);
+      revalidatePath("/ventas");
+      revalidatePath("/facturacion");
+
+      return {
+        success:
+          "La venta ya fue emitida fiscalmente. Requiere nota de credito."
+      };
+    }
 
     await createAuditLog({
       userId: user.id,

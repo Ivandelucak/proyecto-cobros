@@ -1,4 +1,4 @@
-import { Prisma, SaleStatus } from "@prisma/client";
+import { FiscalStatus, Prisma, SaleStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
@@ -19,7 +19,7 @@ export default async function AdminPage() {
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
 
-  const [cashSession, todaySales, stockLowProducts, latestSales, customers, latestPurchases] = await Promise.all([
+  const [cashSession, todaySales, stockLowProducts, latestSales, customers, latestPurchases, fiscalCounts] = await Promise.all([
     getOpenCashSessionSnapshot(),
     prisma.sale.findMany({
       where: {
@@ -52,6 +52,20 @@ export default async function AdminPage() {
       include: { supplier: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take: 6
+    }),
+    prisma.sale.groupBy({
+      by: ["fiscalStatus"],
+      _count: { _all: true },
+      where: {
+        fiscalStatus: {
+          in: [
+            FiscalStatus.PENDING,
+            FiscalStatus.READY_TO_ISSUE,
+            FiscalStatus.FAILED,
+            FiscalStatus.CREDIT_NOTE_REQUIRED
+          ]
+        }
+      }
     })
   ]);
 
@@ -68,6 +82,12 @@ export default async function AdminPage() {
     new Prisma.Decimal(0)
   );
   const topProducts = buildTopProducts(todaySales);
+  const fiscalCountMap = new Map(
+    fiscalCounts.map((item) => [item.fiscalStatus, item._count._all])
+  );
+  const pendingFiscal =
+    (fiscalCountMap.get(FiscalStatus.PENDING) ?? 0) +
+    (fiscalCountMap.get(FiscalStatus.READY_TO_ISSUE) ?? 0);
 
   return (
     <section className="space-y-6">
@@ -86,6 +106,13 @@ export default async function AdminPage() {
         />
         <Metric label="Stock bajo" value={String(lowProducts.length)} />
         <Metric label="Cuentas corrientes" value={formatARS(pendingCustomerBalance)} />
+        <Metric
+          label="Facturacion pendiente"
+          value={String(pendingFiscal)}
+          detail={`Fallidas ${fiscalCountMap.get(FiscalStatus.FAILED) ?? 0} · NC ${
+            fiscalCountMap.get(FiscalStatus.CREDIT_NOTE_REQUIRED) ?? 0
+          }`}
+        />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">

@@ -15,6 +15,7 @@ const navItems = [
   { href: "/proveedores", label: "Proveedores", adminOnly: true },
   { href: "/compras", label: "Compras", adminOnly: true },
   { href: "/ventas", label: "Ventas", cashierLabel: "Mis ventas" },
+  { href: "/facturacion", label: "Facturacion", adminOnly: true },
   { href: "/reportes", label: "Reportes", adminOnly: true },
   { href: "/usuarios", label: "Usuarios", adminOnly: true },
   { href: "/auditoria", label: "Auditoria", adminOnly: true },

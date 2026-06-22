@@ -1,5 +1,7 @@
 import {
   CustomerAccountMovementType,
+  FiscalDocumentStatus,
+  FiscalStatus,
   PaymentMethod,
   Prisma,
   Role,
@@ -8,14 +10,23 @@ import {
 } from "@prisma/client";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
+import {
+  cancelFiscalBeforeIssueTx,
+  markCreditNoteRequiredTx
+} from "@/lib/fiscal/fiscal-engine";
+import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import { prisma } from "@/lib/prisma";
 import { assertRole } from "@/lib/permissions";
+
+type CancelSaleResult =
+  | { status: "cancelled"; saleId: string }
+  | { status: "credit_note_required"; saleId: string };
 
 export async function cancelSale(input: {
   saleId: string;
   userId: string;
   reason: string;
-}) {
+}): Promise<CancelSaleResult> {
   const reason = input.reason.trim();
   if (!reason) {
     throw new Error("El motivo es obligatorio.");
@@ -37,7 +48,10 @@ export async function cancelSale(input: {
       where: { id: input.saleId },
       include: {
         items: true,
-        payments: true
+        payments: true,
+        fiscalDocument: {
+          select: { status: true }
+        }
       }
     });
 
@@ -47,6 +61,20 @@ export async function cancelSale(input: {
 
     if (sale.status === SaleStatus.CANCELLED) {
       throw new Error("La venta ya esta anulada.");
+    }
+
+    if (
+      sale.fiscalStatus === FiscalStatus.ISSUED ||
+      sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ||
+      sale.fiscalDocument?.status === FiscalDocumentStatus.ISSUED
+    ) {
+      await markCreditNoteRequiredTx(tx, sale.id, user.id, reason);
+      return { status: "credit_note_required", saleId: sale.id };
+    }
+
+    const fiscalSetting = await getFiscalSettingOrDefault(tx);
+    if (sale.requiresFiscalInvoice && !fiscalSetting.allowCancelBeforeIssue) {
+      throw new Error("La configuracion fiscal no permite anular antes de emitir.");
     }
 
     await tx.sale.update({
@@ -111,6 +139,8 @@ export async function cancelSale(input: {
       });
     }
 
-    return sale.id;
+    await cancelFiscalBeforeIssueTx(tx, sale.id, user.id, reason);
+
+    return { status: "cancelled", saleId: sale.id };
   });
 }

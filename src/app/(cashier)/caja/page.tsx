@@ -3,6 +3,7 @@ import { getSuggestedCashProductsAction } from "./actions";
 import { CashSessionPanel } from "./cash-session-panel";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { getOpenCashSessionSnapshot } from "@/lib/cash-session";
+import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import {
   getActiveCreditInstallmentPlans,
   getEnabledPaymentMethodSettings
@@ -16,14 +17,16 @@ export default async function CajaPage() {
     paymentMethods,
     creditPlans,
     printSetting,
-    cashSetting
+    cashSetting,
+    fiscalSetting
   ] = await Promise.all([
     getOpenCashSessionSnapshot(),
     getSuggestedCashProductsAction(),
     getEnabledPaymentMethodSettings(),
     getActiveCreditInstallmentPlans(),
     getPrintSetting(),
-    getCashRegisterSetting()
+    getCashRegisterSetting(),
+    getFiscalSettingOrDefault()
   ]);
 
   return (
@@ -34,6 +37,7 @@ export default async function CajaPage() {
           paymentMethods={paymentMethods}
           creditPlans={creditPlans}
           printSetting={printSetting}
+          fiscalSetting={fiscalSetting}
         />
       ) : null}
       <div className="mt-auto">

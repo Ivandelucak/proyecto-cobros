@@ -7,6 +7,7 @@ export const ADMIN_ROUTES = [
   "/categorias",
   "/stock",
   "/ventas",
+  "/facturacion",
   "/reportes",
   "/configuracion"
 ];

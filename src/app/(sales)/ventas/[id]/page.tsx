@@ -1,10 +1,15 @@
-import { PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
+import { FiscalStatus, PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { formatDateTimeStable } from "@/lib/date-format";
+import {
+  fiscalDocumentStatusLabels,
+  fiscalStatusLabels,
+  fiscalStatusTone
+} from "@/lib/fiscal/fiscal-status";
 import { formatARS } from "@/lib/money";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
@@ -45,6 +50,9 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
               <LinkButton href={`/ventas/${sale.id}/ticket`} variant="primary">
                 Ver ticket
               </LinkButton>
+              {user.role === Role.ADMIN ? (
+                <LinkButton href="/facturacion">Ver en facturacion</LinkButton>
+              ) : null}
             </>
           }
         />
@@ -131,6 +139,54 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
                       : "Sin caja asociada"
                   }
                 />
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+                Estado fiscal
+              </h2>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-600 dark:text-gray-300">Estado</span>
+                  <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
+                    {fiscalStatusLabels[sale.fiscalStatus]}
+                  </Badge>
+                </div>
+                <TotalRow
+                  label="Requiere factura"
+                  value={sale.requiresFiscalInvoice ? "Si" : "No"}
+                />
+                {sale.fiscalRequestedAt ? (
+                  <TotalRow
+                    label="Solicitada"
+                    value={formatDateTimeStable(sale.fiscalRequestedAt)}
+                  />
+                ) : null}
+                {sale.fiscalDocument ? (
+                  <>
+                    <TotalRow
+                      label="Documento"
+                      value={`${sale.fiscalDocument.letter} - ${
+                        fiscalDocumentStatusLabels[sale.fiscalDocument.status]
+                      }`}
+                    />
+                    <TotalRow
+                      label="CAE"
+                      value={sale.fiscalDocument.cae ?? "Pendiente de integracion ARCA"}
+                    />
+                  </>
+                ) : null}
+                {sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
+                    La venta ya fue emitida fiscalmente. Requiere nota de credito.
+                  </p>
+                ) : null}
+                {sale.fiscalFailureReason ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
+                    {sale.fiscalFailureReason}
+                  </p>
+                ) : null}
               </div>
             </Card>
 

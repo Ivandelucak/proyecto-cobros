@@ -1,8 +1,9 @@
-import { PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
+import { FiscalStatus, PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
 import { LinkButton } from "@/components/ui/link-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { getBusinessProfileOrDefault } from "@/lib/business-profile";
 import { formatDateTimeConfigured } from "@/lib/date-format";
+import { fiscalStatusLabels } from "@/lib/fiscal/fiscal-status";
 import { formatMoney } from "@/lib/money";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getPrintSetting } from "@/lib/print-settings";
@@ -84,6 +85,11 @@ export default async function TicketPage({ params }: TicketPageProps) {
             <p className="mt-2 font-semibold uppercase">{ticketSetting.nonFiscalLegend}</p>
           ) : null}
           <p className="mt-1 font-semibold uppercase">{ticketSetting.ticketTitle}</p>
+          <p className="mt-1 text-[11px] uppercase">
+            {sale.fiscalStatus === FiscalStatus.NOT_REQUESTED
+              ? "Ticket interno / no fiscal"
+              : fiscalStatusLabels[sale.fiscalStatus]}
+          </p>
           {sale.status === SaleStatus.CANCELLED ? (
             <p className="mt-2 border border-black py-1 text-sm font-bold uppercase">
               Venta anulada
@@ -101,6 +107,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
             <Line label="Cliente" value={sale.customer.name} />
           ) : null}
           {sale.cashSession ? <Line label="Caja" value={sale.cashSession.id.slice(-6)} /> : null}
+          {sale.requiresFiscalInvoice ? (
+            <Line label="Fiscal" value={fiscalStatusLabels[sale.fiscalStatus]} />
+          ) : null}
         </section>
 
         <Divider />

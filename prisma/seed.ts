@@ -1,5 +1,8 @@
 import {
   BusinessType,
+  FiscalDocumentIdentityType,
+  FiscalEnvironment,
+  FiscalIssueMode,
   PaymentMethod,
   PrintPaperSize,
   Prisma,
@@ -432,6 +435,35 @@ async function main() {
       defaultMinStock: null,
       allowManualStockAdjustment: true,
       showLowStockWarnings: true
+    }
+  });
+
+  await prisma.fiscalSetting.upsert({
+    where: { id: "default" },
+    update: {
+      enabled: false,
+      environment: FiscalEnvironment.HOMOLOGACION,
+      cashIssueMode: FiscalIssueMode.ASK,
+      electronicPaymentIssueMode: FiscalIssueMode.AUTO,
+      currentAccountIssueMode: FiscalIssueMode.ASK,
+      pendingWarningMinutes: 30,
+      pendingCriticalMinutes: 120,
+      allowCancelBeforeIssue: true,
+      requireCustomerForInvoiceA: true,
+      defaultCustomerDocType: FiscalDocumentIdentityType.CONSUMIDOR_FINAL
+    },
+    create: {
+      id: "default",
+      enabled: false,
+      environment: FiscalEnvironment.HOMOLOGACION,
+      cashIssueMode: FiscalIssueMode.ASK,
+      electronicPaymentIssueMode: FiscalIssueMode.AUTO,
+      currentAccountIssueMode: FiscalIssueMode.ASK,
+      pendingWarningMinutes: 30,
+      pendingCriticalMinutes: 120,
+      allowCancelBeforeIssue: true,
+      requireCustomerForInvoiceA: true,
+      defaultCustomerDocType: FiscalDocumentIdentityType.CONSUMIDOR_FINAL
     }
   });
 

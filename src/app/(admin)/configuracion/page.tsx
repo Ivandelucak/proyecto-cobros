@@ -42,6 +42,9 @@ export default async function ConfiguracionPage() {
         description="Datos basicos del comercio usados por ticket y operacion."
         actions={
           <>
+            <LinkButton href="/configuracion/fiscal" variant="outline">
+              Fiscal
+            </LinkButton>
             <LinkButton href="/configuracion/impresion" variant="outline">
               Impresion
             </LinkButton>

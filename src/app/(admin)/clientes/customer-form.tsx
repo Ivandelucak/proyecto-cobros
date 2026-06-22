@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import type { CustomerFormState } from "./actions";
 
@@ -16,12 +16,37 @@ type CustomerFormProps = {
     phone: string | null;
     email: string | null;
     address: string | null;
+    fiscalCondition: string | null;
+    docType: string | null;
+    docNumber: string | null;
+    businessName: string | null;
+    taxAddress: string | null;
     notes: string | null;
     active: boolean;
   };
 };
 
 const initialState: CustomerFormState = {};
+const fiscalConditionLabels = {
+  "": "Sin especificar",
+  CONSUMIDOR_FINAL: "Consumidor final",
+  RESPONSABLE_INSCRIPTO: "Responsable inscripto",
+  MONOTRIBUTO: "Monotributo",
+  EXENTO: "Exento",
+  NO_RESPONSABLE: "No responsable",
+  EXTERIOR: "Exterior",
+  OTHER: "Otro"
+};
+const fiscalDocumentTypeLabels = {
+  "": "Sin especificar",
+  DNI: "DNI",
+  CUIT: "CUIT",
+  CUIL: "CUIL",
+  CDI: "CDI",
+  PASAPORTE: "Pasaporte",
+  CONSUMIDOR_FINAL: "Consumidor final",
+  OTHER: "Otro"
+};
 
 export function CustomerForm({ action, submitLabel, initialValues }: CustomerFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -64,6 +89,44 @@ export function CustomerForm({ action, submitLabel, initialValues }: CustomerFor
               className="min-h-24 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-50 dark:focus:ring-brand-900/60"
             />
           </label>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-4 text-sm font-semibold text-gray-950 dark:text-gray-50">
+          Datos fiscales
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Condicion fiscal">
+            <Select
+              name="fiscalCondition"
+              defaultValue={initialValues?.fiscalCondition ?? ""}
+            >
+              {Object.entries(fiscalConditionLabels).map(([value, label]) => (
+                <option key={value || "empty"} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Tipo de documento fiscal">
+            <Select name="docType" defaultValue={initialValues?.docType ?? ""}>
+              {Object.entries(fiscalDocumentTypeLabels).map(([value, label]) => (
+                <option key={value || "empty"} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Numero documento fiscal">
+            <Input name="docNumber" defaultValue={initialValues?.docNumber ?? ""} />
+          </Field>
+          <Field label="Razon social">
+            <Input name="businessName" defaultValue={initialValues?.businessName ?? ""} />
+          </Field>
+          <Field label="Domicilio fiscal">
+            <Input name="taxAddress" defaultValue={initialValues?.taxAddress ?? ""} />
+          </Field>
         </div>
       </Card>
 

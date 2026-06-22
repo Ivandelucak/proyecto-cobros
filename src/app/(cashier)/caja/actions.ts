@@ -1,6 +1,13 @@
 "use server";
 
-import { CashMovementType, CashSessionStatus, PaymentMethod, Prisma, Role } from "@prisma/client";
+import {
+  CashMovementType,
+  CashSessionStatus,
+  type FiscalStatus,
+  PaymentMethod,
+  Prisma,
+  Role
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAuditLog } from "@/lib/audit-log";
@@ -51,6 +58,7 @@ export type RegisterSaleInput = {
   }>;
   payments: RegisterPaymentInput[];
   customerId?: string | null;
+  fiscalInvoiceRequested?: boolean | null;
 };
 
 export type RegisterSaleResult = {
@@ -58,6 +66,8 @@ export type RegisterSaleResult = {
   error?: string;
   saleId?: string;
   saleNumber?: number;
+  fiscalStatus?: FiscalStatus;
+  requiresFiscalInvoice?: boolean;
   suggestedProducts?: CashProductResult[];
 };
 
@@ -205,7 +215,8 @@ export async function confirmRegisterSaleAction(
       userId: user.id,
       customerId: input.customerId ?? null,
       items,
-      payments
+      payments,
+      fiscalInvoiceRequested: input.fiscalInvoiceRequested ?? null
     });
 
     await createAuditLog({
@@ -227,6 +238,8 @@ export async function confirmRegisterSaleAction(
       ok: true,
       saleId: sale.id,
       saleNumber: sale.saleNumber,
+      fiscalStatus: sale.fiscalStatus,
+      requiresFiscalInvoice: sale.requiresFiscalInvoice,
       suggestedProducts: await getSuggestedCashProductsAction()
     };
   } catch (error) {

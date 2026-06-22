@@ -9,6 +9,9 @@ import {
 } from "@prisma/client";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
+import { applyFiscalDecisionToSale } from "@/lib/fiscal/fiscal-engine";
+import { determineFiscalRequirementForSale } from "@/lib/fiscal/fiscal-policy";
+import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import {
   getActiveCreditInstallmentPlans,
   getEnabledPaymentMethodSettings
@@ -37,6 +40,7 @@ export type ConfirmSaleInput = {
   customerId?: string | null;
   items: SaleItemInput[];
   payments: PaymentInput[];
+  fiscalInvoiceRequested?: boolean | null;
 };
 
 type ActiveCreditInstallmentPlan = {
@@ -123,9 +127,10 @@ export async function confirmSale(input: ConfirmSaleInput) {
       };
     });
 
-    const [enabledPaymentMethods, activeCreditPlans] = await Promise.all([
+    const [enabledPaymentMethods, activeCreditPlans, fiscalSetting] = await Promise.all([
       getEnabledPaymentMethodSettings(tx),
-      getActiveCreditInstallmentPlans(tx)
+      getActiveCreditInstallmentPlans(tx),
+      getFiscalSettingOrDefault(tx)
     ]);
     const enabledMethodCodes = new Set(
       enabledPaymentMethods.map((setting) => setting.method)
@@ -143,6 +148,11 @@ export async function confirmSale(input: ConfirmSaleInput) {
       subtotal,
       activeCreditPlans
     );
+    const fiscalDecision = determineFiscalRequirementForSale({
+      payments: paymentRecords.map((payment) => ({ method: payment.method })),
+      setting: fiscalSetting,
+      cashierRequestedInvoice: input.fiscalInvoiceRequested ?? null
+    });
     const total = subtotal.plus(surchargeTotal).minus(discountTotal).toDecimalPlaces(2);
     const currentAccountTotal = paymentRecords
       .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
@@ -235,7 +245,16 @@ export async function confirmSale(input: ConfirmSaleInput) {
       });
     }
 
-    return sale;
+    await applyFiscalDecisionToSale(tx, sale.id, fiscalDecision, user.id);
+
+    return tx.sale.findUniqueOrThrow({
+      where: { id: sale.id },
+      include: {
+        items: true,
+        payments: true,
+        user: true
+      }
+    });
   });
 }
 

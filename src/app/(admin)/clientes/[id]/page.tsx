@@ -82,6 +82,20 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
               <Info label="Email" value={customer.email} />
               <Info label="Direccion" value={customer.address} />
               <Info label="Estado" value={customer.active ? "Activo" : "Inactivo"} />
+              <Info
+                label="Condicion fiscal"
+                value={customer.fiscalCondition ? fiscalConditionLabel(customer.fiscalCondition) : null}
+              />
+              <Info
+                label="Documento fiscal"
+                value={
+                  customer.docType || customer.docNumber
+                    ? [customer.docType, customer.docNumber].filter(Boolean).join(" ")
+                    : null
+                }
+              />
+              <Info label="Razon social" value={customer.businessName} />
+              <Info label="Domicilio fiscal" value={customer.taxAddress} />
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Saldo actual</p>
                 <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
@@ -194,4 +208,18 @@ function Info({ label, value }: { label: string; value: string | null }) {
       <p className="mt-1 font-medium text-gray-950 dark:text-gray-50">{value || "-"}</p>
     </div>
   );
+}
+
+function fiscalConditionLabel(value: string) {
+  const labels: Record<string, string> = {
+    CONSUMIDOR_FINAL: "Consumidor final",
+    RESPONSABLE_INSCRIPTO: "Responsable inscripto",
+    MONOTRIBUTO: "Monotributo",
+    EXENTO: "Exento",
+    NO_RESPONSABLE: "No responsable",
+    EXTERIOR: "Exterior",
+    OTHER: "Otro"
+  };
+
+  return labels[value] ?? value;
 }

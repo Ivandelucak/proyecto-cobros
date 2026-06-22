@@ -1,6 +1,11 @@
 "use server";
 
-import { CustomerAccountMovementType, PaymentMethod } from "@prisma/client";
+import {
+  CustomerAccountMovementType,
+  FiscalCustomerCondition,
+  FiscalDocumentIdentityType,
+  PaymentMethod
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin-auth";
@@ -188,9 +193,32 @@ function parseCustomerForm(formData: FormData) {
     phone: readOptional(formData, "phone"),
     email: readOptional(formData, "email"),
     address: readOptional(formData, "address"),
+    fiscalCondition: parseFiscalCustomerCondition(formData.get("fiscalCondition")),
+    docType: parseFiscalDocumentIdentityType(formData.get("docType")),
+    docNumber: readOptional(formData, "docNumber"),
+    businessName: readOptional(formData, "businessName"),
+    taxAddress: readOptional(formData, "taxAddress"),
     notes: readOptional(formData, "notes"),
     active: formData.get("active") === "on"
   };
+}
+
+function parseFiscalCustomerCondition(value: FormDataEntryValue | null) {
+  const condition = String(value ?? "");
+  return Object.values(FiscalCustomerCondition).includes(
+    condition as FiscalCustomerCondition
+  )
+    ? (condition as FiscalCustomerCondition)
+    : null;
+}
+
+function parseFiscalDocumentIdentityType(value: FormDataEntryValue | null) {
+  const type = String(value ?? "");
+  return Object.values(FiscalDocumentIdentityType).includes(
+    type as FiscalDocumentIdentityType
+  )
+    ? (type as FiscalDocumentIdentityType)
+    : null;
 }
 
 function parsePaymentMethod(value: FormDataEntryValue | null): PaymentMethod {

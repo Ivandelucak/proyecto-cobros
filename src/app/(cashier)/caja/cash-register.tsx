@@ -21,6 +21,7 @@ import type {
   CreditInstallmentPlanView,
   PaymentMethodSettingView
 } from "@/lib/payment-settings";
+import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import type { PrintSettingView } from "@/lib/print-settings";
 import { cn } from "@/lib/ui";
 import {
@@ -64,6 +65,8 @@ type AutomaticPaymentResult =
 type SaleSuccess = {
   saleId: string;
   saleNumber: number;
+  fiscalStatus?: string;
+  requiresFiscalInvoice?: boolean;
 };
 
 type Message = {
@@ -76,6 +79,7 @@ type CashRegisterProps = {
   paymentMethods: PaymentMethodSettingView[];
   creditPlans: CreditInstallmentPlanView[];
   printSetting: PrintSettingView;
+  fiscalSetting: FiscalSettingView;
 };
 
 const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
@@ -89,12 +93,23 @@ const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
 
 const AUTO_PAYMENT_AMOUNT = "__AUTO_PENDING__";
 const decimalUnits = new Set(["KG", "GR", "LITER", "METER"]);
+const fiscalStatusLabels: Record<string, string> = {
+  NOT_REQUESTED: "Ticket interno",
+  PENDING: "Pendiente de facturacion",
+  READY_TO_ISSUE: "Factura preparada",
+  ISSUED: "Emitida fiscalmente",
+  FAILED: "Facturacion fallida",
+  CANCELLED_BEFORE_ISSUE: "Anulada antes de emitir",
+  CREDIT_NOTE_REQUIRED: "Requiere nota de credito",
+  CANCELLED_BY_CREDIT_NOTE: "Anulada con nota de credito"
+};
 
 export function CashRegister({
   initialSuggestedProducts,
   paymentMethods,
   creditPlans,
-  printSetting
+  printSetting,
+  fiscalSetting
 }: CashRegisterProps) {
   const defaultPaymentMethod =
     (paymentMethods[0]?.method as PaymentMethodValue | undefined) ?? "CASH";
@@ -124,6 +139,7 @@ export function CashRegister({
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerResults, setCustomerResults] = useState<CashCustomerResult[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<CashCustomerResult | null>(null);
+  const [fiscalInvoiceRequested, setFiscalInvoiceRequested] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<SaleSuccess | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -176,6 +192,13 @@ export function CashRegister({
   const quickCashAmounts = buildQuickCashAmounts(remaining);
   const compactProducts = cart.length > 0;
   const paymentsDisabled = cart.length === 0;
+  const projectedPaymentMethods = useMemo(
+    () => buildProjectedPaymentMethods(payments, paymentMethod, remaining),
+    [payments, paymentMethod, remaining]
+  );
+  const fiscalMode = getFiscalModeForMethods(fiscalSetting, projectedPaymentMethods);
+  const shouldAskFiscal = fiscalSetting.enabled && fiscalMode === "ASK";
+  const willAutoFiscal = fiscalSetting.enabled && fiscalMode === "AUTO";
 
   useEffect(() => {
     const search = query.trim();
@@ -474,6 +497,7 @@ export function CashRegister({
     setCashReceived("");
     setInstallments(defaultInstallments);
     setPaymentMethod(defaultPaymentMethod);
+    setFiscalInvoiceRequested(false);
     setMessage(null);
     setSaleSuccess(null);
     clearSearch();
@@ -508,6 +532,11 @@ export function CashRegister({
       return;
     }
 
+    const finalFiscalMode = getFiscalModeForMethods(
+      fiscalSetting,
+      finalPayments.payments.map((payment) => payment.method)
+    );
+
     setMessage(null);
     startTransition(async () => {
       const accountPayment = finalPayments.payments.find(
@@ -524,7 +553,11 @@ export function CashRegister({
           receivedAmount: payment.receivedAmount,
           installments: payment.method === "CREDIT" ? payment.installments : undefined
         })),
-        customerId: accountPayment?.customerId ?? null
+        customerId: accountPayment?.customerId ?? null,
+        fiscalInvoiceRequested:
+          fiscalSetting.enabled && finalFiscalMode === "ASK"
+            ? fiscalInvoiceRequested
+            : null
       });
 
       if (!result.ok) {
@@ -534,11 +567,15 @@ export function CashRegister({
 
       const confirmedSale = {
         saleId: result.saleId ?? "",
-        saleNumber: result.saleNumber ?? 0
+        saleNumber: result.saleNumber ?? 0,
+        fiscalStatus: result.fiscalStatus,
+        requiresFiscalInvoice: result.requiresFiscalInvoice
       };
       setSaleSuccess({
         saleId: confirmedSale.saleId,
-        saleNumber: confirmedSale.saleNumber
+        saleNumber: confirmedSale.saleNumber,
+        fiscalStatus: confirmedSale.fiscalStatus,
+        requiresFiscalInvoice: confirmedSale.requiresFiscalInvoice
       });
       setCart([]);
       setPayments([]);
@@ -546,6 +583,7 @@ export function CashRegister({
       setCashReceived("");
       setInstallments(defaultInstallments);
       setPaymentMethod(defaultPaymentMethod);
+      setFiscalInvoiceRequested(false);
       setCustomerQuery("");
       setCustomerResults([]);
       setSelectedCustomer(null);
@@ -1156,6 +1194,47 @@ export function CashRegister({
             </Button>
           </div>
 
+          {fiscalSetting.enabled && cart.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+              <p className="font-semibold text-gray-950 dark:text-gray-50">
+                Facturacion
+              </p>
+              {shouldAskFiscal ? (
+                <div className="mt-2 grid gap-2">
+                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <input
+                      type="radio"
+                      name="fiscalInvoiceRequested"
+                      checked={!fiscalInvoiceRequested}
+                      onChange={() => setFiscalInvoiceRequested(false)}
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    <span>Solo ticket interno</span>
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+                    <input
+                      type="radio"
+                      name="fiscalInvoiceRequested"
+                      checked={fiscalInvoiceRequested}
+                      onChange={() => setFiscalInvoiceRequested(true)}
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    <span>Enviar a facturacion</span>
+                  </label>
+                </div>
+              ) : (
+                <p className="mt-1 text-gray-600 dark:text-gray-300">
+                  {willAutoFiscal
+                    ? "Esta venta quedara pendiente de facturacion."
+                    : "Esta venta quedara como ticket interno."}
+                </p>
+              )}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                No se emite comprobante real en ARCA en esta etapa.
+              </p>
+            </div>
+          ) : null}
+
           {payments.length > 0 ? (
             <div className="mt-5 space-y-2">
               <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
@@ -1200,6 +1279,13 @@ export function CashRegister({
           {saleSuccess ? (
             <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
               <p className="font-medium">Venta #{saleSuccess.saleNumber} confirmada.</p>
+              {saleSuccess.fiscalStatus ? (
+                <p className="mt-1">
+                  Estado fiscal:{" "}
+                  {fiscalStatusLabels[saleSuccess.fiscalStatus] ??
+                    saleSuccess.fiscalStatus}
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="sm" onClick={cancelSale}>
                   Nueva venta
@@ -1466,6 +1552,40 @@ function roundQuantity(value: number) {
 
 function shouldAutofillPaymentAmount(method: PaymentMethodValue) {
   return ["MERCADOPAGO", "TRANSFER", "DEBIT", "CREDIT"].includes(method);
+}
+
+function buildProjectedPaymentMethods(
+  payments: PaymentEntry[],
+  paymentMethod: PaymentMethodValue,
+  remaining: number
+) {
+  const methods = payments.map((payment) => payment.method);
+  if (remaining > 0 && !methods.includes(paymentMethod)) {
+    methods.push(paymentMethod);
+  }
+  return methods;
+}
+
+function getFiscalModeForMethods(
+  setting: FiscalSettingView,
+  methods: PaymentMethodValue[]
+) {
+  if (!setting.enabled) {
+    return "NEVER";
+  }
+
+  const hasElectronic = methods.some((method) =>
+    ["DEBIT", "CREDIT", "TRANSFER", "MERCADOPAGO"].includes(method)
+  );
+  if (hasElectronic) {
+    return setting.electronicPaymentIssueMode;
+  }
+
+  if (methods.includes("CURRENT_ACCOUNT")) {
+    return setting.currentAccountIssueMode;
+  }
+
+  return setting.cashIssueMode;
 }
 
 function createPaymentId() {
