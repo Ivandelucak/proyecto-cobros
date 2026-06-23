@@ -1,0 +1,36 @@
+.fiscalActionShortLabel {
+  display: none;
+}
+
+@media (max-width: 1280px) and (max-height: 720px) {
+  .fiscalTable {
+    min-width: 1020px !important;
+  }
+
+  .fiscalActionsColumn {
+    width: 190px !important;
+  }
+
+  .fiscalActionsGroup {
+    gap: 0.25rem !important;
+  }
+
+  .fiscalActionButton {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    font-size: 11px !important;
+  }
+
+  .fiscalMenuButton {
+    height: 2rem !important;
+    width: 2rem !important;
+  }
+
+  .fiscalActionFullLabel {
+    display: none;
+  }
+
+  .fiscalActionShortLabel {
+    display: inline;
+  }
+}

@@ -20,5 +20,5 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return <AppShell user={user} defaultSidebarOpen>{children}</AppShell>;
 }

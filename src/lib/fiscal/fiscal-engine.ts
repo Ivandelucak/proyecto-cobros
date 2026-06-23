@@ -1,10 +1,14 @@
 import {
   FiscalDocumentIdentityType,
   FiscalDocumentStatus,
-  FiscalDocumentType,
   FiscalStatus,
+  SaleStatus,
   type Prisma
 } from "@prisma/client";
+import {
+  determineFiscalDocumentTypeAndLetter,
+  validateFiscalReadiness
+} from "@/lib/fiscal/fiscal-documents";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import type { FiscalRequirementDecision } from "@/lib/fiscal/fiscal-policy";
 import { prisma } from "@/lib/prisma";
@@ -61,6 +65,32 @@ export async function markSaleFiscalPendingTx(
   saleId: string,
   userId?: string | null
 ) {
+  const sale = await client.sale.findUnique({
+    where: { id: saleId },
+    select: {
+      status: true,
+      fiscalStatus: true,
+      fiscalDocument: { select: { status: true } }
+    }
+  });
+
+  if (!sale) {
+    throw new Error("Venta no encontrada.");
+  }
+
+  if (sale.status === SaleStatus.CANCELLED) {
+    throw new Error("No se puede marcar una venta anulada como pendiente fiscal.");
+  }
+
+  if (
+    sale.fiscalStatus === FiscalStatus.ISSUED ||
+    sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ||
+    sale.fiscalStatus === FiscalStatus.CANCELLED_BY_CREDIT_NOTE ||
+    sale.fiscalDocument?.status === FiscalDocumentStatus.ISSUED
+  ) {
+    throw new Error("No se puede cambiar el estado fiscal de una venta emitida.");
+  }
+
   await client.sale.update({
     where: { id: saleId },
     data: {
@@ -93,6 +123,34 @@ export async function markSaleFiscalNotRequestedTx(
   saleId: string,
   userId?: string | null
 ) {
+  const sale = await client.sale.findUnique({
+    where: { id: saleId },
+    select: {
+      status: true,
+      fiscalStatus: true,
+      fiscalDocument: { select: { status: true } }
+    }
+  });
+
+  if (!sale) {
+    throw new Error("Venta no encontrada.");
+  }
+
+  if (sale.status === SaleStatus.CANCELLED) {
+    throw new Error("No se puede marcar una venta anulada como ticket interno.");
+  }
+
+  if (
+    sale.fiscalStatus !== FiscalStatus.PENDING &&
+    sale.fiscalStatus !== FiscalStatus.FAILED
+  ) {
+    throw new Error("Solo se pueden marcar como ticket interno ventas pendientes o fallidas.");
+  }
+
+  if (sale.fiscalDocument?.status === FiscalDocumentStatus.ISSUED) {
+    throw new Error("No se puede cambiar el estado fiscal de una venta emitida.");
+  }
+
   await client.sale.update({
     where: { id: saleId },
     data: {
@@ -138,14 +196,23 @@ export async function prepareFiscalDocumentDraft(
       throw new Error("La venta requiere nota de credito.");
     }
 
+    const readiness = await validateFiscalReadiness(sale.id, tx);
+    if (readiness.errors.length > 0) {
+      throw new Error(readiness.errors.join(" "));
+    }
+
     const customerSnapshot = buildFiscalCustomerSnapshot(
       sale.customer,
       setting.defaultCustomerDocType
     );
+    const documentShape = determineFiscalDocumentTypeAndLetter({
+      setting,
+      customerCondition: customerSnapshot.condition
+    });
     const documentData = {
       saleId: sale.id,
-      type: FiscalDocumentType.INVOICE,
-      letter: setting.defaultInvoiceLetter ?? "B",
+      type: documentShape.type,
+      letter: documentShape.letter,
       status: FiscalDocumentStatus.DRAFT,
       environment: setting.environment,
       pointOfSale: setting.pointOfSale,
@@ -173,9 +240,13 @@ export async function prepareFiscalDocumentDraft(
     };
 
     const existingDocument = await tx.fiscalDocument.findFirst({
-      where: { saleId: sale.id, type: FiscalDocumentType.INVOICE },
-      select: { id: true }
+      where: { saleId: sale.id, type: documentShape.type },
+      select: { id: true, status: true }
     });
+
+    if (existingDocument?.status === FiscalDocumentStatus.ISSUED) {
+      throw new Error("No se puede regenerar un comprobante fiscal emitido.");
+    }
 
     const fiscalDocument = existingDocument
       ? await tx.fiscalDocument.update({
@@ -253,6 +324,17 @@ export async function cancelFiscalBeforeIssueTx(
   userId: string,
   reason: string
 ) {
+  await client.fiscalDocument.updateMany({
+    where: {
+      saleId,
+      status: { not: FiscalDocumentStatus.ISSUED }
+    },
+    data: {
+      status: FiscalDocumentStatus.CANCELLED,
+      errorMessage: null
+    }
+  });
+
   await client.sale.update({
     where: { id: saleId },
     data: {

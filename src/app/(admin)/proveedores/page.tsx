@@ -51,7 +51,7 @@ export default async function ProveedoresPage({ searchParams }: ProveedoresPageP
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+        <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
           <Input name="q" placeholder="Buscar por nombre, CUIT o telefono" defaultValue={q} />
           <Select name="status" defaultValue={status}>
             <option value="active">Activos</option>

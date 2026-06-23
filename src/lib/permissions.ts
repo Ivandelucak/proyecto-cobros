@@ -2,14 +2,19 @@ import { Role } from "@prisma/client";
 
 export const ADMIN_ROUTES = [
   "/admin",
+  "/auditoria",
+  "/categorias",
+  "/clientes",
+  "/compras",
+  "/configuracion",
+  "/facturacion",
   "/productos",
   "/productos/importar",
-  "/categorias",
+  "/proveedores",
+  "/reportes",
   "/stock",
   "/ventas",
-  "/facturacion",
-  "/reportes",
-  "/configuracion"
+  "/usuarios"
 ];
 
 export function canAccessAdmin(role: Role) {

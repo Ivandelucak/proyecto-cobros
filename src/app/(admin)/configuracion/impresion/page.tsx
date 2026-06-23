@@ -16,7 +16,7 @@ export default async function ImpresionPage() {
     <section className="space-y-5">
       <PageHeader
         title="Impresion"
-        description="Configuracion basica para imprimir tickets desde Electron."
+        description="Configuracion de papel, copias e impresora para tickets."
         actions={
           <LinkButton href="/configuracion" variant="outline">
             Volver a configuracion
@@ -34,8 +34,10 @@ export default async function ImpresionPage() {
           Prueba de impresion
         </h2>
         <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-          Para probar, abri cualquier ticket real desde Ventas o desde Caja y usa
-          el boton Imprimir ticket.
+          Para probar, abri cualquier ticket real desde Ventas, Facturacion o Caja
+          y usa el boton Imprimir ticket. En navegador se abrira el dialogo del
+          sistema; en la app de escritorio se usara la impresora configurada si
+          esta disponible.
         </p>
       </Card>
     </section>

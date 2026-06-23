@@ -4,14 +4,21 @@ import { useState } from "react";
 import { recordTicketPrintAction } from "@/app/(sales)/ventas/print-actions";
 import { Button } from "@/components/ui/button";
 import type { PrintSettingView } from "@/lib/print-settings";
+import { isSafeInternalReturnTo } from "@/lib/return-to";
 
 type PrintButtonProps = {
   saleId?: string;
   setting?: PrintSettingView;
+  printHref?: string;
   autoFocus?: boolean;
 };
 
-export function PrintButton({ saleId, setting, autoFocus }: PrintButtonProps) {
+export function PrintButton({
+  saleId,
+  setting,
+  printHref,
+  autoFocus
+}: PrintButtonProps) {
   const [status, setStatus] = useState<{
     tone: "ok" | "error" | "muted";
     text: string;
@@ -51,6 +58,34 @@ export function PrintButton({ saleId, setting, autoFocus }: PrintButtonProps) {
       const error = result.error || "No se pudo imprimir el ticket";
       setStatus({ tone: "error", text: error });
       await recordTicketPrintAction({ saleId, ok: false, error });
+      return;
+    }
+
+    if (printHref) {
+      if (!isSafeInternalReturnTo(printHref)) {
+        const error = "Ruta de ticket invalida.";
+        setStatus({ tone: "error", text: error });
+        if (saleId) {
+          await recordTicketPrintAction({ saleId, ok: false, error });
+        }
+        return;
+      }
+
+      const ticketWindow = window.open(
+        printHref,
+        "_blank",
+        "popup,width=420,height=720"
+      );
+
+      if (!ticketWindow) {
+        window.location.assign(printHref);
+        return;
+      }
+
+      if (saleId) {
+        await recordTicketPrintAction({ saleId, ok: true });
+      }
+      setStatus({ tone: "ok", text: "Ticket abierto para imprimir." });
       return;
     }
 

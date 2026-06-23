@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { buildReturnToHref, buildSaleDetailHref, buildTicketHref } from "@/lib/return-to";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
   const to = params.to ?? "";
   const status = parseSaleStatus(params.status);
   const method = parsePaymentMethod(params.method);
+  const returnTo = buildReturnToHref("/ventas", params);
   const where = buildSaleWhere({
     q,
     from,
@@ -86,7 +88,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 lg:grid-cols-[1fr_150px_150px_170px_220px_auto]">
+        <form className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_170px_220px_auto]">
           <Input
             name="q"
             placeholder="Buscar por numero, cajero o producto"
@@ -193,10 +195,10 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <LinkButton href={`/ventas/${sale.id}`} size="sm">
+                        <LinkButton href={buildSaleDetailHref(sale.id, returnTo)} size="sm">
                           Detalle
                         </LinkButton>
-                        <LinkButton href={`/ventas/${sale.id}/ticket`} size="sm">
+                        <LinkButton href={buildTicketHref(sale.id, returnTo)} size="sm">
                           Ticket
                         </LinkButton>
                       </div>

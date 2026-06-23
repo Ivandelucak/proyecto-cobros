@@ -55,7 +55,7 @@ export default async function ClientesPage({ searchParams }: ClientesPageProps) 
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+        <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
           <Input name="q" placeholder="Buscar por nombre, documento o telefono" defaultValue={q} />
           <Select name="status" defaultValue={status}>
             <option value="active">Activos</option>

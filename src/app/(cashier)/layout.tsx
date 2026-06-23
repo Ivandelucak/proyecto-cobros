@@ -20,9 +20,5 @@ export default async function CashierLayout({
     redirect("/login");
   }
 
-  return (
-    <AppShell user={user}>
-      {children}
-    </AppShell>
-  );
+  return <AppShell user={user} defaultSidebarOpen={false}>{children}</AppShell>;
 }

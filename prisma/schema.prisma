@@ -297,6 +297,16 @@ model FiscalSetting {
   allowCancelBeforeIssue     Boolean                    @default(true)
   requireCustomerForInvoiceA Boolean                    @default(true)
   defaultCustomerDocType     FiscalDocumentIdentityType @default(CONSUMIDOR_FINAL)
+  arcaCertificatePem         String?                    @db.Text
+  arcaPrivateKeyPem          String?                    @db.Text
+  arcaWsaaToken              String?                    @db.Text
+  arcaWsaaSign               String?                    @db.Text
+  arcaTokenExpiresAt         DateTime?
+  arcaLastConnectionStatus   String?
+  arcaLastConnectionTestAt   DateTime?
+  arcaLastWsfeStatus         String?
+  arcaLastWsfeTestAt         DateTime?
+  arcaLastError              String?                    @db.Text
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
 }

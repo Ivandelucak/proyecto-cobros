@@ -38,11 +38,12 @@ export function isFiscalIssuedStatus(status: FiscalStatus) {
 }
 
 export function fiscalStatusTone(status: FiscalStatus) {
-  if (
-    status === FiscalStatus.PENDING ||
-    status === FiscalStatus.READY_TO_ISSUE
-  ) {
+  if (status === FiscalStatus.PENDING) {
     return "amber" as const;
+  }
+
+  if (status === FiscalStatus.READY_TO_ISSUE) {
+    return "blue" as const;
   }
 
   if (

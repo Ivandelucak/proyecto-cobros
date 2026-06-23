@@ -26,3 +26,12 @@ pnpm-debug.log*
 /coverage
 tsconfig.tsbuildinfo
 /backups
+
+*.key
+*.pem
+*.crt
+*.csr
+*.pfx
+arca-homologacion/
+certificados/
+secrets/

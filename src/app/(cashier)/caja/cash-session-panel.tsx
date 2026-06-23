@@ -114,7 +114,7 @@ export function CashSessionPanel({
         {mode === "open" ? (
           <form
             action={openAction}
-            className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-[180px_1fr_auto]"
+            className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
           >
             <Input
               name="openingAmount"
@@ -226,7 +226,7 @@ export function CashSessionPanel({
           {mode === "movement" ? (
             <form
               action={movementAction}
-              className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none lg:grid-cols-[160px_140px_1fr_auto]"
+              className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(0,1fr)_auto]"
             >
               <Select name="type" defaultValue="EXPENSE">
                 {Object.entries(movementLabels).map(([value, label]) => (
@@ -247,7 +247,7 @@ export function CashSessionPanel({
           {mode === "close" ? (
             <form
               action={closeAction}
-              className="mt-3 grid gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/70 dark:bg-red-950/20 lg:grid-cols-[180px_1fr_auto]"
+              className="mt-3 grid gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/70 dark:bg-red-950/20 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
             >
               <Input
                 name="countedCashAmount"
@@ -278,15 +278,15 @@ function Summary({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
+    <div className="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
       <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label}
       </p>
       <p
         className={
           strong
-            ? "mt-0.5 text-lg font-semibold text-gray-950 dark:text-gray-50"
-            : "mt-0.5 text-sm font-semibold text-gray-950 dark:text-gray-50"
+            ? "mt-0.5 break-words text-base font-semibold text-gray-950 dark:text-gray-50 2xl:text-lg"
+            : "mt-0.5 break-words text-sm font-semibold text-gray-950 dark:text-gray-50"
         }
       >
         {value}

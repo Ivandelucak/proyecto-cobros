@@ -100,7 +100,7 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_210px_150px_170px_170px_auto]">
+        <form className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_210px_150px_170px_170px_auto]">
           <Input
             name="q"
             placeholder="Buscar por nombre, codigo o SKU"

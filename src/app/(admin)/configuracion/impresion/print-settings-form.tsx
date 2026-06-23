@@ -72,6 +72,12 @@ export function PrintSettingsForm({
         : true,
     [initialSetting.printerName, printers]
   );
+  const desktopStatusLabel =
+    desktopAvailable === null
+      ? "Detectando entorno"
+      : desktopAvailable
+        ? "App de escritorio"
+        : "Navegador web";
 
   return (
     <Card className="p-5">
@@ -81,7 +87,8 @@ export function PrintSettingsForm({
             Impresora de tickets
           </h2>
           <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-            La seleccion de impresora esta disponible en la app de escritorio.
+            La seleccion de impresora se usa desde la app de escritorio. En
+            navegador se usara el dialogo de impresion.
           </p>
         </div>
 
@@ -98,8 +105,8 @@ export function PrintSettingsForm({
 
         {desktopAvailable === false ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-            La seleccion de impresora esta disponible en la app de escritorio.
-            En navegador web los tickets seguiran usando window.print.
+            La seleccion de impresora se usa desde la app de escritorio. En
+            navegador se usara el dialogo de impresion.
             <input
               type="hidden"
               name="printerName"
@@ -156,7 +163,7 @@ export function PrintSettingsForm({
               Estado
             </span>
             <Input
-              value={desktopAvailable ? "App de escritorio" : "Modo web"}
+              value={desktopStatusLabel}
               readOnly
             />
           </label>

@@ -9,6 +9,7 @@ import { getCustomerBalance } from "@/lib/customer-account";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { buildReturnToHref, buildSaleDetailHref } from "@/lib/return-to";
 import { CustomerAdjustmentForm, CustomerPaymentForm } from "./account-forms";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
   }
 
   const balance = await getCustomerBalance(customer.id);
+  const returnTo = buildReturnToHref(`/clientes/${customer.id}`);
 
   return (
     <section className="space-y-5">
@@ -73,7 +75,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
         }
       />
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
           <Card className="p-5">
             <div className="grid gap-4 md:grid-cols-3">
@@ -181,7 +183,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
                       <p className="font-semibold text-gray-950 dark:text-gray-50">
                         {formatARS(sale.total)}
                       </p>
-                      <LinkButton href={`/ventas/${sale.id}`} size="sm">
+                      <LinkButton href={buildSaleDetailHref(sale.id, returnTo)} size="sm">
                         Ver
                       </LinkButton>
                     </div>

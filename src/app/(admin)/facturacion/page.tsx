@@ -16,6 +16,7 @@ import {
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { FiscalSaleActions } from "./fiscal-sale-actions";
+import styles from "./facturacion-responsive.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +24,18 @@ type FacturacionPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+type FiscalStatusFilter = FiscalStatus | "ALL";
+
 const filterLabels: Array<{ label: string; value: FiscalStatus | "ALL" }> = [
+  { label: "Todas", value: "ALL" },
+  { label: "Ticket interno", value: FiscalStatus.NOT_REQUESTED },
   { label: "Pendientes", value: FiscalStatus.PENDING },
   { label: "Preparadas", value: FiscalStatus.READY_TO_ISSUE },
-  { label: "Emitidas", value: FiscalStatus.ISSUED },
   { label: "Fallidas", value: FiscalStatus.FAILED },
   { label: "Anuladas antes", value: FiscalStatus.CANCELLED_BEFORE_ISSUE },
   { label: "Nota credito", value: FiscalStatus.CREDIT_NOTE_REQUIRED },
-  { label: "Todas", value: "ALL" }
+  { label: "Emitidas", value: FiscalStatus.ISSUED },
+  { label: "Anuladas con nota", value: FiscalStatus.CANCELLED_BY_CREDIT_NOTE }
 ];
 
 export default async function FacturacionPage({
@@ -38,7 +43,7 @@ export default async function FacturacionPage({
 }: FacturacionPageProps) {
   await requireAdminPage();
   const params = (await searchParams) ?? {};
-  const status = parseFiscalStatus(param(params.status)) ?? FiscalStatus.PENDING;
+  const statusFilter = parseFiscalStatusFilter(param(params.status));
   const paymentMethod = parsePaymentMethod(param(params.paymentMethod));
   const query = param(params.q).trim();
   const from = parseDate(param(params.from));
@@ -46,7 +51,7 @@ export default async function FacturacionPage({
   const setting = await getFiscalSettingOrDefault();
 
   const where: Prisma.SaleWhereInput = {
-    ...(status ? { fiscalStatus: status } : {}),
+    ...buildFiscalStatusWhere(statusFilter),
     ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(paymentMethod ? { payments: { some: { method: paymentMethod } } } : {}),
     ...(query
@@ -103,7 +108,7 @@ export default async function FacturacionPage({
         actions={<LinkButton href="/configuracion/fiscal">Configurar fiscal</LinkButton>}
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Pendientes" value={String(countMap.get(FiscalStatus.PENDING) ?? 0)} />
         <Metric
           label="Preparadas"
@@ -114,9 +119,9 @@ export default async function FacturacionPage({
       </div>
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_160px_150px_150px_auto]">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_160px_150px_150px_auto]">
           <Input name="q" placeholder="Cliente o venta #" defaultValue={query} />
-          <Select name="status" defaultValue={status ?? "ALL"}>
+          <Select name="status" defaultValue={statusFilter}>
             {filterLabels.map((filter) => (
               <option key={filter.value} value={filter.value}>
                 {filter.label}
@@ -139,9 +144,84 @@ export default async function FacturacionPage({
         </form>
       </Card>
 
-      <Card className="overflow-hidden">
+      <div className="grid gap-3 xl:hidden">
+        {sales.length === 0 ? (
+          <Card className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+            Sin ventas para el filtro seleccionado.
+          </Card>
+        ) : (
+          sales.map((sale) => {
+            const priority = pendingPriority(sale, setting);
+            const canPrepare = isPreparableFiscalStatus(sale.fiscalStatus);
+            const canMarkNotRequested =
+              sale.fiscalStatus === FiscalStatus.PENDING ||
+              sale.fiscalStatus === FiscalStatus.FAILED;
+            const canCancelBeforeIssue =
+              sale.status === SaleStatus.PAID &&
+              isPreparableFiscalStatus(sale.fiscalStatus);
+            const customer =
+              sale.customer?.name ??
+              sale.fiscalCustomerNameSnapshot ??
+              "Consumidor final";
+            const paymentLabel = sale.payments
+              .map((payment) => paymentMethodLabel(payment.method))
+              .join(" + ");
+
+            return (
+              <Card key={sale.id} className="p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-950 dark:text-gray-50">
+                      #{sale.saleNumber} · {paymentLabel || "Sin pago"}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+                      {customer} · {formatDateTimeStable(sale.createdAt)}
+                    </p>
+                  </div>
+                  <p className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-950 dark:text-gray-50">
+                    {formatARS(sale.total)}
+                  </p>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
+                    {fiscalStatusLabels[sale.fiscalStatus]}
+                  </Badge>
+                  <Badge tone={priorityTone(priority)}>
+                    {pendingAgeLabel(sale)}
+                  </Badge>
+                  {sale.fiscalDocument ? (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {sale.fiscalDocument.letter}
+                      {sale.fiscalDocument.pointOfSale
+                        ? ` PV ${sale.fiscalDocument.pointOfSale}`
+                        : ""}{" "}
+                      {sale.fiscalDocument.number
+                        ? `#${sale.fiscalDocument.number}`
+                        : "sin numero"}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3">
+                  <FiscalSaleActions
+                    saleId={sale.id}
+                    fiscalStatus={sale.fiscalStatus}
+                    requiresFiscalInvoice={sale.requiresFiscalInvoice}
+                    canPrepare={canPrepare}
+                    canMarkNotRequested={canMarkNotRequested}
+                    canCancelBeforeIssue={canCancelBeforeIssue}
+                  />
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      <Card className="hidden overflow-hidden xl:block">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className={`${styles.fiscalTable} w-full min-w-[1080px] text-left text-sm`}>
             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Venta</th>
@@ -151,7 +231,9 @@ export default async function FacturacionPage({
                 <th className="px-4 py-3 font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Estado fiscal</th>
                 <th className="px-4 py-3 font-medium">Pendiente</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
+                <th className={`${styles.fiscalActionsColumn} w-[240px] px-3 py-3 font-medium`}>
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -205,28 +287,20 @@ export default async function FacturacionPage({
                           </p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className={`${styles.fiscalActionsColumn} w-[240px] px-3 py-3 align-top`}>
                         <Badge tone={priorityTone(priority)}>
                           {pendingAgeLabel(sale)}
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2">
-                            <LinkButton href={`/ventas/${sale.id}`} size="sm">
-                              Ver venta
-                            </LinkButton>
-                            <Button type="button" size="sm" disabled>
-                              Emision real pendiente de integracion ARCA
-                            </Button>
-                          </div>
-                          <FiscalSaleActions
-                            saleId={sale.id}
-                            canPrepare={canPrepare}
-                            canMarkNotRequested={canMarkNotRequested}
-                            canCancelBeforeIssue={canCancelBeforeIssue}
-                          />
-                        </div>
+                        <FiscalSaleActions
+                          saleId={sale.id}
+                          fiscalStatus={sale.fiscalStatus}
+                          requiresFiscalInvoice={sale.requiresFiscalInvoice}
+                          canPrepare={canPrepare}
+                          canMarkNotRequested={canMarkNotRequested}
+                          canCancelBeforeIssue={canCancelBeforeIssue}
+                        />
                       </td>
                     </tr>
                   );
@@ -255,14 +329,42 @@ function param(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function parseFiscalStatus(value: string) {
+function parseFiscalStatusFilter(value: string): FiscalStatusFilter {
   if (value === "ALL") {
-    return null;
+    return "ALL";
   }
 
   return Object.values(FiscalStatus).includes(value as FiscalStatus)
     ? (value as FiscalStatus)
-    : null;
+    : "ALL";
+}
+
+function buildFiscalStatusWhere(statusFilter: FiscalStatusFilter): Prisma.SaleWhereInput {
+  if (statusFilter === "ALL") {
+    return {};
+  }
+
+  if (statusFilter === FiscalStatus.PENDING) {
+    return {
+      requiresFiscalInvoice: true,
+      fiscalStatus: { in: [FiscalStatus.PENDING, FiscalStatus.READY_TO_ISSUE] },
+      status: { not: SaleStatus.CANCELLED }
+    };
+  }
+
+  if (
+    statusFilter === FiscalStatus.READY_TO_ISSUE ||
+    statusFilter === FiscalStatus.FAILED ||
+    statusFilter === FiscalStatus.CREDIT_NOTE_REQUIRED
+  ) {
+    return {
+      requiresFiscalInvoice: true,
+      fiscalStatus: statusFilter,
+      status: { not: SaleStatus.CANCELLED }
+    };
+  }
+
+  return { fiscalStatus: statusFilter };
 }
 
 function parsePaymentMethod(value: string) {

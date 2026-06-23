@@ -61,7 +61,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[220px_180px_auto]">
+        <form className="grid gap-3 md:grid-cols-[minmax(180px,220px)_180px_auto]">
           <Select name="categoryId" defaultValue={categoryId}>
             <option value="">Todas las categorias</option>
             {categories.map((category) => (

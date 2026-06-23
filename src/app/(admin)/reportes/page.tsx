@@ -158,7 +158,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[160px_160px_220px_auto]">
+        <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[160px_160px_220px_auto]">
           <Input name="from" type="date" defaultValue={from} />
           <Input name="to" type="date" defaultValue={to} />
           <Select name="method" defaultValue={method ?? ""}>
@@ -176,7 +176,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
       </Card>
 
       <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Metric label="Total vendido" value={formatARS(metrics.totalSold)} />
           <Metric label="Cantidad ventas" value={String(metrics.salesCount)} />
           <Metric label="Ticket promedio" value={formatARS(metrics.averageTicket)} />
@@ -382,9 +382,9 @@ function Metric({
   compact?: boolean;
 }) {
   return (
-    <Card className={compact ? "p-4" : "p-5"}>
+    <Card className={compact ? "min-w-0 p-4" : "min-w-0 p-4 2xl:p-5"}>
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className={tone === "red" ? "mt-2 text-2xl font-semibold text-red-700 dark:text-red-300" : "mt-2 text-2xl font-semibold text-gray-950 dark:text-gray-50"}>
+      <p className={tone === "red" ? "mt-2 break-words text-xl font-semibold text-red-700 dark:text-red-300 2xl:text-2xl" : "mt-2 break-words text-xl font-semibold text-gray-950 dark:text-gray-50 2xl:text-2xl"}>
         {value}
       </p>
     </Card>
@@ -403,7 +403,7 @@ function MetricSection({
   return (
     <div>
       <h2 className="mb-3 text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <div className={`grid gap-4 md:grid-cols-2 ${columns}`}>{children}</div>
+      <div className={`grid gap-3 md:grid-cols-2 ${columns}`}>{children}</div>
     </div>
   );
 }

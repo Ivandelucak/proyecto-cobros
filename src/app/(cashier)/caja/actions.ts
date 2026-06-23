@@ -233,6 +233,7 @@ export async function confirmRegisterSaleAction(
     revalidatePath("/stock");
     revalidatePath("/ventas");
     revalidatePath("/clientes");
+    revalidatePath("/facturacion");
 
     return {
       ok: true,

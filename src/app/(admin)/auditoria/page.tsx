@@ -59,7 +59,7 @@ export default async function AuditoriaPage({ searchParams }: AuditoriaPageProps
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+        <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]">
           <Input name="q" placeholder="Buscar accion, usuario o detalle" defaultValue={q} />
           <Select name="entity" defaultValue={entity}>
             <option value="all">Todas las entidades</option>

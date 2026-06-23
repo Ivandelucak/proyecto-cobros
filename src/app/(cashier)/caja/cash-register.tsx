@@ -23,6 +23,7 @@ import type {
 } from "@/lib/payment-settings";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import type { PrintSettingView } from "@/lib/print-settings";
+import { buildTicketHref } from "@/lib/return-to";
 import { cn } from "@/lib/ui";
 import {
   confirmRegisterSaleAction,
@@ -80,6 +81,8 @@ type CashRegisterProps = {
   creditPlans: CreditInstallmentPlanView[];
   printSetting: PrintSettingView;
   fiscalSetting: FiscalSettingView;
+  canAccessFiscalAdmin: boolean;
+  allowNegativeStock: boolean;
 };
 
 const fallbackPaymentLabels: Record<PaymentMethodValue, string> = {
@@ -109,7 +112,9 @@ export function CashRegister({
   paymentMethods,
   creditPlans,
   printSetting,
-  fiscalSetting
+  fiscalSetting,
+  canAccessFiscalAdmin,
+  allowNegativeStock
 }: CashRegisterProps) {
   const defaultPaymentMethod =
     (paymentMethods[0]?.method as PaymentMethodValue | undefined) ?? "CASH";
@@ -139,7 +144,7 @@ export function CashRegister({
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerResults, setCustomerResults] = useState<CashCustomerResult[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<CashCustomerResult | null>(null);
-  const [fiscalInvoiceRequested, setFiscalInvoiceRequested] = useState(false);
+  const [pendingFiscalPayments, setPendingFiscalPayments] = useState<PaymentEntry[] | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<SaleSuccess | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -174,8 +179,11 @@ export function CashRegister({
   const remaining = Math.max(balance, 0);
   const overpaid = Math.max(-balance, 0);
   const paymentsMatch = cart.length > 0 && Math.abs(balance) < 0.01;
-  const hasInvalidCart = cart.some((item) => !isValidQuantity(item.quantity, item));
-  const canFinish = cart.length > 0 && !hasInvalidCart && !isPending;
+  const hasInvalidCart = cart.some((item) =>
+    !isValidQuantity(item.quantity, item, allowNegativeStock)
+  );
+  const canFinish =
+    cart.length > 0 && !hasInvalidCart && !isPending && !pendingFiscalPayments;
   const currentReceived = safeNumber(cashReceived);
   const currentAmount =
     paymentMethod === "CASH"
@@ -190,14 +198,13 @@ export function CashRegister({
         : ""
       : paymentAmount;
   const quickCashAmounts = buildQuickCashAmounts(remaining);
-  const compactProducts = cart.length > 0;
+  const compactProducts = true;
   const paymentsDisabled = cart.length === 0;
   const projectedPaymentMethods = useMemo(
     () => buildProjectedPaymentMethods(payments, paymentMethod, remaining),
     [payments, paymentMethod, remaining]
   );
   const fiscalMode = getFiscalModeForMethods(fiscalSetting, projectedPaymentMethods);
-  const shouldAskFiscal = fiscalSetting.enabled && fiscalMode === "ASK";
   const willAutoFiscal = fiscalSetting.enabled && fiscalMode === "AUTO";
 
   useEffect(() => {
@@ -315,6 +322,14 @@ export function CashRegister({
   }
 
   function handlePanelKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (pendingFiscalPayments) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPendingFiscalPayments(null);
+      }
+      return;
+    }
+
     if (event.key === "F1") {
       event.preventDefault();
       inputRef.current?.focus();
@@ -340,7 +355,7 @@ export function CashRegister({
     const existing = cart.find((item) => item.id === product.id);
     if (existing) {
       const nextQuantity = increaseQuantity(existing.quantity, product);
-      if (safeNumber(nextQuantity) > safeNumber(product.stock)) {
+      if (!allowNegativeStock && safeNumber(nextQuantity) > safeNumber(product.stock)) {
         showMessage(`Stock insuficiente para ${product.name}.`, "error");
         return;
       }
@@ -378,7 +393,7 @@ export function CashRegister({
       return;
     }
 
-    if (nextQuantity > safeNumber(item.stock)) {
+    if (!allowNegativeStock && nextQuantity > safeNumber(item.stock)) {
       showMessage(`Stock insuficiente para ${item.name}.`, "error");
       return;
     }
@@ -497,7 +512,7 @@ export function CashRegister({
     setCashReceived("");
     setInstallments(defaultInstallments);
     setPaymentMethod(defaultPaymentMethod);
-    setFiscalInvoiceRequested(false);
+    setPendingFiscalPayments(null);
     setMessage(null);
     setSaleSuccess(null);
     clearSearch();
@@ -537,9 +552,27 @@ export function CashRegister({
       finalPayments.payments.map((payment) => payment.method)
     );
 
+    if (
+      fiscalSetting.enabled &&
+      finalFiscalMode === "ASK" &&
+      canAskFiscalDecisionForMethods(finalPayments.payments.map((payment) => payment.method))
+    ) {
+      setMessage(null);
+      setPendingFiscalPayments(finalPayments.payments);
+      return;
+    }
+
+    submitSale(finalPayments.payments, null);
+  }
+
+  function submitSale(
+    finalPayments: PaymentEntry[],
+    requestedFiscalInvoice: boolean | null
+  ) {
     setMessage(null);
+    setPendingFiscalPayments(null);
     startTransition(async () => {
-      const accountPayment = finalPayments.payments.find(
+      const accountPayment = finalPayments.find(
         (payment) => payment.method === "CURRENT_ACCOUNT"
       );
       const result = await confirmRegisterSaleAction({
@@ -547,17 +580,14 @@ export function CashRegister({
           productId: item.id,
           quantity: item.quantity
         })),
-        payments: finalPayments.payments.map((payment) => ({
+        payments: finalPayments.map((payment) => ({
           method: payment.method,
           amount: payment.amount,
           receivedAmount: payment.receivedAmount,
           installments: payment.method === "CREDIT" ? payment.installments : undefined
         })),
         customerId: accountPayment?.customerId ?? null,
-        fiscalInvoiceRequested:
-          fiscalSetting.enabled && finalFiscalMode === "ASK"
-            ? fiscalInvoiceRequested
-            : null
+        fiscalInvoiceRequested: requestedFiscalInvoice
       });
 
       if (!result.ok) {
@@ -583,7 +613,6 @@ export function CashRegister({
       setCashReceived("");
       setInstallments(defaultInstallments);
       setPaymentMethod(defaultPaymentMethod);
-      setFiscalInvoiceRequested(false);
       setCustomerQuery("");
       setCustomerResults([]);
       setSelectedCustomer(null);
@@ -606,10 +635,23 @@ export function CashRegister({
     }
 
     if (!window.posElectron?.isElectron) {
-      showMessage(
-        "Venta confirmada. La impresion automatica esta disponible en Electron.",
-        "ok"
+      const printHref = buildTicketHref(saleId, "/caja", { print: true });
+      const ticketWindow = window.open(
+        printHref,
+        "_blank",
+        "popup,width=420,height=720"
       );
+
+      if (!ticketWindow) {
+        const error =
+          "El navegador bloqueo la ventana de impresion. Usa Imprimir ticket.";
+        showMessage(`Venta confirmada, pero ${error}`, "error");
+        await recordTicketPrintAction({ saleId, ok: false, error });
+        return;
+      }
+
+      showMessage("Venta confirmada e impresion abierta.", "ok");
+      await recordTicketPrintAction({ saleId, ok: true });
       return;
     }
 
@@ -746,13 +788,13 @@ export function CashRegister({
 
   return (
     <section
-      className="grid min-h-[calc(100vh-12rem)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]"
+      className="grid min-h-[calc(100vh-12rem)] gap-3 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-4"
       onKeyDown={handlePanelKeyDown}
     >
-      <div className="space-y-4">
-        <Card className="border-slate-300 bg-gradient-to-b from-white to-slate-50/50 p-4 shadow-lg shadow-slate-300/30 ring-1 ring-white/70 dark:bg-none dark:shadow-none dark:ring-0">
+      <div className="min-w-0 space-y-3 2xl:space-y-4">
+        <Card className="border-slate-300 bg-gradient-to-b from-white to-slate-50/50 p-3 shadow-lg shadow-slate-300/30 ring-1 ring-white/70 dark:bg-none dark:shadow-none dark:ring-0 2xl:p-4">
           <form
-            className="flex gap-3"
+            className="flex flex-col gap-2 sm:flex-row sm:gap-3"
             onSubmit={(event) => {
               event.preventDefault();
               handleSearchSubmit();
@@ -771,6 +813,7 @@ export function CashRegister({
               type="submit"
               variant="primary"
               disabled={isPending || query.trim().length === 0}
+              className="shrink-0"
             >
               Buscar
             </Button>
@@ -803,7 +846,7 @@ export function CashRegister({
 
         <Card className="overflow-hidden border-slate-300 shadow-lg shadow-slate-300/25 dark:shadow-none">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="border-b-2 border-slate-300 bg-slate-200 text-xs uppercase tracking-wide text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Producto</th>
@@ -824,8 +867,13 @@ export function CashRegister({
                   cart.map((item) => {
                     const quantity = safeNumber(item.quantity);
                     const subtotalItem = Number(item.salePrice) * quantity;
-                    const invalid = !isValidQuantity(item.quantity, item);
-                    const stockExceeded = quantity > safeNumber(item.stock);
+                    const invalid = !isValidQuantity(
+                      item.quantity,
+                      item,
+                      allowNegativeStock
+                    );
+                    const stockExceeded =
+                      !allowNegativeStock && quantity > safeNumber(item.stock);
 
                     return (
                       <tr
@@ -903,13 +951,13 @@ export function CashRegister({
         </Card>
       </div>
 
-      <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-        <Card className="border-slate-300/90 bg-gradient-to-b from-white to-slate-50/70 p-5 shadow-xl shadow-slate-300/40 ring-1 ring-white/80 dark:bg-none dark:shadow-none dark:ring-0 border-t-4 border-t-brand-500">
+      <aside className="min-w-0 space-y-3 xl:sticky xl:top-4 xl:self-start 2xl:space-y-4">
+        <Card className="border-t-4 border-t-brand-500 border-slate-300/90 bg-gradient-to-b from-white to-slate-50/70 p-4 shadow-xl shadow-slate-300/40 ring-1 ring-white/80 dark:bg-none dark:shadow-none dark:ring-0 2xl:p-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">
               Total final
             </p>
-            <p className="mt-1 text-5xl font-extrabold tracking-tight text-slate-950 dark:text-gray-50">
+            <p className="mt-1 text-4xl font-extrabold tracking-tight text-slate-950 dark:text-gray-50 2xl:text-5xl">
               {formatARS(total)}
             </p>
             {surchargeAmount > 0 ? (
@@ -1194,41 +1242,16 @@ export function CashRegister({
             </Button>
           </div>
 
-          {fiscalSetting.enabled && cart.length > 0 ? (
+          {fiscalSetting.enabled && cart.length > 0 && fiscalMode !== "ASK" ? (
             <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
               <p className="font-semibold text-gray-950 dark:text-gray-50">
                 Facturacion
               </p>
-              {shouldAskFiscal ? (
-                <div className="mt-2 grid gap-2">
-                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
-                    <input
-                      type="radio"
-                      name="fiscalInvoiceRequested"
-                      checked={!fiscalInvoiceRequested}
-                      onChange={() => setFiscalInvoiceRequested(false)}
-                      className="h-4 w-4 accent-brand-600"
-                    />
-                    <span>Solo ticket interno</span>
-                  </label>
-                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
-                    <input
-                      type="radio"
-                      name="fiscalInvoiceRequested"
-                      checked={fiscalInvoiceRequested}
-                      onChange={() => setFiscalInvoiceRequested(true)}
-                      className="h-4 w-4 accent-brand-600"
-                    />
-                    <span>Enviar a facturacion</span>
-                  </label>
-                </div>
-              ) : (
-                <p className="mt-1 text-gray-600 dark:text-gray-300">
-                  {willAutoFiscal
-                    ? "Esta venta quedara pendiente de facturacion."
-                    : "Esta venta quedara como ticket interno."}
-                </p>
-              )}
+              <p className="mt-1 text-gray-600 dark:text-gray-300">
+                {willAutoFiscal
+                  ? "Esta venta quedara pendiente de facturacion."
+                  : "Esta venta quedara como ticket interno."}
+              </p>
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 No se emite comprobante real en ARCA en esta etapa.
               </p>
@@ -1290,13 +1313,24 @@ export function CashRegister({
                 <Button type="button" size="sm" onClick={cancelSale}>
                   Nueva venta
                 </Button>
-                <LinkButton size="sm" href={`/ventas/${saleSuccess.saleId}/ticket`}>
+                <LinkButton size="sm" href={buildTicketHref(saleSuccess.saleId, "/caja")}>
                   Ver ticket
                 </LinkButton>
-                <PrintButton saleId={saleSuccess.saleId} setting={printSetting} />
+                <PrintButton
+                  saleId={saleSuccess.saleId}
+                  setting={printSetting}
+                  printHref={buildTicketHref(saleSuccess.saleId, "/caja", {
+                    print: true
+                  })}
+                />
                 <LinkButton size="sm" href={`/ventas/${saleSuccess.saleId}`}>
                   Ver venta
                 </LinkButton>
+                {canAccessFiscalAdmin && isFiscalQueueStatus(saleSuccess.fiscalStatus) ? (
+                  <LinkButton size="sm" href="/facturacion">
+                    Ver facturacion
+                  </LinkButton>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1334,6 +1368,55 @@ export function CashRegister({
           </div>
         </Card>
       </aside>
+      {pendingFiscalPayments ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fiscal-sale-dialog-title"
+        >
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
+            <h2
+              id="fiscal-sale-dialog-title"
+              className="text-lg font-semibold text-gray-950 dark:text-gray-50"
+            >
+              Facturacion de la venta
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              {getFiscalModalDescription(
+                pendingFiscalPayments.map((payment) => payment.method)
+              )}
+            </p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isPending}
+                onClick={() => submitSale(pendingFiscalPayments, false)}
+              >
+                Solo ticket interno
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={isPending}
+                onClick={() => submitSale(pendingFiscalPayments, true)}
+              >
+                Enviar a facturacion
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="sm:col-span-2"
+                disabled={isPending}
+                onClick={() => setPendingFiscalPayments(null)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1357,12 +1440,19 @@ function ProductGrid({
 
   return (
     <div className={compact ? "mt-3" : "mt-5"}>
-      <h2 className="text-sm font-bold text-slate-800 dark:text-gray-50">{title}</h2>
+      <h2
+        className={cn(
+          "font-bold text-slate-800 dark:text-gray-50",
+          compact ? "text-xs" : "text-sm"
+        )}
+      >
+        {title}
+      </h2>
       <div
         className={cn(
-          "mt-3 grid gap-2",
+          compact ? "mt-2 grid gap-2" : "mt-3 grid gap-2",
           compact
-            ? "grid-cols-2 sm:grid-cols-4 2xl:grid-cols-6"
+            ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6"
             : "sm:grid-cols-2 xl:grid-cols-4"
         )}
       >
@@ -1372,24 +1462,24 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "group cursor-pointer rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
-              compact ? "p-2.5" : "p-3",
+              "group min-w-0 cursor-pointer rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
+              compact ? "p-2" : "p-3",
               selectedIndex === index &&
                 "border-brand-500 bg-brand-50/50 border-l-brand-600 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
             )}
           >
             <span
               className={cn(
-                "line-clamp-2 text-sm font-semibold text-slate-800 transition-colors group-hover:text-brand-700 dark:text-gray-200 dark:group-hover:text-brand-400",
-                compact ? "min-h-9" : "min-h-10"
+                "line-clamp-2 font-semibold text-slate-800 transition-colors group-hover:text-brand-700 dark:text-gray-200 dark:group-hover:text-brand-400",
+                compact ? "min-h-8 text-xs" : "min-h-10 text-sm"
               )}
             >
               {product.name}
             </span>
-            <span className={cn("block text-base font-extrabold text-brand-700 dark:text-brand-400", compact ? "mt-1.5" : "mt-2")}>
+            <span className={cn("block truncate font-extrabold text-brand-700 dark:text-brand-400", compact ? "mt-1 text-sm" : "mt-2 text-base")}>
               {formatARS(product.salePrice)}
             </span>
-            <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+            <span className={cn("mt-1 block truncate text-gray-500 dark:text-gray-400", compact ? "text-[11px]" : "text-xs")}>
               {product.categoryName} - {formatStock(product.stock, product.unitType)}
             </span>
           </button>
@@ -1422,7 +1512,7 @@ function SummaryValue({
       </p>
       <p
         className={cn(
-          "mt-1 text-lg font-semibold",
+          "mt-1 text-base font-semibold 2xl:text-lg",
           tone === "default" && "text-amber-800 dark:text-amber-200",
           tone === "ok" && "text-emerald-800 dark:text-emerald-300",
           tone === "error" && "text-red-800 dark:text-red-300"
@@ -1460,9 +1550,9 @@ function allowsDecimal(item: QuantityConfig) {
   return item.allowsDecimalQuantity || decimalUnits.has(item.unitType);
 }
 
-function isValidQuantity(quantity: string, item: CartItem) {
+function isValidQuantity(quantity: string, item: CartItem, allowNegativeStock: boolean) {
   const value = safeNumber(quantity);
-  if (value <= 0 || value > safeNumber(item.stock)) {
+  if (value <= 0 || (!allowNegativeStock && value > safeNumber(item.stock))) {
     return false;
   }
 
@@ -1586,6 +1676,30 @@ function getFiscalModeForMethods(
   }
 
   return setting.cashIssueMode;
+}
+
+function canAskFiscalDecisionForMethods(methods: PaymentMethodValue[]) {
+  const hasElectronic = methods.some((method) =>
+    ["DEBIT", "CREDIT", "TRANSFER", "MERCADOPAGO"].includes(method)
+  );
+
+  if (hasElectronic) {
+    return false;
+  }
+
+  return methods.includes("CASH") || methods.includes("CURRENT_ACCOUNT");
+}
+
+function getFiscalModalDescription(methods: PaymentMethodValue[]) {
+  if (methods.includes("CURRENT_ACCOUNT")) {
+    return "Esta venta fue registrada en cuenta corriente. Elegi como queres registrarla fiscalmente.";
+  }
+
+  return "Esta venta fue cobrada en efectivo. Elegi como queres registrarla fiscalmente.";
+}
+
+function isFiscalQueueStatus(status: string | undefined) {
+  return status === "PENDING" || status === "READY_TO_ISSUE";
 }
 
 function createPaymentId() {

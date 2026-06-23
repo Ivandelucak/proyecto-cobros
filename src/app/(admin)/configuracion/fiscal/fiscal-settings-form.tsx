@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import {
   updateFiscalSettingsAction,
@@ -61,7 +61,8 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
   return (
     <form action={formAction} className="space-y-5">
       <Card className="border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100">
-        Esta etapa solo prepara la facturacion. No emite comprobantes reales en ARCA.
+        Esta etapa solo prepara la conexion de homologacion. No emite comprobantes
+        reales en ARCA.
       </Card>
 
       <Card className="p-5">
@@ -190,6 +191,42 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
         </div>
       </Card>
 
+      <Card className="p-5">
+        <SectionTitle title="Credenciales ARCA homologacion" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <CredentialStatus
+            label="Certificado cargado"
+            value={setting.hasArcaCertificatePem}
+          />
+          <CredentialStatus
+            label="Clave privada cargada"
+            value={setting.hasArcaPrivateKeyPem}
+          />
+          <Field label="Certificado PEM">
+            <Textarea
+              name="arcaCertificatePem"
+              rows={7}
+              spellCheck={false}
+              placeholder="Pegar nuevo certificado PEM para reemplazar"
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field label="Clave privada PEM">
+            <Textarea
+              name="arcaPrivateKeyPem"
+              rows={7}
+              spellCheck={false}
+              placeholder="Pegar nueva clave privada PEM para reemplazar"
+              className="font-mono text-xs"
+            />
+          </Field>
+        </div>
+        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          Las credenciales se guardan para pruebas locales de homologacion y no se
+          vuelven a mostrar despues de guardar.
+        </p>
+      </Card>
+
       <StateMessage state={state} />
 
       <div className="flex justify-end">
@@ -224,6 +261,19 @@ function Toggle({ name, label, value }: { name: string; label: string; value: bo
       />
       <span className="font-medium text-gray-800 dark:text-gray-100">{label}</span>
     </label>
+  );
+}
+
+function CredentialStatus({ label, value }: { label: string; value: boolean }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
+      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {label}
+      </span>
+      <span className="mt-1 block font-semibold text-gray-950 dark:text-gray-50">
+        {value ? "Si" : "No"}
+      </span>
+    </div>
   );
 }
 

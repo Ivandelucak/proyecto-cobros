@@ -28,6 +28,14 @@ export type FiscalSettingView = {
   allowCancelBeforeIssue: boolean;
   requireCustomerForInvoiceA: boolean;
   defaultCustomerDocType: FiscalDocumentIdentityType;
+  hasArcaCertificatePem: boolean;
+  hasArcaPrivateKeyPem: boolean;
+  arcaTokenExpiresAt: Date | null;
+  arcaLastConnectionStatus: string | null;
+  arcaLastConnectionTestAt: Date | null;
+  arcaLastWsfeStatus: string | null;
+  arcaLastWsfeTestAt: Date | null;
+  arcaLastError: string | null;
 };
 
 export function getDefaultFiscalSetting(): FiscalSettingView {
@@ -46,7 +54,15 @@ export function getDefaultFiscalSetting(): FiscalSettingView {
     pendingCriticalMinutes: 120,
     allowCancelBeforeIssue: true,
     requireCustomerForInvoiceA: true,
-    defaultCustomerDocType: FiscalDocumentIdentityType.CONSUMIDOR_FINAL
+    defaultCustomerDocType: FiscalDocumentIdentityType.CONSUMIDOR_FINAL,
+    hasArcaCertificatePem: false,
+    hasArcaPrivateKeyPem: false,
+    arcaTokenExpiresAt: null,
+    arcaLastConnectionStatus: null,
+    arcaLastConnectionTestAt: null,
+    arcaLastWsfeStatus: null,
+    arcaLastWsfeTestAt: null,
+    arcaLastError: null
   };
 }
 
@@ -54,10 +70,63 @@ export async function getFiscalSettingOrDefault(
   client: FiscalSettingsClient = prisma
 ): Promise<FiscalSettingView> {
   const setting = await client.fiscalSetting.findUnique({
-    where: { id: FISCAL_SETTING_ID }
+    where: { id: FISCAL_SETTING_ID },
+    select: {
+      enabled: true,
+      environment: true,
+      cuit: true,
+      legalName: true,
+      fiscalCondition: true,
+      pointOfSale: true,
+      defaultInvoiceLetter: true,
+      cashIssueMode: true,
+      electronicPaymentIssueMode: true,
+      currentAccountIssueMode: true,
+      pendingWarningMinutes: true,
+      pendingCriticalMinutes: true,
+      allowCancelBeforeIssue: true,
+      requireCustomerForInvoiceA: true,
+      defaultCustomerDocType: true,
+      arcaCertificatePem: true,
+      arcaPrivateKeyPem: true,
+      arcaTokenExpiresAt: true,
+      arcaLastConnectionStatus: true,
+      arcaLastConnectionTestAt: true,
+      arcaLastWsfeStatus: true,
+      arcaLastWsfeTestAt: true,
+      arcaLastError: true
+    }
   });
 
-  return setting ?? getDefaultFiscalSetting();
+  if (!setting) {
+    return getDefaultFiscalSetting();
+  }
+
+  return {
+    enabled: setting.enabled,
+    environment: setting.environment,
+    cuit: setting.cuit,
+    legalName: setting.legalName,
+    fiscalCondition: setting.fiscalCondition,
+    pointOfSale: setting.pointOfSale,
+    defaultInvoiceLetter: setting.defaultInvoiceLetter,
+    cashIssueMode: setting.cashIssueMode,
+    electronicPaymentIssueMode: setting.electronicPaymentIssueMode,
+    currentAccountIssueMode: setting.currentAccountIssueMode,
+    pendingWarningMinutes: setting.pendingWarningMinutes,
+    pendingCriticalMinutes: setting.pendingCriticalMinutes,
+    allowCancelBeforeIssue: setting.allowCancelBeforeIssue,
+    requireCustomerForInvoiceA: setting.requireCustomerForInvoiceA,
+    defaultCustomerDocType: setting.defaultCustomerDocType,
+    hasArcaCertificatePem: Boolean(setting.arcaCertificatePem),
+    hasArcaPrivateKeyPem: Boolean(setting.arcaPrivateKeyPem),
+    arcaTokenExpiresAt: setting.arcaTokenExpiresAt,
+    arcaLastConnectionStatus: setting.arcaLastConnectionStatus,
+    arcaLastConnectionTestAt: setting.arcaLastConnectionTestAt,
+    arcaLastWsfeStatus: setting.arcaLastWsfeStatus,
+    arcaLastWsfeTestAt: setting.arcaLastWsfeTestAt,
+    arcaLastError: setting.arcaLastError
+  };
 }
 
 export function normalizePendingMinutes(value: number, fallback: number) {

@@ -12,6 +12,12 @@ import {
 } from "@/lib/fiscal/fiscal-status";
 import { formatARS } from "@/lib/money";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
+import {
+  buildReturnToHref,
+  buildTicketHref,
+  getSafeInternalReturnTo,
+  isSafeInternalReturnTo
+} from "@/lib/return-to";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
 import { CancelSaleForm } from "./cancel-sale-form";
 
@@ -21,16 +27,27 @@ type VentaDetallePageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    returnTo?: string | string[];
+  }>;
 };
 
-export default async function VentaDetallePage({ params }: VentaDetallePageProps) {
+export default async function VentaDetallePage({
+  params,
+  searchParams
+}: VentaDetallePageProps) {
   const { id } = await params;
+  const query = (await searchParams) ?? {};
   const [{ sale, user }, paymentMethods, cashSetting] = await Promise.all([
     getAccessibleSaleOrRedirect(id),
     getPaymentMethodSettings(),
     getCashRegisterSetting()
   ]);
-  const backHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
+  const fallbackBackHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
+  const rawReturnTo = param(query.returnTo);
+  const originalReturnTo = isSafeInternalReturnTo(rawReturnTo) ? rawReturnTo : null;
+  const backHref = getSafeInternalReturnTo(originalReturnTo, fallbackBackHref);
+  const ticketReturnTo = originalReturnTo ?? buildReturnToHref(`/ventas/${sale.id}`);
   const canCancelSale =
     sale.status === SaleStatus.PAID &&
     (user.role === Role.ADMIN || cashSetting.allowCashierCancelSale);
@@ -47,17 +64,20 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
           actions={
             <>
               <LinkButton href={backHref}>Volver</LinkButton>
-              <LinkButton href={`/ventas/${sale.id}/ticket`} variant="primary">
+              <LinkButton href={buildTicketHref(sale.id, ticketReturnTo)} variant="primary">
                 Ver ticket
               </LinkButton>
-              {user.role === Role.ADMIN ? (
-                <LinkButton href="/facturacion">Ver en facturacion</LinkButton>
+              {user.role === Role.ADMIN &&
+              (sale.requiresFiscalInvoice || sale.fiscalDocument) ? (
+                <LinkButton href={`/facturacion/${sale.id}`}>
+                  Ver detalle fiscal
+                </LinkButton>
               ) : null}
             </>
           }
         />
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="overflow-hidden">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
               <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
@@ -177,6 +197,14 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
                     />
                   </>
                 ) : null}
+                {user.role === Role.ADMIN &&
+                (sale.requiresFiscalInvoice || sale.fiscalDocument) ? (
+                  <div className="pt-2">
+                    <LinkButton href={`/facturacion/${sale.id}`} size="sm">
+                      Ver detalle fiscal
+                    </LinkButton>
+                  </div>
+                ) : null}
                 {sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ? (
                   <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
                     La venta ya fue emitida fiscalmente. Requiere nota de credito.
@@ -262,6 +290,10 @@ export default async function VentaDetallePage({ params }: VentaDetallePageProps
       </section>
     </main>
   );
+}
+
+function param(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 function TotalRow({

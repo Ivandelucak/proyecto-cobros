@@ -1,4 +1,4 @@
-import { FiscalStatus, PaymentMethod, Role, SaleStatus, UnitType } from "@prisma/client";
+import { FiscalStatus, PaymentMethod, SaleStatus, UnitType } from "@prisma/client";
 import { LinkButton } from "@/components/ui/link-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { getBusinessProfileOrDefault } from "@/lib/business-profile";
@@ -7,8 +7,11 @@ import { fiscalStatusLabels } from "@/lib/fiscal/fiscal-status";
 import { formatMoney } from "@/lib/money";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getPrintSetting } from "@/lib/print-settings";
+import { buildSaleDetailHref, getSafeInternalReturnTo, isSafeInternalReturnTo } from "@/lib/return-to";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
 import { getTicketSetting } from "@/lib/ticket-settings";
+import { cn } from "@/lib/ui";
+import { TicketAutoPrint } from "./ticket-auto-print";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +19,16 @@ type TicketPageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    returnTo?: string | string[];
+    print?: string | string[];
+  }>;
 };
 
-export default async function TicketPage({ params }: TicketPageProps) {
+export default async function TicketPage({ params, searchParams }: TicketPageProps) {
   const { id } = await params;
-  const [{ sale, user }, business, printSetting, ticketSetting, paymentMethods] =
+  const query = (await searchParams) ?? {};
+  const [{ sale }, business, printSetting, ticketSetting, paymentMethods] =
     await Promise.all([
       getAccessibleSaleOrRedirect(id),
       getBusinessProfileOrDefault(),
@@ -28,7 +36,10 @@ export default async function TicketPage({ params }: TicketPageProps) {
       getTicketSetting(),
       getPaymentMethodSettings()
     ]);
-  const backHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
+  const rawReturnTo = param(query.returnTo);
+  const returnTo = isSafeInternalReturnTo(rawReturnTo) ? rawReturnTo : null;
+  const backHref = getSafeInternalReturnTo(returnTo, "/ventas");
+  const shouldAutoPrint = param(query.print) === "1";
   const ticketWidth = getTicketWidth(printSetting.paperSize);
   const pageSize = getPageSize(printSetting.paperSize);
   const paymentLabels = Object.fromEntries(
@@ -38,42 +49,84 @@ export default async function TicketPage({ params }: TicketPageProps) {
     formatMoney(value as string, business.currency, business.locale);
   const dateTime = (value: Date) =>
     formatDateTimeConfigured(value, business.locale, business.timezone);
+  const isTicket58 = printSetting.paperSize === "TICKET_58";
+  const isA4 = printSetting.paperSize === "A4";
+  const printSheetPosition = isA4
+    ? "left: 50% !important; transform: translateX(-50%) !important;"
+    : "left: 0 !important;";
+  const sheetClassName = cn(
+    "ticket-sheet mx-auto border border-gray-200 bg-white font-mono text-gray-950 shadow-sm dark:border-neutral-800 dark:bg-white dark:text-gray-950",
+    isA4
+      ? "rounded-md p-8 text-[13px] leading-6"
+      : isTicket58
+        ? "p-2 text-[10.5px] leading-4"
+        : "p-3 text-[11.5px] leading-5"
+  );
+  const titleClassName = cn(
+    "font-bold uppercase tracking-wide",
+    isA4 ? "text-xl" : isTicket58 ? "text-[13px]" : "text-[15px]"
+  );
 
   return (
-    <main className="min-h-screen bg-gray-100 px-4 py-6 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
+    <main className="ticket-print-page min-h-screen bg-gray-100 px-4 py-6 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
       <style>{`
         .ticket-sheet {
           width: ${ticketWidth};
           max-width: ${ticketWidth};
         }
+        .ticket-section,
+        .ticket-item,
+        .ticket-total,
+        .ticket-footer {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
         @media print {
           @page { size: ${pageSize}; margin: ${printSetting.marginMm}mm; }
-          body { background: #fff !important; }
+          html,
+          body,
+          .ticket-print-page {
+            background: #fff !important;
+          }
+          body * {
+            visibility: hidden !important;
+          }
           .ticket-print-controls { display: none !important; }
+          .ticket-sheet,
+          .ticket-sheet * {
+            visibility: visible !important;
+          }
           .ticket-sheet {
+            position: absolute !important;
+            ${printSheetPosition}
+            top: 0 !important;
             width: ${ticketWidth} !important;
             max-width: ${ticketWidth} !important;
             border: 0 !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
             padding: 0 !important;
+            color: #000 !important;
+            background: #fff !important;
           }
         }
       `}</style>
+      <TicketAutoPrint enabled={shouldAutoPrint} />
 
       <div
         className="ticket-print-controls mx-auto mb-4 flex flex-wrap gap-2"
         style={{ maxWidth: ticketWidth }}
       >
         <LinkButton href={backHref}>Volver</LinkButton>
-        <LinkButton href={`/ventas/${sale.id}`}>Detalle</LinkButton>
+        <LinkButton href={buildSaleDetailHref(sale.id, returnTo)}>Detalle</LinkButton>
         <PrintButton saleId={sale.id} setting={printSetting} />
       </div>
 
-      <article className="ticket-sheet mx-auto rounded-md border border-gray-200 bg-white p-4 font-mono text-[12px] leading-5 text-gray-950 shadow-sm dark:border-neutral-800 dark:bg-white dark:text-gray-950">
-        <header className="text-center">
+      <article className={sheetClassName}>
+        <header className="ticket-section text-center">
           {ticketSetting.showBusinessName ? (
-            <h1 className="text-base font-bold uppercase">{business.name}</h1>
+            <h1 className={titleClassName}>{business.name}</h1>
           ) : null}
           {ticketSetting.headerText ? <p>{ticketSetting.headerText}</p> : null}
           {ticketSetting.showAddress && business.address ? <p>{business.address}</p> : null}
@@ -82,13 +135,13 @@ export default async function TicketPage({ params }: TicketPageProps) {
           {ticketSetting.showCuit && business.cuit ? <p>CUIT: {business.cuit}</p> : null}
           {business.fiscalCondition ? <p>{business.fiscalCondition}</p> : null}
           {ticketSetting.showNonFiscalLegend ? (
-            <p className="mt-2 font-semibold uppercase">{ticketSetting.nonFiscalLegend}</p>
+            <p className="mt-2 border-y border-dashed border-gray-500 py-1 font-semibold uppercase">
+              {ticketSetting.nonFiscalLegend}
+            </p>
           ) : null}
-          <p className="mt-1 font-semibold uppercase">{ticketSetting.ticketTitle}</p>
+          <p className="mt-2 font-semibold uppercase">{ticketSetting.ticketTitle}</p>
           <p className="mt-1 text-[11px] uppercase">
-            {sale.fiscalStatus === FiscalStatus.NOT_REQUESTED
-              ? "Ticket interno / no fiscal"
-              : fiscalStatusLabels[sale.fiscalStatus]}
+            {ticketFiscalStatusLabel(sale.fiscalStatus)}
           </p>
           {sale.status === SaleStatus.CANCELLED ? (
             <p className="mt-2 border border-black py-1 text-sm font-bold uppercase">
@@ -99,7 +152,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
         <Divider />
 
-        <section>
+        <section className="ticket-section space-y-1">
           <Line label="Venta" value={`#${sale.saleNumber}`} />
           <Line label="Fecha" value={dateTime(sale.createdAt)} />
           {ticketSetting.showSeller ? <Line label="Cajero" value={sale.user.name} /> : null}
@@ -108,21 +161,27 @@ export default async function TicketPage({ params }: TicketPageProps) {
           ) : null}
           {sale.cashSession ? <Line label="Caja" value={sale.cashSession.id.slice(-6)} /> : null}
           {sale.requiresFiscalInvoice ? (
-            <Line label="Fiscal" value={fiscalStatusLabels[sale.fiscalStatus]} />
+            <Line label="Fiscal" value={ticketFiscalStatusLabel(sale.fiscalStatus)} />
           ) : null}
         </section>
 
         <Divider />
 
-        <section className="space-y-2">
+        <section className="ticket-section space-y-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-dashed border-gray-400 pb-1 text-[10px] font-semibold uppercase tracking-wide">
+            <span>Producto</span>
+            <span className="text-right">Subtotal</span>
+          </div>
           {sale.items.map((item) => (
-            <div key={item.id}>
-              <p className="font-semibold uppercase">{item.productNameSnapshot}</p>
+            <div key={item.id} className="ticket-item">
+              <p className="break-words font-semibold uppercase">
+                {item.productNameSnapshot}
+              </p>
               {ticketSetting.showBarcode && (item.product.barcode || item.product.sku) ? (
                 <p className="text-[11px]">Cod: {item.product.barcode ?? item.product.sku}</p>
               ) : null}
-              <div className="flex justify-between gap-3">
-                <span>
+              <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <span className="text-gray-700">
                   {formatQuantity(
                     item.quantity.toString(),
                     item.unitTypeSnapshot,
@@ -130,7 +189,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
                   )} x{" "}
                   {money(item.unitPrice)}
                 </span>
-                <span>{money(item.subtotal)}</span>
+                <span className="text-right font-medium">{money(item.subtotal)}</span>
               </div>
             </div>
           ))}
@@ -138,11 +197,15 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
         <Divider />
 
-        <section className="space-y-1">
+        <section className="ticket-section space-y-1">
           <Line label="Subtotal" value={money(sale.subtotal)} />
-          <Line label="Descuento" value={money(sale.discountTotal)} />
-          <Line label="Recargo" value={money(sale.surchargeTotal)} />
-          <div className="flex justify-between gap-3 text-base font-bold">
+          {hasAmount(sale.discountTotal) ? (
+            <Line label="Descuento" value={money(sale.discountTotal)} />
+          ) : null}
+          {hasAmount(sale.surchargeTotal) ? (
+            <Line label="Recargo" value={money(sale.surchargeTotal)} />
+          ) : null}
+          <div className="ticket-total mt-2 flex justify-between gap-3 border-y border-gray-900 py-1 text-base font-bold">
             <span>Total</span>
             <span>{money(sale.total)}</span>
           </div>
@@ -152,7 +215,10 @@ export default async function TicketPage({ params }: TicketPageProps) {
           <>
             <Divider />
 
-            <section className="space-y-1">
+            <section className="ticket-section space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide">
+                Pagos
+              </p>
               {sale.payments.map((payment) => (
                 <div key={payment.id}>
                   <Line label={paymentLabels[payment.method]} value={money(payment.amount)} />
@@ -183,7 +249,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
         {sale.status === SaleStatus.CANCELLED ? (
           <>
-            <section>
+            <section className="ticket-section">
               <Line
                 label="Anulada"
                 value={sale.cancelledAt ? dateTime(sale.cancelledAt) : "-"}
@@ -194,7 +260,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
           </>
         ) : null}
 
-        <footer className="text-center">
+        <footer className="ticket-footer text-center">
           <p>{ticketSetting.thankYouText}</p>
           {ticketSetting.footerText ? <p>{ticketSetting.footerText}</p> : null}
           {business.generalFooterText ? <p>{business.generalFooterText}</p> : null}
@@ -202,6 +268,10 @@ export default async function TicketPage({ params }: TicketPageProps) {
       </article>
     </main>
   );
+}
+
+function param(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 function getTicketWidth(paperSize: string) {
@@ -226,6 +296,18 @@ function getPageSize(paperSize: string) {
   return "80mm auto";
 }
 
+function ticketFiscalStatusLabel(status: FiscalStatus) {
+  if (status === FiscalStatus.NOT_REQUESTED) {
+    return "Ticket interno / no fiscal";
+  }
+
+  if (status === FiscalStatus.READY_TO_ISSUE) {
+    return "Factura preparada, pendiente de emision real";
+  }
+
+  return fiscalStatusLabels[status];
+}
+
 function Divider() {
   return <div className="my-3 border-t border-dashed border-gray-400" />;
 }
@@ -233,10 +315,14 @@ function Divider() {
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <span>{label}</span>
+      <span className="min-w-0">{label}</span>
       <span className="text-right">{value}</span>
     </div>
   );
+}
+
+function hasAmount(value: unknown) {
+  return Math.abs(Number(value)) > 0;
 }
 
 function formatQuantity(value: string, unitType: UnitType, showUnit: boolean) {

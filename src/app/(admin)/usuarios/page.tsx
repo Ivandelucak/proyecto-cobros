@@ -56,7 +56,7 @@ export default async function UsuariosPage({ searchParams }: UsuariosPageProps) 
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
           <Input name="q" placeholder="Buscar por nombre o email" defaultValue={q} />
           <Select name="role" defaultValue={role}>
             <option value="all">Todos los roles</option>

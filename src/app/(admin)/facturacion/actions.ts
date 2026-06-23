@@ -103,6 +103,7 @@ export async function cancelFiscalBeforeIssueAction(
 
 function revalidateFiscalPaths(saleId: string) {
   revalidatePath("/facturacion");
+  revalidatePath(`/facturacion/${saleId}`);
   revalidatePath(`/ventas/${saleId}`);
   revalidatePath(`/ventas/${saleId}/ticket`);
   revalidatePath("/ventas");
