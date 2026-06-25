@@ -14,6 +14,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { formatDateTimeStable } from "@/lib/date-format";
 import {
+  buildArcaInvoiceRequest,
+  validateArcaPreEmission,
+  type ArcaInvoiceRequestPreview,
+  type ArcaPreEmissionValidation
+} from "@/lib/fiscal/arca/arca-pre-emission";
+import { buildInitialArcaPreflightStatus } from "@/lib/fiscal/arca/arca-preflight";
+import {
   fiscalDocumentLetterLabels,
   fiscalDocumentTypeLabels,
   validateFiscalReadiness
@@ -29,6 +36,7 @@ import { formatARS } from "@/lib/money";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 import { buildReturnToHref, buildSaleDetailHref, buildTicketHref } from "@/lib/return-to";
+import { ArcaPreflightPanel } from "./arca-preflight-panel";
 import { FiscalSaleActions } from "../fiscal-sale-actions";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +97,13 @@ export default async function FacturacionDetallePage({
   const pendingAge = pendingAgeLabel(sale);
   const fiscalDocument = sale.fiscalDocument;
   const returnTo = buildReturnToHref(`/facturacion/${sale.id}`);
+  const shouldShowArcaPreview =
+    sale.requiresFiscalInvoice &&
+    Boolean(fiscalDocument) &&
+    sale.fiscalStatus === FiscalStatus.READY_TO_ISSUE;
+  const arcaPreview = shouldShowArcaPreview && fiscalDocument
+    ? buildArcaPreviewState({ sale, fiscalDocument, setting })
+    : null;
 
   return (
     <section className="space-y-5">
@@ -272,6 +287,20 @@ export default async function FacturacionDetallePage({
             </Card>
           )}
 
+          {arcaPreview ? (
+            <>
+              <ArcaPreviewSection
+                request={arcaPreview.request}
+                validation={arcaPreview.validation}
+              />
+              <ArcaPreflightPanel
+                saleId={sale.id}
+                request={arcaPreview.request}
+                initialResult={arcaPreview.initialPreflight}
+              />
+            </>
+          ) : null}
+
           <Card className="overflow-hidden">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
               <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
@@ -381,6 +410,197 @@ export default async function FacturacionDetallePage({
         </aside>
       </div>
     </section>
+  );
+}
+
+function buildArcaPreviewState(input: Parameters<typeof validateArcaPreEmission>[0]) {
+  const validation = validateArcaPreEmission(input);
+  const request = buildArcaInvoiceRequest(input);
+
+  return {
+    validation,
+    request,
+    initialPreflight: buildInitialArcaPreflightStatus({
+      request,
+      validationErrors: validation.errors,
+      validationWarnings: validation.warnings,
+      setting: input.setting
+    })
+  };
+}
+
+function ArcaPreviewSection({
+  request,
+  validation
+}: {
+  request: ArcaInvoiceRequestPreview;
+  validation: ArcaPreEmissionValidation;
+}) {
+  const hasErrors = validation.errors.length > 0;
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            Previsualizacion ARCA
+          </h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            Request interno para emision futura. No se envia a ARCA.
+          </p>
+        </div>
+        <Badge tone={hasErrors ? "red" : "green"}>
+          {hasErrors ? "Con errores" : "Lista para pre-emision"}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <Info label="Tipo" value={request.header.cbteTipoLabel} strong />
+        <Info
+          label="Estado"
+          value={hasErrors ? "Con errores" : "Lista para pre-emision"}
+        />
+        <Info label="Ambiente" value={environmentLabel(request.meta.environment)} />
+        <Info label="Servicio" value={request.meta.service} />
+        <Info label="Operacion futura" value={request.meta.futureOperation} />
+        <Info label="CUIT emisor" value={request.issuer.cuit ?? "-"} />
+        <Info
+          label="Punto de venta"
+          value={request.header.ptoVta ? String(request.header.ptoVta) : "-"}
+        />
+        <Info
+          label="Tipo comprobante"
+          value={
+            request.header.cbteTipo
+              ? `${request.header.cbteTipo} - ${request.header.cbteTipoLabel}`
+              : request.header.cbteTipoLabel
+          }
+        />
+        <Info label="Letra" value={request.document.letterLabel} />
+        <Info label="Motivo letra" value={request.document.letterReason} />
+        <Info
+          label="Condicion comercio"
+          value={conditionLabel(request.issuer.fiscalCondition)}
+        />
+        <Info
+          label="Condicion receptor"
+          value={conditionLabel(request.receiver.fiscalCondition)}
+        />
+        <Info label="Concepto" value={request.detail.conceptoLabel} />
+        <Info
+          label="Documento receptor"
+          value={`${request.receiver.docType} ${request.receiver.docNumber ?? "-"}`}
+        />
+        <Info
+          label="Fecha comprobante"
+          value={formatArcaRequestDate(request.detail.cbteFch)}
+        />
+        <Info label="Importe total" value={formatARS(request.detail.impTotal)} strong />
+        <Info label="Neto gravado" value={formatARS(request.detail.impNeto)} />
+        <Info label="IVA" value={formatARS(request.detail.impIVA)} />
+        <Info label="Exento" value={formatARS(request.detail.impOpEx)} />
+        <Info label="No gravado" value={formatARS(request.detail.impTotConc)} />
+        <Info label="Moneda" value={request.detail.monId} />
+        <Info label="Cotizacion" value={request.detail.monCotiz} />
+        <Info label="Items considerados" value={String(request.items.length)} />
+        <Info
+          label="Tratamiento fiscal"
+          value={
+            request.taxSummary.treatments.length > 0
+              ? request.taxSummary.treatments.join(" + ")
+              : "-"
+          }
+        />
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            Alicuotas IVA ARCA
+          </h3>
+          {request.taxSummary.vatGroups.length > 0 ? (
+            <div className="mt-3 space-y-2 text-sm">
+              {request.taxSummary.vatGroups.map((group) => (
+                <div
+                  key={group.id}
+                  className="flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-black"
+                >
+                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                    {group.description} · codigo {group.id}
+                  </span>
+                  <span className="text-right text-gray-600 dark:text-gray-300">
+                    Base {formatARS(group.baseImp)} / IVA {formatARS(group.importe)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+              Sin IVA discriminado para esta letra o tratamiento.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            Items fiscales
+          </h3>
+          <div className="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
+            {request.items.map((item) => (
+              <div
+                key={`${item.description}-${item.subtotal}`}
+                className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-black"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                    {item.description}
+                  </span>
+                  <span className="text-right font-medium text-gray-950 dark:text-gray-50">
+                    {formatARS(item.subtotal)}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {item.taxTreatmentLabel}
+                  {item.vatRate ? ` · IVA ${item.vatRate}%` : ""}
+                  {item.taxCode ? ` · codigo ${item.taxCode}` : ""}
+                  {" · "}
+                  Neto {formatARS(item.netAmount)} / IVA {formatARS(item.vatAmount)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div>
+          <ValidationList
+            title="Errores"
+            items={validation.errors}
+            emptyText="Sin errores bloqueantes."
+            tone="red"
+          />
+        </div>
+        <div>
+          <ValidationList
+            title="Advertencias"
+            items={validation.warnings}
+            emptyText="Sin advertencias."
+            tone="amber"
+          />
+        </div>
+      </div>
+
+      <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-gray-50">
+          Request tecnico JSON
+        </summary>
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-black dark:text-gray-100">
+          {JSON.stringify(request, null, 2)}
+        </pre>
+      </details>
+
+    </Card>
   );
 }
 
@@ -522,6 +742,14 @@ function docTypeLabel(docType: FiscalDocumentIdentityType | null) {
 
 function environmentLabel(environment: string) {
   return environment === "PRODUCCION" ? "Produccion" : "Homologacion";
+}
+
+function formatArcaRequestDate(value: string) {
+  if (!/^\d{8}$/.test(value)) {
+    return value;
+  }
+
+  return `${value.slice(6, 8)}/${value.slice(4, 6)}/${value.slice(0, 4)}`;
 }
 
 function formatQuantity(value: string, unitType: UnitType) {

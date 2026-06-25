@@ -1,15 +1,23 @@
 import { PaymentMethod, Prisma, SaleStatus } from "@prisma/client";
-import { Badge } from "@/components/ui/badge";
+import { BarList } from "@/components/reports/bar-list";
+import { DailySalesChart } from "@/components/reports/daily-sales-chart";
+import { MetricCard } from "@/components/reports/metric-card";
+import { ReportList, type ReportListItem } from "@/components/reports/report-list";
+import { ReportSection } from "@/components/reports/report-section";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
-import { getCustomerBalanceMap } from "@/lib/customer-account";
+import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
-import { prisma } from "@/lib/prisma";
+import {
+  buildReportFilters,
+  getReportDashboardData,
+  reportPaymentLabels,
+  type ReportAlert
+} from "@/lib/reports/report-service";
 import { formatStock } from "@/lib/stock-format";
 
 export const dynamic = "force-dynamic";
@@ -22,134 +30,24 @@ type ReportesPageProps = {
   }>;
 };
 
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  DEBIT: "Debito",
-  CREDIT: "Credito",
-  TRANSFER: "Transferencia",
-  MERCADOPAGO: "MercadoPago",
-  CURRENT_ACCOUNT: "Cuenta corriente"
-};
-
 export default async function ReportesPage({ searchParams }: ReportesPageProps) {
   await requireAdminPage();
 
   const params = await searchParams;
-  const from = params.from ?? dateInput(daysAgo(7));
-  const to = params.to ?? dateInput(new Date());
-  const method = parsePaymentMethod(params.method);
-  const today = dateInput(new Date());
-  const quickRanges = [
-    { label: "Hoy", href: `/reportes?from=${today}&to=${today}` },
-    {
-      label: "Esta semana",
-      href: `/reportes?from=${dateInput(startOfCurrentWeek())}&to=${today}`
-    },
-    {
-      label: "Este mes",
-      href: `/reportes?from=${dateInput(startOfCurrentMonth())}&to=${today}`
-    }
-  ];
-  const dateWhere = {
-    gte: startOfDay(from),
-    lt: nextDay(to)
-  };
-  const saleWhere = {
-    status: SaleStatus.PAID,
-    createdAt: dateWhere,
-    ...(method ? { payments: { some: { method } } } : {})
-  } satisfies Prisma.SaleWhereInput;
-
-  const [sales, cancelledSales, stockLowProducts, recentSales, purchases, customers] = await Promise.all([
-    prisma.sale.findMany({
-      where: saleWhere,
-      include: {
-        payments: true,
-        items: {
-          include: {
-            product: {
-              select: { cost: true }
-            }
-          }
-        }
-      }
-    }),
-    prisma.sale.findMany({
-      where: {
-        status: SaleStatus.CANCELLED,
-        createdAt: dateWhere
-      },
-      include: {
-        user: { select: { name: true } }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10
-    }),
-    prisma.product.findMany({
-      where: {
-        deletedAt: null,
-        active: true
-      },
-      include: {
-        category: { select: { name: true } }
-      },
-      orderBy: { stock: "asc" }
-    }),
-    prisma.sale.findMany({
-      where: {
-        createdAt: dateWhere
-      },
-      include: {
-        user: { select: { name: true } }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10
-    }),
-    prisma.purchase.findMany({
-      where: {
-        createdAt: dateWhere
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10
-    }),
-    prisma.customer.findMany({
-      where: { active: true, deletedAt: null },
-      select: { id: true, name: true }
-    })
-  ]);
-
-  const lowProducts = stockLowProducts
-    .filter((product) => product.stock.lte(product.minStock))
-    .slice(0, 12);
-  const metrics = buildMetrics(sales, cancelledSales);
-  const topProducts = buildTopProducts(sales);
-  const customerBalances = await getCustomerBalanceMap(customers.map((customer) => customer.id));
-  const allDebtors = customers
-    .map((customer) => ({
-      ...customer,
-      balance: customerBalances.get(customer.id) ?? new Prisma.Decimal(0)
-    }))
-    .filter((customer) => customer.balance.gt(0))
-    .sort((left, right) => right.balance.comparedTo(left.balance));
-  const debtors = allDebtors.slice(0, 8);
-  const pendingCustomerBalance = allDebtors.reduce(
-    (sum, customer) => sum.plus(customer.balance),
-    new Prisma.Decimal(0)
-  );
-  const purchaseTotal = purchases.reduce(
-    (sum, purchase) => sum.plus(purchase.total),
-    new Prisma.Decimal(0)
-  );
+  const filters = buildReportFilters(params);
+  const data = await getReportDashboardData(filters);
+  const executive = data.executive;
+  const methodLabel = filters.method ? reportPaymentLabels[filters.method] : "Todos los pagos";
 
   return (
     <section className="space-y-5">
       <PageHeader
         title="Reportes"
-        description="Resumen real de ventas, pagos, anulaciones y productos."
+        description={`Dashboard comercial del periodo ${data.periodLabel}. Comparacion contra ${data.previousPeriodLabel}.`}
         actions={
           <>
-            {quickRanges.map((range) => (
-              <LinkButton key={range.label} href={range.href} size="sm">
+            {data.quickRanges.map((range) => (
+              <LinkButton key={range.label} href={range.href} size="sm" variant="outline">
                 {range.label}
               </LinkButton>
             ))}
@@ -158,14 +56,14 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[160px_160px_220px_auto]">
-          <Input name="from" type="date" defaultValue={from} />
-          <Input name="to" type="date" defaultValue={to} />
-          <Select name="method" defaultValue={method ?? ""}>
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[160px_160px_minmax(190px,1fr)_auto]">
+          <Input name="from" type="date" defaultValue={filters.from} aria-label="Desde" />
+          <Input name="to" type="date" defaultValue={filters.to} aria-label="Hasta" />
+          <Select name="method" defaultValue={filters.method ?? ""} aria-label="Medio de pago">
             <option value="">Todos los pagos</option>
-            {Object.entries(paymentLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
+            {Object.values(PaymentMethod).map((method) => (
+              <option key={method} value={method}>
+                {reportPaymentLabels[method]}
               </option>
             ))}
           </Select>
@@ -173,322 +71,436 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
             Filtrar
           </Button>
         </form>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+          <span>Periodo: {data.periodLabel}</span>
+          <span className="hidden h-1 w-1 rounded-full bg-current sm:inline-block" />
+          <span>Pago: {methodLabel}</span>
+        </div>
       </Card>
 
-      <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Total vendido" value={formatARS(metrics.totalSold)} />
-          <Metric label="Cantidad ventas" value={String(metrics.salesCount)} />
-          <Metric label="Ticket promedio" value={formatARS(metrics.averageTicket)} />
-          <Metric label="Total anuladas" value={formatARS(metrics.cancelledTotal)} tone="red" />
-        </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Venta neta"
+          value={formatARS(executive.netSold.value)}
+          detail="Ventas pagadas, sin anuladas."
+          comparison={executive.netSold.comparison}
+          tone="blue"
+        />
+        <MetricCard
+          label="Ganancia estimada"
+          value={formatARS(executive.estimatedProfit.value)}
+          detail="Calculada con costos cargados."
+          comparison={executive.estimatedProfit.comparison}
+          tone="green"
+        />
+        <MetricCard
+          label="Ticket promedio"
+          value={formatARS(executive.averageTicket.value)}
+          detail="Promedio por venta pagada."
+          comparison={executive.averageTicket.comparison}
+        />
+        <MetricCard
+          label="Ventas pagadas"
+          value={formatInteger(executive.paidSalesCount.value)}
+          detail={`${executive.cancelledSalesCount} anuladas`}
+          comparison={executive.paidSalesCount.comparison}
+        />
+      </div>
 
-        <MetricSection title="Medios de pago">
-          <Metric label="Efectivo" value={formatARS(metrics.payments.CASH)} compact />
-          <Metric label="Debito" value={formatARS(metrics.payments.DEBIT)} compact />
-          <Metric label="Credito" value={formatARS(metrics.payments.CREDIT)} compact />
-          <Metric label="Transferencia" value={formatARS(metrics.payments.TRANSFER)} compact />
-          <Metric label="MercadoPago" value={formatARS(metrics.payments.MERCADOPAGO)} compact />
-          <Metric
-            label="Cuenta corriente"
-            value={formatARS(metrics.payments.CURRENT_ACCOUNT)}
-            compact
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Venta bruta"
+          value={formatARS(executive.grossSold)}
+          detail="Incluye ventas anuladas."
+          compact
+        />
+        <MetricCard
+          label="Total anulado"
+          value={formatARS(executive.cancelledTotal)}
+          detail={`${formatPercent(executive.cancellationRate)} de operaciones`}
+          tone={executive.cancelledSalesCount > 0 ? "red" : "default"}
+          compact
+        />
+        <MetricCard
+          label="Margen estimado"
+          value={formatPercentNumber(executive.marginPercent.value)}
+          detail="Ganancia sobre venta neta."
+          comparison={executive.marginPercent.comparison}
+          compact
+        />
+        <MetricCard
+          label="Unidades vendidas"
+          value={formatDecimal(executive.unitsSold, 3)}
+          detail={`${formatInteger(executive.itemsSold)} lineas de productos`}
+          compact
+        />
+        <MetricCard
+          label="Mejor medio"
+          value={executive.bestPaymentMethod ? reportPaymentLabels[executive.bestPaymentMethod] : "-"}
+          detail="Por importe cobrado."
+          compact
+        />
+        <MetricCard
+          label="Categoria lider"
+          value={executive.leadingCategory ?? "-"}
+          detail="Por facturacion."
+          compact
+        />
+        <MetricCard
+          label="Ventas a cuenta"
+          value={formatARS(executive.currentAccountSales)}
+          detail="Operacion financiada a clientes."
+          tone="amber"
+          compact
+        />
+        <MetricCard
+          label="Ventas - compras"
+          value={formatARS(executive.salesMinusPurchases)}
+          detail={`Compras: ${formatARS(executive.purchasesTotal)}`}
+          tone={executive.salesMinusPurchases.lt(0) ? "red" : "green"}
+          compact
+        />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <ReportSection
+          title="Medios de pago"
+          description="Distribucion del cobro por importe y cantidad de ventas."
+        >
+          <BarList
+            emptyText="Sin cobros en el periodo."
+            items={data.paymentBreakdown.map((item) => ({
+              label: item.label,
+              value: item.total.toNumber(),
+              valueLabel: formatARS(item.total),
+              detail: `${item.count} operaciones`,
+              percentLabel: formatPercent(item.percent),
+              tone: paymentTone(item.method)
+            }))}
           />
-        </MetricSection>
+        </ReportSection>
 
-        <MetricSection title="Totales complementarios" columns="xl:grid-cols-3">
-          <Metric label="Recargos" value={formatARS(metrics.surcharges)} compact />
-          <Metric label="Descuentos" value={formatARS(metrics.discounts)} compact />
-          <Metric label="Ganancia estimada" value={formatARS(metrics.estimatedProfit)} compact />
-        </MetricSection>
-
-        <MetricSection title="Cuenta corriente y compras" columns="xl:grid-cols-3">
-          <Metric
-            label="Ventas a cuenta corriente"
-            value={formatARS(metrics.payments.CURRENT_ACCOUNT)}
-            compact
-          />
-          <Metric label="Saldos pendientes" value={formatARS(pendingCustomerBalance)} compact />
-          <Metric label="Compras del periodo" value={formatARS(purchaseTotal)} compact />
-        </MetricSection>
+        <ReportSection
+          title="Tendencia diaria"
+          description="Ventas netas por dia dentro del rango seleccionado."
+        >
+          <DailySalesChart items={data.dailySales} />
+        </ReportSection>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <ReportTable title="Productos mas vendidos">
-          {topProducts.length === 0 ? (
-            <EmptyLine text="Sin ventas en el periodo." />
-          ) : (
-            topProducts.map((product) => (
-              <Row key={product.name} left={product.name} right={formatARS(product.total)} />
-            ))
-          )}
-        </ReportTable>
+        <ReportSection title="Top productos por facturacion">
+          <BarList
+            emptyText="Sin productos vendidos en el periodo."
+            items={data.topProductsByRevenue.map((product) => ({
+              label: product.name,
+              value: product.revenue.toNumber(),
+              valueLabel: formatARS(product.revenue),
+              detail: `${product.categoryName} - ${formatDecimal(product.quantity, 3)} u.`,
+              tone: "blue"
+            }))}
+          />
+        </ReportSection>
 
-        <ReportTable title="Productos con stock bajo">
-          {lowProducts.length === 0 ? (
-            <EmptyLine text="No hay productos bajo minimo." />
-          ) : (
-            lowProducts.map((product) => (
-              <Row
-                key={product.id}
-                left={`${product.name} - ${product.category.name}`}
-                right={formatStock(product.stock, product.unitType)}
-              />
-            ))
-          )}
-        </ReportTable>
+        <ReportSection title="Top productos por cantidad">
+          <BarList
+            emptyText="Sin productos vendidos en el periodo."
+            items={data.topProductsByQuantity.map((product) => ({
+              label: product.name,
+              value: product.quantity.toNumber(),
+              valueLabel: formatDecimal(product.quantity, 3),
+              detail: `${product.categoryName} - ${formatARS(product.revenue)}`,
+              tone: "green"
+            }))}
+          />
+        </ReportSection>
 
-        <ReportTable title="Ventas recientes">
-          {recentSales.length === 0 ? (
-            <EmptyLine text="Sin ventas recientes." />
-          ) : (
-            recentSales.map((sale) => (
-              <Row
-                key={sale.id}
-                left={`#${sale.saleNumber} - ${sale.user.name}`}
-                right={formatARS(sale.total)}
-                badge={sale.status === SaleStatus.CANCELLED ? "Anulada" : "Pagada"}
-              />
-            ))
-          )}
-        </ReportTable>
+        <ReportSection title="Top productos por ganancia">
+          <BarList
+            emptyText="Sin costos suficientes para estimar ganancia."
+            items={data.topProductsByProfit.map((product) => ({
+              label: product.name,
+              value: product.estimatedProfit?.toNumber() ?? 0,
+              valueLabel: product.estimatedProfit ? formatARS(product.estimatedProfit) : "-",
+              detail: `${product.categoryName} - venta ${formatARS(product.revenue)}`,
+              tone: "amber"
+            }))}
+          />
+        </ReportSection>
 
-        <ReportTable title="Ventas anuladas">
-          {cancelledSales.length === 0 ? (
-            <EmptyLine text="Sin anulaciones en el periodo." />
-          ) : (
-            cancelledSales.map((sale) => (
-              <Row
-                key={sale.id}
-                left={`#${sale.saleNumber} - ${sale.user.name}`}
-                right={formatARS(sale.total)}
-                badge="Anulada"
-              />
-            ))
-          )}
-        </ReportTable>
+        <ReportSection title="Stock bajo">
+          <ReportList
+            emptyText="No hay productos por debajo del minimo."
+            items={data.lowStockProducts.map((product) => ({
+              id: product.id,
+              title: product.name,
+              description: `${product.categoryName} - minimo ${formatStock(
+                product.minStock,
+                product.unitType
+              )}`,
+              value: formatStock(product.stock, product.unitType),
+              badge: "Stock bajo",
+              badgeTone: "amber"
+            }))}
+          />
+        </ReportSection>
+      </div>
 
-        <ReportTable title="Clientes con mayor deuda">
-          {debtors.length === 0 ? (
-            <EmptyLine text="Sin saldos pendientes." />
-          ) : (
-            debtors.map((customer) => (
-              <Row
-                key={customer.id}
-                left={customer.name}
-                right={formatARS(customer.balance)}
-              />
-            ))
-          )}
-        </ReportTable>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <ReportSection title="Categorias" description="Participacion por categoria vendida.">
+          <BarList
+            emptyText="Sin ventas por categoria."
+            items={data.categories.map((category) => ({
+              label: category.categoryName,
+              value: category.revenue.toNumber(),
+              valueLabel: formatARS(category.revenue),
+              detail: `${formatDecimal(category.quantity, 3)} unidades`,
+              percentLabel: formatPercent(category.percent),
+              tone: "blue"
+            }))}
+          />
+        </ReportSection>
 
-        <ReportTable title="Compras recientes">
-          {purchases.length === 0 ? (
-            <EmptyLine text="Sin compras en el periodo." />
-          ) : (
-            purchases.map((purchase) => (
-              <Row
-                key={purchase.id}
-                left={`#${purchase.purchaseNumber}`}
-                right={formatARS(purchase.total)}
-              />
-            ))
-          )}
-        </ReportTable>
+        <ReportSection title="Operacion y cajeros">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BarList
+              emptyText="Sin ventas por cajero."
+              items={data.cashiers.map((cashier) => ({
+                label: cashier.name,
+                value: cashier.total.toNumber(),
+                valueLabel: formatARS(cashier.total),
+                detail: `${cashier.salesCount} ventas - ${cashier.cancelledCount} anuladas`,
+                tone: cashier.cancelledCount > 0 ? "amber" : "green"
+              }))}
+            />
+            <ReportList
+              dense
+              emptyText="Sin ventas recientes."
+              items={data.recentSales.map((sale) => saleListItem(sale))}
+            />
+          </div>
+        </ReportSection>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ReportSection
+          title="Clientes y cuenta corriente"
+          description="Deuda vigente, ventas a cuenta y pagos recibidos."
+        >
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard
+              label="Deuda clientes"
+              value={formatARS(executive.pendingCustomerBalance)}
+              detail={`${data.debtors.length} clientes visibles`}
+              tone={executive.pendingCustomerBalance.gt(0) ? "amber" : "default"}
+              compact
+            />
+            <MetricCard
+              label="Ventas a cuenta"
+              value={formatARS(executive.currentAccountSales)}
+              detail="Del periodo filtrado."
+              compact
+            />
+            <MetricCard
+              label="Pagos recibidos"
+              value={formatARS(data.accountPaymentsTotal)}
+              detail="Cobros de cuenta corriente."
+              compact
+            />
+          </div>
+          <div className="mt-4">
+            <BarList
+              emptyText="No hay clientes con saldo pendiente."
+              items={data.debtors.map((debtor) => ({
+                label: debtor.name,
+                value: debtor.balance.toNumber(),
+                valueLabel: formatARS(debtor.balance),
+                tone: "amber"
+              }))}
+            />
+          </div>
+        </ReportSection>
+
+        <ReportSection
+          title="Compras y proveedores"
+          description="Impacto de compras recibidas dentro del periodo."
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <MetricCard
+              label="Compras"
+              value={formatARS(executive.purchasesTotal)}
+              detail="Solo compras recibidas."
+              compact
+            />
+            <MetricCard
+              label="Resultado comercial"
+              value={formatARS(executive.salesMinusPurchases)}
+              detail="Venta neta menos compras."
+              tone={executive.salesMinusPurchases.lt(0) ? "red" : "green"}
+              compact
+            />
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <ReportList
+              dense
+              emptyText="Sin compras en el periodo."
+              items={data.purchases.map((purchase) => ({
+                id: purchase.id,
+                title: `Compra #${purchase.purchaseNumber}`,
+                description: `${purchase.supplierName} - ${formatDateTimeStable(
+                  purchase.createdAt
+                )}`,
+                value: formatARS(purchase.total),
+                action: (
+                  <LinkButton href={`/compras/${purchase.id}`} size="sm" variant="outline">
+                    Ver
+                  </LinkButton>
+                )
+              }))}
+            />
+            <BarList
+              emptyText="Sin proveedores en el periodo."
+              items={data.suppliers.map((supplier) => ({
+                label: supplier.name,
+                value: supplier.total.toNumber(),
+                valueLabel: formatARS(supplier.total),
+                detail: `${supplier.count} compras`,
+                tone: "gray"
+              }))}
+            />
+          </div>
+        </ReportSection>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <ReportSection title="Alertas accionables">
+          <ReportList
+            emptyText="No hay alertas relevantes para el periodo."
+            items={data.alerts.map((alert, index) => alertListItem(alert, index))}
+          />
+        </ReportSection>
+
+        <ReportSection title="Ventas anuladas recientes">
+          <ReportList
+            emptyText="Sin anulaciones en el periodo."
+            items={data.recentCancelledSales.map((sale) => saleListItem(sale))}
+          />
+        </ReportSection>
       </div>
     </section>
   );
 }
 
-function buildMetrics(
-  sales: Array<{
-    total: Prisma.Decimal;
-    surchargeTotal: Prisma.Decimal;
-    discountTotal: Prisma.Decimal;
-    payments: Array<{ method: PaymentMethod; amount: Prisma.Decimal }>;
-    items: Array<{
-      subtotal: Prisma.Decimal;
-      quantity: Prisma.Decimal;
-      product: { cost: Prisma.Decimal | null };
-    }>;
-  }>,
-  cancelledSales: Array<{ total: Prisma.Decimal }>
-) {
-  const payments = Object.fromEntries(
-    Object.values(PaymentMethod).map((paymentMethod) => [paymentMethod, new Prisma.Decimal(0)])
-  ) as Record<PaymentMethod, Prisma.Decimal>;
-  let estimatedProfit = new Prisma.Decimal(0);
-
-  for (const sale of sales) {
-    for (const payment of sale.payments) {
-      payments[payment.method] = payments[payment.method].plus(payment.amount);
-    }
-
-    for (const item of sale.items) {
-      const cost = item.product.cost;
-      if (cost) {
-        estimatedProfit = estimatedProfit.plus(item.subtotal.minus(cost.mul(item.quantity)));
-      }
-    }
-  }
-
-  const totalSold = sum(sales.map((sale) => sale.total));
-  const salesCount = sales.length;
+function saleListItem(sale: {
+  id: string;
+  saleNumber: number;
+  total: Prisma.Decimal;
+  status: SaleStatus;
+  createdAt: Date;
+  userName: string;
+  customerName: string;
+}): ReportListItem {
+  const isCancelled = sale.status === SaleStatus.CANCELLED;
 
   return {
-    totalSold,
-    salesCount,
-    averageTicket: salesCount > 0 ? totalSold.div(salesCount).toDecimalPlaces(2) : 0,
-    cancelledTotal: sum(cancelledSales.map((sale) => sale.total)),
-    payments,
-    surcharges: sum(sales.map((sale) => sale.surchargeTotal)),
-    discounts: sum(sales.map((sale) => sale.discountTotal)),
-    estimatedProfit
+    id: sale.id,
+    title: `Venta #${sale.saleNumber}`,
+    description: `${sale.customerName} - ${sale.userName} - ${formatDateTimeStable(
+      sale.createdAt
+    )}`,
+    value: formatARS(sale.total),
+    badge: isCancelled ? "Anulada" : "Pagada",
+    badgeTone: isCancelled ? "red" : "green",
+    action: (
+      <LinkButton href={`/ventas/${sale.id}`} size="sm" variant="outline">
+        Ver
+      </LinkButton>
+    )
   };
 }
 
-function buildTopProducts(
-  sales: Array<{ items: Array<{ productNameSnapshot: string; quantity: Prisma.Decimal; subtotal: Prisma.Decimal }> }>
-) {
-  const products = new Map<string, { name: string; quantity: Prisma.Decimal; total: Prisma.Decimal }>();
+function alertListItem(alert: ReportAlert, index: number): ReportListItem {
+  return {
+    id: `${alert.title}-${index}`,
+    title: alert.title,
+    description: alert.description,
+    badge: severityLabel(alert.severity),
+    badgeTone: severityTone(alert.severity),
+    action:
+      alert.href && alert.actionLabel ? (
+        <LinkButton href={alert.href} size="sm" variant="outline">
+          {alert.actionLabel}
+        </LinkButton>
+      ) : null
+  };
+}
 
-  for (const sale of sales) {
-    for (const item of sale.items) {
-      const current = products.get(item.productNameSnapshot) ?? {
-        name: item.productNameSnapshot,
-        quantity: new Prisma.Decimal(0),
-        total: new Prisma.Decimal(0)
-      };
-      current.quantity = current.quantity.plus(item.quantity);
-      current.total = current.total.plus(item.subtotal);
-      products.set(item.productNameSnapshot, current);
-    }
+function paymentTone(method: PaymentMethod) {
+  if (method === PaymentMethod.CASH) {
+    return "green";
   }
 
-  return [...products.values()]
-    .sort((left, right) => right.total.comparedTo(left.total))
-    .slice(0, 10);
-}
-
-function Metric({
-  label,
-  value,
-  tone,
-  compact = false
-}: {
-  label: string;
-  value: string;
-  tone?: "red";
-  compact?: boolean;
-}) {
-  return (
-    <Card className={compact ? "min-w-0 p-4" : "min-w-0 p-4 2xl:p-5"}>
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className={tone === "red" ? "mt-2 break-words text-xl font-semibold text-red-700 dark:text-red-300 2xl:text-2xl" : "mt-2 break-words text-xl font-semibold text-gray-950 dark:text-gray-50 2xl:text-2xl"}>
-        {value}
-      </p>
-    </Card>
-  );
-}
-
-function MetricSection({
-  title,
-  children,
-  columns = "xl:grid-cols-6"
-}: {
-  title: string;
-  children: React.ReactNode;
-  columns?: string;
-}) {
-  return (
-    <div>
-      <h2 className="mb-3 text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <div className={`grid gap-3 md:grid-cols-2 ${columns}`}>{children}</div>
-    </div>
-  );
-}
-
-function ReportTable({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card className="p-5">
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <div className="mt-4 divide-y divide-gray-100 dark:divide-neutral-800">{children}</div>
-    </Card>
-  );
-}
-
-function Row({
-  left,
-  right,
-  badge
-}: {
-  left: string;
-  right: string;
-  badge?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-2 text-sm">
-      <div className="min-w-0">
-        <span className="font-medium text-gray-950 dark:text-gray-50">{left}</span>
-        {badge ? (
-          <span className="ml-2">
-            <Badge tone={badge === "Anulada" ? "red" : "green"}>{badge}</Badge>
-          </span>
-        ) : null}
-      </div>
-      <span className="shrink-0 text-gray-700 dark:text-gray-200">{right}</span>
-    </div>
-  );
-}
-
-function EmptyLine({ text }: { text: string }) {
-  return <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">{text}</p>;
-}
-
-function sum(values: Prisma.Decimal[]) {
-  return values.reduce((total, value) => total.plus(value), new Prisma.Decimal(0));
-}
-
-function parsePaymentMethod(value: string | undefined) {
-  if (!value) {
-    return null;
+  if (method === PaymentMethod.CURRENT_ACCOUNT) {
+    return "amber";
   }
 
-  return Object.values(PaymentMethod).includes(value as PaymentMethod)
-    ? (value as PaymentMethod)
-    : null;
+  if (method === PaymentMethod.MERCADOPAGO) {
+    return "blue";
+  }
+
+  return "gray";
 }
 
-function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
+function severityLabel(severity: ReportAlert["severity"]) {
+  if (severity === "error") {
+    return "Critica";
+  }
+
+  if (severity === "warning") {
+    return "Atencion";
+  }
+
+  return "Info";
 }
 
-function startOfCurrentWeek() {
-  const date = new Date();
-  const day = date.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  date.setDate(date.getDate() - diff);
-  return date;
+function severityTone(severity: ReportAlert["severity"]) {
+  if (severity === "error") {
+    return "red";
+  }
+
+  if (severity === "warning") {
+    return "amber";
+  }
+
+  return "info";
 }
 
-function startOfCurrentMonth() {
-  const date = new Date();
-  date.setDate(1);
-  return date;
+function formatInteger(value: Prisma.Decimal | number) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 0
+  }).format(toNumber(value));
 }
 
-function dateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
+function formatDecimal(value: Prisma.Decimal | number, maximumFractionDigits: number) {
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits
+  }).format(toNumber(value));
 }
 
-function startOfDay(value: string) {
-  return new Date(`${value}T00:00:00`);
+function formatPercentNumber(value: Prisma.Decimal | number) {
+  return formatPercent(toNumber(value));
 }
 
-function nextDay(value: string) {
-  const date = startOfDay(value);
-  date.setDate(date.getDate() + 1);
-  return date;
+function formatPercent(value: number) {
+  return (
+    new Intl.NumberFormat("es-AR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }).format(value) + "%"
+  );
+}
+
+function toNumber(value: Prisma.Decimal | number) {
+  return typeof value === "number" ? value : value.toNumber();
 }

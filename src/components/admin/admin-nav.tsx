@@ -26,7 +26,7 @@ export function AdminNav({ role, compact = false }: { role: RoleValue; compact?:
   const pathname = usePathname();
 
   return (
-    <nav className={cn("space-y-1", compact ? "mt-5 xl:mt-6" : "mt-5 2xl:mt-8")}>
+    <nav className={cn("space-y-1.5", compact ? "mt-5 xl:mt-6" : "mt-5 2xl:mt-8")}>
       {navItems
         .filter((item) => role === "ADMIN" || !item.adminOnly)
         .map((item) => {
@@ -40,14 +40,23 @@ export function AdminNav({ role, compact = false }: { role: RoleValue; compact?:
               href={item.href}
               title={label}
               className={cn(
-                "block truncate rounded-md font-medium transition duration-150",
+                "group relative flex min-w-0 items-center gap-2 overflow-hidden rounded-md font-semibold transition-[background-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                 compact ? "px-2 py-2 text-xs xl:text-sm" : "px-2.5 py-2 text-xs lg:text-sm 2xl:px-3",
                 active
-                  ? "bg-brand-100/70 text-brand-800 font-semibold ring-1 ring-brand-200/80 dark:bg-brand-600/20 dark:text-white dark:ring-brand-500/30"
-                  : "text-gray-700 hover:bg-slate-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-white"
+                  ? "bg-brand-100/80 text-brand-800 shadow-sm ring-1 ring-brand-200/80 dark:bg-brand-600/20 dark:text-white dark:ring-brand-500/30"
+                  : "text-slate-700 hover:translate-x-0.5 hover:bg-slate-100 hover:text-slate-950 dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-white"
               )}
             >
-              {label}
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full transition-colors duration-150",
+                  active
+                    ? "bg-brand-600 dark:bg-brand-300"
+                    : "bg-slate-300 group-hover:bg-brand-400 dark:bg-neutral-700 dark:group-hover:bg-brand-400"
+                )}
+                aria-hidden="true"
+              />
+              <span className="truncate">{label}</span>
             </Link>
           );
         })}

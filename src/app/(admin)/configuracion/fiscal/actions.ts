@@ -30,6 +30,7 @@ import {
   normalizePendingMinutes,
   normalizePointOfSale
 } from "@/lib/fiscal/fiscal-settings";
+import { taxSelectionFromOption } from "@/lib/fiscal/fiscal-tax";
 import { prisma } from "@/lib/prisma";
 
 export type FiscalSettingsState = {
@@ -65,6 +66,7 @@ export async function updateFiscalSettingsAction(
     }
 
     const credentialUpdate = parseArcaCredentialUpdate(formData);
+    const defaultTax = taxSelectionFromOption(readText(formData, "defaultFiscalTax"));
     const baseData = {
       enabled: isChecked(formData, "enabled"),
       environment: parseEnum(
@@ -103,7 +105,10 @@ export async function updateFiscalSettingsAction(
         formData.get("defaultCustomerDocType"),
         FiscalDocumentIdentityType,
         FiscalDocumentIdentityType.CONSUMIDOR_FINAL
-      )
+      ),
+      defaultTaxTreatment: defaultTax?.treatment ?? null,
+      defaultVatRate: defaultTax?.vatRate ?? null,
+      defaultVatArcaCode: defaultTax?.vatArcaCode ?? null
     };
 
     const setting = await prisma.fiscalSetting.upsert({
@@ -130,6 +135,9 @@ export async function updateFiscalSettingsAction(
         enabled: setting.enabled,
         environment: setting.environment,
         pointOfSale: setting.pointOfSale,
+        defaultTaxTreatment: setting.defaultTaxTreatment,
+        defaultVatRate: setting.defaultVatRate?.toString() ?? null,
+        defaultVatArcaCode: setting.defaultVatArcaCode,
         arcaCertificateUpdated: Boolean(credentialUpdate.arcaCertificatePem),
         arcaPrivateKeyUpdated: Boolean(credentialUpdate.arcaPrivateKeyPem)
       }
@@ -158,17 +166,25 @@ export async function testArcaWsaaAction(
   const user = await requireAdminPage();
 
   try {
-    const auth = await getArcaAuthToken({ forceRefresh: true });
+    const auth = await getArcaAuthToken();
+    const successMessage = auth.alreadyAuthenticated
+      ? "ARCA informa que ya existe un Ticket de Acceso válido para este servicio."
+      : auth.fromCache
+        ? "Ya existe un token WSAA válido."
+        : "Conexion WSAA homologacion exitosa.";
+
+    await markArcaWsaaSuccess();
 
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSAA_TEST_OK",
-      message: "Conexion WSAA homologacion exitosa.",
+      message: successMessage,
       metadata: {
         environment: auth.environment,
         service: "wsfe",
         expirationTime: auth.expirationTime.toISOString(),
-        fromCache: auth.fromCache
+        fromCache: auth.fromCache,
+        alreadyAuthenticated: auth.alreadyAuthenticated
       }
     });
     await createAuditLog({
@@ -176,16 +192,18 @@ export async function testArcaWsaaAction(
       action: "ARCA_WSAA_TEST_OK",
       entity: "FiscalSetting",
       entityId: FISCAL_SETTING_ID,
-      description: "Probo conexion WSAA homologacion correctamente.",
+      description: successMessage,
       metadata: {
-        expirationTime: auth.expirationTime.toISOString()
+        expirationTime: auth.expirationTime.toISOString(),
+        fromCache: auth.fromCache,
+        alreadyAuthenticated: auth.alreadyAuthenticated
       }
     });
 
     revalidateFiscalPaths();
 
     return {
-      success: "Conexion WSAA homologacion exitosa.",
+      success: successMessage,
       result: [
         { label: "Servicio", value: "wsfe" },
         { label: "CUIT", value: auth.cuit },
@@ -455,6 +473,17 @@ async function markArcaFailure(
   await prisma.fiscalSetting.updateMany({
     where: { id: FISCAL_SETTING_ID },
     data
+  });
+}
+
+async function markArcaWsaaSuccess() {
+  await prisma.fiscalSetting.updateMany({
+    where: { id: FISCAL_SETTING_ID },
+    data: {
+      arcaLastConnectionStatus: "OK",
+      arcaLastConnectionTestAt: new Date(),
+      arcaLastError: null
+    }
   });
 }
 

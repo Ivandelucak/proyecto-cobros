@@ -9,6 +9,7 @@ import {
   determineFiscalDocumentTypeAndLetter,
   validateFiscalReadiness
 } from "@/lib/fiscal/fiscal-documents";
+import { calculateFiscalAmountsForSale } from "@/lib/fiscal/fiscal-amounts";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import type { FiscalRequirementDecision } from "@/lib/fiscal/fiscal-policy";
 import { prisma } from "@/lib/prisma";
@@ -179,7 +180,17 @@ export async function prepareFiscalDocumentDraft(
       where: { id: saleId },
       include: {
         customer: true,
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                taxTreatment: true,
+                vatRate: true,
+                vatArcaCode: true
+              }
+            }
+          }
+        },
         payments: true
       }
     });
@@ -209,6 +220,27 @@ export async function prepareFiscalDocumentDraft(
       setting,
       customerCondition: customerSnapshot.condition
     });
+    const fiscalAmounts = calculateFiscalAmountsForSale({
+      items: sale.items.map((item) => ({
+        id: item.id,
+        description: item.productNameSnapshot,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+        unitType: item.unitTypeSnapshot,
+        product: item.product
+      })),
+      setting,
+      documentLetter: documentShape.letter
+    });
+
+    if (fiscalAmounts.errors.length > 0) {
+      throw new Error(fiscalAmounts.errors.join(" "));
+    }
+
+    const fiscalAmountItemsById = new Map(
+      fiscalAmounts.items.map((item) => [item.id, item])
+    );
     const documentData = {
       saleId: sale.id,
       type: documentShape.type,
@@ -220,11 +252,11 @@ export async function prepareFiscalDocumentDraft(
       cae: null,
       caeDueDate: null,
       issueDate: null,
-      total: sale.total,
-      netAmount: sale.subtotal,
-      vatAmount: null,
-      exemptAmount: null,
-      nonTaxedAmount: null,
+      total: fiscalAmounts.totals.impTotal,
+      netAmount: fiscalAmounts.totals.impNeto,
+      vatAmount: fiscalAmounts.totals.impIVA,
+      exemptAmount: fiscalAmounts.totals.impOpEx,
+      nonTaxedAmount: fiscalAmounts.totals.impTotConc,
       customerName: customerSnapshot.name,
       customerDocType: customerSnapshot.docType,
       customerDocNumber: customerSnapshot.docNumber,
@@ -234,6 +266,7 @@ export async function prepareFiscalDocumentDraft(
         saleId: sale.id,
         saleNumber: sale.saleNumber,
         paymentMethods: sale.payments.map((payment) => payment.method),
+        fiscalAmountWarnings: fiscalAmounts.warnings,
         note: "Borrador interno. No enviado a ARCA."
       },
       errorMessage: null
@@ -263,15 +296,27 @@ export async function prepareFiscalDocumentDraft(
 
     if (sale.items.length > 0) {
       await tx.fiscalDocumentItem.createMany({
-        data: sale.items.map((item) => ({
-          fiscalDocumentId: fiscalDocument.id,
-          description: item.productNameSnapshot,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          subtotal: item.subtotal,
-          vatRate: null,
-          taxCode: null
-        }))
+        data: sale.items.map((item) => {
+          const fiscalAmountItem = fiscalAmountItemsById.get(item.id);
+
+          if (!fiscalAmountItem) {
+            throw new Error(`No se pudo calcular IVA para "${item.productNameSnapshot}".`);
+          }
+
+          return {
+            fiscalDocumentId: fiscalDocument.id,
+            description: item.productNameSnapshot,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            subtotal: item.subtotal,
+            vatRate: fiscalAmountItem.vatRate,
+            taxCode:
+              fiscalAmountItem.vatArcaCode === null
+                ? null
+                : String(fiscalAmountItem.vatArcaCode),
+            taxTreatment: fiscalAmountItem.taxTreatment
+          };
+        })
       });
     }
 

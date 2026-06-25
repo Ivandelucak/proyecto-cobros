@@ -1,10 +1,17 @@
 "use server";
 
-import { Prisma, Role, StockMovementType, UnitType } from "@prisma/client";
+import {
+  Prisma,
+  Role,
+  StockMovementType,
+  UnitType,
+  type FiscalTaxTreatment
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
+import { taxSelectionFromOption } from "@/lib/fiscal/fiscal-tax";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { shouldUseDecimalQuantity } from "@/lib/stock-format";
@@ -27,6 +34,9 @@ type ParsedProductForm = {
   allowsDecimalQuantity: boolean;
   quickAccess: boolean;
   active: boolean;
+  vatRate: Prisma.Decimal | null;
+  vatArcaCode: number | null;
+  taxTreatment: FiscalTaxTreatment | null;
 };
 
 export async function createProductAction(
@@ -175,6 +185,11 @@ async function parseProductForm(formData: FormData): Promise<ParsedProductForm> 
   const costValue = readString(formData, "cost");
   const cost = costValue ? parseNonNegativeDecimal(costValue, "El costo") : null;
   const stock = parseNonNegativeDecimal(formData.get("stock"), "El stock");
+  const fiscalTax = taxSelectionFromOption(readString(formData, "fiscalTax")) ?? {
+    treatment: null,
+    vatRate: null,
+    vatArcaCode: null
+  };
   const minStock = parseNonNegativeDecimal(formData.get("minStock"), "El stock mínimo");
 
   if (!name) {
@@ -209,7 +224,10 @@ async function parseProductForm(formData: FormData): Promise<ParsedProductForm> 
     unitType,
     allowsDecimalQuantity: requestedDecimal || shouldUseDecimalQuantity(unitType),
     quickAccess: formData.get("quickAccess") === "on",
-    active: formData.get("active") === "on"
+    active: formData.get("active") === "on",
+    taxTreatment: fiscalTax.treatment,
+    vatRate: fiscalTax.vatRate,
+    vatArcaCode: fiscalTax.vatArcaCode
   };
 }
 

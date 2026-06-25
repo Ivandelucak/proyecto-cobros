@@ -41,6 +41,9 @@ export function ArcaStatusPanel({
     initialState
   );
   const isHomologacion = setting.environment === "HOMOLOGACION";
+  const connectionStatus = setting.arcaTokenIsValid
+    ? "OK"
+    : setting.arcaLastConnectionStatus ?? setting.arcaLastWsfeStatus;
 
   return (
     <Card className="p-5">
@@ -53,7 +56,7 @@ export function ArcaStatusPanel({
             Pruebas tecnicas sin emision de comprobantes ni solicitud de CAE.
           </p>
         </div>
-        <StatusPill status={setting.arcaLastConnectionStatus ?? setting.arcaLastWsfeStatus} />
+        <StatusPill status={connectionStatus} />
       </div>
 
       {!isHomologacion ? (
@@ -67,9 +70,14 @@ export function ArcaStatusPanel({
         <DetailItem label="Ambiente" value={setting.environment} />
         <DetailItem label="CUIT" value={setting.cuit ?? "Sin cargar"} />
         <DetailItem
+          label="Condicion fiscal"
+          value={conditionLabel(setting.fiscalCondition)}
+        />
+        <DetailItem
           label="Punto de venta"
           value={setting.pointOfSale ? String(setting.pointOfSale) : "Sin cargar"}
         />
+        <DetailItem label="IVA por defecto" value={defaultVatLabel(setting)} />
         <DetailItem
           label="Token vence"
           value={formatDateTime(setting.arcaTokenExpiresAt)}
@@ -95,7 +103,7 @@ export function ArcaStatusPanel({
         />
       </div>
 
-      {setting.arcaLastError ? (
+      {setting.arcaLastError && !setting.arcaTokenIsValid ? (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100">
           {setting.arcaLastError}
         </div>
@@ -209,6 +217,36 @@ function StatusPill({ status }: { status: string | null }) {
       {normalized}
     </span>
   );
+}
+
+function conditionLabel(condition: string | null) {
+  const labels: Record<string, string> = {
+    CONSUMIDOR_FINAL: "Consumidor final",
+    RESPONSABLE_INSCRIPTO: "Responsable inscripto",
+    MONOTRIBUTO: "Monotributo",
+    EXENTO: "Exento",
+    NO_RESPONSABLE: "No responsable",
+    EXTERIOR: "Exterior",
+    OTHER: "Otro"
+  };
+
+  return condition ? labels[condition] ?? condition : "Sin cargar";
+}
+
+function defaultVatLabel(setting: FiscalSettingView) {
+  if (!setting.defaultTaxTreatment) {
+    return "Sin cargar";
+  }
+
+  if (setting.defaultTaxTreatment === "EXEMPT") {
+    return "Exento";
+  }
+
+  if (setting.defaultTaxTreatment === "NON_TAXABLE") {
+    return "No gravado";
+  }
+
+  return `${setting.defaultVatRate ?? "0"}% - codigo ${setting.defaultVatArcaCode ?? "-"}`;
 }
 
 function ActionResult({ state }: { state: ArcaTestState }) {

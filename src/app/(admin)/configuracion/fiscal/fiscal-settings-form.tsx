@@ -51,6 +51,15 @@ const identityTypeLabels = {
   CONSUMIDOR_FINAL: "Consumidor final",
   OTHER: "Otro"
 };
+const fiscalTaxOptions = [
+  ["", "Sin definir", "La pre-emision pedira configurar tratamiento fiscal."],
+  ["TAXED_21", "Gravado 21%", "Codigo ARCA 5"],
+  ["TAXED_10_5", "Gravado 10.5%", "Codigo ARCA 4"],
+  ["TAXED_27", "Gravado 27%", "Codigo ARCA 6"],
+  ["TAXED_0", "Gravado 0%", "Codigo ARCA 3"],
+  ["EXEMPT", "Exento", "Suma en importe exento"],
+  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado"]
+] as const;
 
 export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
   const [state, formAction, pending] = useActionState(
@@ -66,7 +75,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="Modulo fiscal" />
+        <SectionTitle title="Datos fiscales del emisor" />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Toggle
             name="enabled"
@@ -134,6 +143,38 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             </Select>
           </Field>
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle title="IVA por defecto" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Tratamiento y alicuota por defecto">
+            <Select
+              name="defaultFiscalTax"
+              defaultValue={defaultFiscalTaxValue(setting)}
+            >
+              {fiscalTaxOptions.map(([value, label]) => (
+                <option key={value || "empty"} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
+            <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Codigo ARCA asociado
+            </span>
+            <span className="mt-1 block font-semibold text-gray-950 dark:text-gray-50">
+              {defaultFiscalTaxHelp(defaultFiscalTaxValue(setting))}
+            </span>
+          </div>
+        </div>
+        {setting.fiscalCondition === "MONOTRIBUTO" ? (
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            En Factura C no se discrimina IVA. La previsualizacion conserva el
+            total como importe neto interno.
+          </p>
+        ) : null}
       </Card>
 
       <Card className="p-5">
@@ -248,6 +289,37 @@ function IssueModeSelect({ name, value }: { name: string; value: string }) {
       ))}
     </Select>
   );
+}
+
+function defaultFiscalTaxValue(setting: FiscalSettingView) {
+  if (!setting.defaultTaxTreatment) {
+    return "";
+  }
+
+  if (setting.defaultTaxTreatment === "EXEMPT") {
+    return "EXEMPT";
+  }
+
+  if (setting.defaultTaxTreatment === "NON_TAXABLE") {
+    return "NON_TAXABLE";
+  }
+
+  if (setting.defaultVatRate === "10.5") {
+    return "TAXED_10_5";
+  }
+  if (setting.defaultVatRate === "27") {
+    return "TAXED_27";
+  }
+  if (setting.defaultVatRate === "0") {
+    return "TAXED_0";
+  }
+
+  return "TAXED_21";
+}
+
+function defaultFiscalTaxHelp(value: string) {
+  const option = fiscalTaxOptions.find(([optionValue]) => optionValue === value);
+  return option?.[2] ?? "Sin codigo";
 }
 
 function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) {

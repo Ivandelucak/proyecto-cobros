@@ -1462,8 +1462,8 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "group min-w-0 cursor-pointer rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-all duration-200 border-l-4 border-l-slate-300/80 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
-              compact ? "p-2" : "p-3",
+              "group flex min-w-0 cursor-pointer flex-col rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-150 border-l-4 border-l-slate-300/80 hover:-translate-y-0.5 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
+              compact ? "min-h-[92px] p-2" : "min-h-[116px] p-3",
               selectedIndex === index &&
                 "border-brand-500 bg-brand-50/50 border-l-brand-600 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
             )}
@@ -1476,7 +1476,7 @@ function ProductGrid({
             >
               {product.name}
             </span>
-            <span className={cn("block truncate font-extrabold text-brand-700 dark:text-brand-400", compact ? "mt-1 text-sm" : "mt-2 text-base")}>
+            <span className={cn("mt-auto block truncate font-extrabold text-brand-700 dark:text-brand-400", compact ? "pt-2 text-sm" : "pt-3 text-base")}>
               {formatARS(product.salePrice)}
             </span>
             <span className={cn("mt-1 block truncate text-gray-500 dark:text-gray-400", compact ? "text-[11px]" : "text-xs")}>

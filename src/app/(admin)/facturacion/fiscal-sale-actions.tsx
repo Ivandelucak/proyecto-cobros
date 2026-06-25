@@ -217,17 +217,18 @@ export function FiscalSaleActions({
           ref={menuButtonRef}
           type="button"
           aria-label="Abrir acciones"
+          title="Mas acciones"
           aria-expanded={menuOpen}
           onClick={toggleMenu}
-          className={`${styles.fiscalMenuButton} inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-base font-semibold leading-none text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-neutral-600 dark:hover:bg-neutral-800`}
+          className={`${styles.fiscalMenuButton} inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow-md active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10`}
         >
-          ...
+          <MoreIcon />
         </button>
       </div>
       {menuOpen && menuPosition ? (
         <div
           ref={menuRef}
-          className="fixed z-50 max-h-[260px] w-56 overflow-y-auto rounded-md border border-gray-200 bg-white p-2 text-sm shadow-xl dark:border-neutral-800 dark:bg-neutral-950"
+          className="fixed z-50 max-h-[260px] w-56 overflow-y-auto rounded-md border border-gray-200 bg-white p-2 text-sm shadow-xl shadow-slate-950/10 dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-black/30"
           style={{ left: menuPosition.left, top: menuPosition.top }}
         >
           <MenuLink href={`/facturacion/${saleId}`}>Detalle fiscal</MenuLink>
@@ -363,7 +364,7 @@ function MenuLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="block rounded-md px-3 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-neutral-900"
+      className="block rounded-md px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-200 dark:hover:bg-neutral-900 dark:hover:text-white"
     >
       {children}
     </Link>
@@ -389,11 +390,25 @@ function MenuButton({
       className={
         danger
           ? "block w-full rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50 disabled:opacity-60 dark:text-red-200 dark:hover:bg-red-950/40"
-          : "block w-full rounded-md px-3 py-2 text-left text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:text-gray-200 dark:hover:bg-neutral-900"
+          : "block w-full rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:bg-neutral-900 dark:hover:text-white"
       }
     >
       {children}
     </button>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+      <path
+        d="M6.5 12h.01M12 12h.01M17.5 12h.01"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="3"
+      />
+    </svg>
   );
 }
 

@@ -50,7 +50,10 @@ export default async function EditarProductoPage({ params }: EditarProductoPageP
           unitType: product.unitType,
           allowsDecimalQuantity: product.allowsDecimalQuantity,
           quickAccess: product.quickAccess,
-          active: product.active
+          active: product.active,
+          vatRate: product.vatRate?.toString() ?? null,
+          vatArcaCode: product.vatArcaCode,
+          taxTreatment: product.taxTreatment
         }}
       />
     </section>

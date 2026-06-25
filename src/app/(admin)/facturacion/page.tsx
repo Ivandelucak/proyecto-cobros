@@ -109,17 +109,22 @@ export default async function FacturacionPage({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Pendientes" value={String(countMap.get(FiscalStatus.PENDING) ?? 0)} />
+        <Metric
+          label="Pendientes"
+          value={String(countMap.get(FiscalStatus.PENDING) ?? 0)}
+          tone="amber"
+        />
         <Metric
           label="Preparadas"
           value={String(countMap.get(FiscalStatus.READY_TO_ISSUE) ?? 0)}
+          tone="blue"
         />
-        <Metric label="Fallidas" value={String(countMap.get(FiscalStatus.FAILED) ?? 0)} />
-        <Metric label="Criticas visibles" value={String(criticalCount)} />
+        <Metric label="Fallidas" value={String(countMap.get(FiscalStatus.FAILED) ?? 0)} tone="red" />
+        <Metric label="Criticas visibles" value={String(criticalCount)} tone="red" />
       </div>
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_160px_150px_150px_auto]">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_160px_150px_150px_minmax(150px,auto)_auto]">
           <Input name="q" placeholder="Cliente o venta #" defaultValue={query} />
           <Select name="status" defaultValue={statusFilter}>
             {filterLabels.map((filter) => (
@@ -137,10 +142,8 @@ export default async function FacturacionPage({
             ))}
           </Select>
           <Input name="from" type="date" defaultValue={param(params.from)} />
-          <div className="flex gap-2">
-            <Input name="to" type="date" defaultValue={param(params.to)} />
-            <Button type="submit">Filtrar</Button>
-          </div>
+          <Input name="to" type="date" defaultValue={param(params.to)} />
+          <Button type="submit" className="w-full xl:w-auto">Filtrar</Button>
         </form>
       </Card>
 
@@ -168,7 +171,7 @@ export default async function FacturacionPage({
               .join(" + ");
 
             return (
-              <Card key={sale.id} className="p-3">
+              <Card key={sale.id} className="p-3 transition-transform duration-150 hover:-translate-y-0.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-950 dark:text-gray-50">
@@ -222,7 +225,7 @@ export default async function FacturacionPage({
       <Card className="hidden overflow-hidden xl:block">
         <div className="overflow-x-auto">
           <table className={`${styles.fiscalTable} w-full min-w-[1080px] text-left text-sm`}>
-            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+            <thead className="border-b border-gray-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Venta</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
@@ -255,7 +258,10 @@ export default async function FacturacionPage({
                     isPreparableFiscalStatus(sale.fiscalStatus);
 
                   return (
-                    <tr key={sale.id}>
+                    <tr
+                      key={sale.id}
+                      className="transition-colors duration-150 hover:bg-slate-50/80 dark:hover:bg-neutral-800/50"
+                    >
                       <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
                         #{sale.saleNumber}
                       </td>
@@ -287,7 +293,7 @@ export default async function FacturacionPage({
                           </p>
                         ) : null}
                       </td>
-                      <td className={`${styles.fiscalActionsColumn} w-[240px] px-3 py-3 align-top`}>
+                      <td className="px-4 py-3 align-top">
                         <Badge tone={priorityTone(priority)}>
                           {pendingAgeLabel(sale)}
                         </Badge>
@@ -314,11 +320,28 @@ export default async function FacturacionPage({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  tone = "blue"
+}: {
+  label: string;
+  value: string;
+  tone?: "blue" | "amber" | "red";
+}) {
+  const toneClass = {
+    blue: "bg-brand-600 dark:bg-brand-400",
+    amber: "bg-amber-500 dark:bg-amber-300",
+    red: "bg-red-500 dark:bg-red-300"
+  }[tone];
+
   return (
-    <Card className="p-4">
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-gray-950 dark:text-gray-50">
+    <Card className="p-4 transition-transform duration-150 hover:-translate-y-0.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        <span className={`h-2 w-2 rounded-full ${toneClass}`} aria-hidden="true" />
+      </div>
+      <p className="mt-2 text-2xl font-bold text-gray-950 dark:text-gray-50">
         {value}
       </p>
     </Card>

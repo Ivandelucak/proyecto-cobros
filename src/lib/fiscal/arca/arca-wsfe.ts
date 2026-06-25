@@ -56,7 +56,9 @@ export async function getLastAuthorizedVoucher(input: {
   return {
     pointOfSale: input.pointOfSale,
     voucherType: input.voucherType,
-    voucherNumber: Number.isFinite(voucherNumber) ? voucherNumber : 0
+    voucherNumber: Number.isFinite(voucherNumber) ? voucherNumber : 0,
+    tokenExpiresAt: auth.expirationTime,
+    tokenFromCache: auth.fromCache
   };
 }
 

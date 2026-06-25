@@ -28,6 +28,8 @@ type ArcaSettingWithSecrets = {
   arcaTokenExpiresAt: Date | null;
 };
 
+const TOKEN_REFRESH_SAFETY_MS = 10 * 60 * 1000;
+
 export type ArcaAuthToken = {
   token: string;
   sign: string;
@@ -35,21 +37,17 @@ export type ArcaAuthToken = {
   cuit: string;
   environment: FiscalEnvironment;
   fromCache: boolean;
+  alreadyAuthenticated: boolean;
 };
 
 export async function getArcaAuthToken(options: { forceRefresh?: boolean } = {}) {
   const setting = await getArcaSettingWithSecrets();
   validateArcaWsaaSetting(setting);
 
-  if (!options.forceRefresh && isCachedTokenValid(setting)) {
-    return {
-      token: setting.arcaWsaaToken!,
-      sign: setting.arcaWsaaSign!,
-      expirationTime: setting.arcaTokenExpiresAt!,
-      cuit: onlyDigits(setting.cuit),
-      environment: setting.environment,
-      fromCache: true
-    } satisfies ArcaAuthToken;
+  if (!options.forceRefresh && isCachedTokenUsable(setting)) {
+    return buildCachedAuthToken(setting, {
+      alreadyAuthenticated: false
+    });
   }
 
   const endpoint = ARCA_ENDPOINTS[setting.environment].wsaa;
@@ -85,6 +83,25 @@ export async function getArcaAuthToken(options: { forceRefresh?: boolean } = {})
       service: ARCA_WSAA_SERVICE,
       rawSoap: sanitizeArcaDetail(arcaError.details) ?? arcaError.message
     });
+
+    if (isWsaaAlreadyAuthenticatedError(arcaError)) {
+      if (isCachedTokenFuture(setting)) {
+        logWsaaDebug("ARCA informa TA vigente; se reutiliza token guardado.", {
+          endpoint,
+          service: ARCA_WSAA_SERVICE,
+          expirationTime: setting.arcaTokenExpiresAt?.toISOString()
+        });
+
+        return buildCachedAuthToken(setting, {
+          alreadyAuthenticated: true
+        });
+      }
+
+      throw new ArcaError(
+        "ARCA informa que ya existe un Ticket de Acceso válido para este servicio.",
+        arcaError.details
+      );
+    }
 
     if (isWsaaXmlSchemaError(arcaError)) {
       throw new ArcaError(
@@ -136,7 +153,8 @@ export async function getArcaAuthToken(options: { forceRefresh?: boolean } = {})
     expirationTime,
     cuit: onlyDigits(setting.cuit),
     environment: setting.environment,
-    fromCache: false
+    fromCache: false,
+    alreadyAuthenticated: false
   } satisfies ArcaAuthToken;
 }
 
@@ -180,12 +198,35 @@ function validateArcaWsaaSetting(setting: ArcaSettingWithSecrets) {
   }
 }
 
-function isCachedTokenValid(setting: ArcaSettingWithSecrets) {
+function isCachedTokenUsable(setting: ArcaSettingWithSecrets) {
   if (!setting.arcaWsaaToken || !setting.arcaWsaaSign || !setting.arcaTokenExpiresAt) {
     return false;
   }
 
-  return setting.arcaTokenExpiresAt.getTime() > Date.now() + 5 * 60 * 1000;
+  return setting.arcaTokenExpiresAt.getTime() > Date.now() + TOKEN_REFRESH_SAFETY_MS;
+}
+
+function isCachedTokenFuture(setting: ArcaSettingWithSecrets) {
+  if (!setting.arcaWsaaToken || !setting.arcaWsaaSign || !setting.arcaTokenExpiresAt) {
+    return false;
+  }
+
+  return setting.arcaTokenExpiresAt.getTime() > Date.now();
+}
+
+function buildCachedAuthToken(
+  setting: ArcaSettingWithSecrets,
+  options: { alreadyAuthenticated: boolean }
+) {
+  return {
+    token: setting.arcaWsaaToken!,
+    sign: setting.arcaWsaaSign!,
+    expirationTime: setting.arcaTokenExpiresAt!,
+    cuit: onlyDigits(setting.cuit),
+    environment: setting.environment,
+    fromCache: true,
+    alreadyAuthenticated: options.alreadyAuthenticated
+  } satisfies ArcaAuthToken;
 }
 
 function createLoginTicketRequestXml(service: string) {
@@ -302,7 +343,13 @@ function onlyDigits(value: string | null) {
 function isWsaaXmlSchemaError(error: ArcaError) {
   const text = `${error.message}\n${error.details ?? ""}`.toLowerCase();
 
-  return text.includes("xml.bad") || text.includes("schema");
+  return text.includes("xml.bad");
+}
+
+function isWsaaAlreadyAuthenticatedError(error: ArcaError) {
+  const text = `${error.message}\n${error.details ?? ""}`.toLowerCase();
+
+  return text.includes("coe.alreadyauthenticated");
 }
 
 function logWsaaDebug(message: string, payload: Record<string, unknown>) {

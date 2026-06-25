@@ -26,6 +26,9 @@ type ProductFormValues = {
   allowsDecimalQuantity?: boolean;
   quickAccess?: boolean;
   active?: boolean;
+  vatRate?: string | null;
+  vatArcaCode?: number | null;
+  taxTreatment?: string | null;
 };
 
 type ProductFormProps = {
@@ -50,6 +53,16 @@ const units = [
 
 const decimalSuggestedUnits = new Set(["KG", "GR", "LITER", "METER"]);
 
+const fiscalTaxOptions = [
+  ["INHERIT", "Heredar configuracion fiscal", "Usa el IVA por defecto de configuracion fiscal."],
+  ["TAXED_21", "Gravado 21%", "Codigo ARCA 5."],
+  ["TAXED_10_5", "Gravado 10.5%", "Codigo ARCA 4."],
+  ["TAXED_27", "Gravado 27%", "Codigo ARCA 6."],
+  ["TAXED_0", "Gravado 0%", "Codigo ARCA 3."],
+  ["EXEMPT", "Exento", "Suma en importe exento."],
+  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado."]
+] as const;
+
 export function ProductForm({
   action,
   categories,
@@ -61,6 +74,7 @@ export function ProductForm({
   const [allowsDecimal, setAllowsDecimal] = useState(
     Boolean(initialValues?.allowsDecimalQuantity)
   );
+  const [fiscalTax, setFiscalTax] = useState(productFiscalTaxValue(initialValues));
   const isNewProduct = !initialValues;
 
   function handleUnitChange(value: string) {
@@ -192,6 +206,31 @@ export function ProductForm({
         </div>
       </Card>
 
+      <Card className="p-5">
+        <SectionTitle
+          title="Fiscal / IVA"
+          description="Define el tratamiento fiscal del producto para preparar comprobantes ARCA."
+        />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Tratamiento fiscal">
+            <Select
+              name="fiscalTax"
+              value={fiscalTax}
+              onChange={(event) => setFiscalTax(event.target.value)}
+            >
+              {fiscalTaxOptions.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+            {fiscalTaxHelp(fiscalTax)}
+          </div>
+        </div>
+      </Card>
+
       <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-100/95 px-1 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
         <LinkButton href="/productos" variant="ghost">
           Cancelar
@@ -218,6 +257,37 @@ export function ProductForm({
       </div>
     </form>
   );
+}
+
+function productFiscalTaxValue(initialValues?: ProductFormValues) {
+  if (!initialValues?.taxTreatment) {
+    return "INHERIT";
+  }
+
+  if (initialValues.taxTreatment === "EXEMPT") {
+    return "EXEMPT";
+  }
+
+  if (initialValues.taxTreatment === "NON_TAXABLE") {
+    return "NON_TAXABLE";
+  }
+
+  const rate = Number(initialValues.vatRate ?? 21);
+  if (rate === 10.5) {
+    return "TAXED_10_5";
+  }
+  if (rate === 27) {
+    return "TAXED_27";
+  }
+  if (rate === 0) {
+    return "TAXED_0";
+  }
+
+  return "TAXED_21";
+}
+
+function fiscalTaxHelp(value: string) {
+  return fiscalTaxOptions.find(([optionValue]) => optionValue === value)?.[2] ?? "";
 }
 
 function SectionTitle({

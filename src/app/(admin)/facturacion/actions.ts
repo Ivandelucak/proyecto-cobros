@@ -7,11 +7,22 @@ import {
   markSaleFiscalNotRequested,
   prepareFiscalDocumentDraft
 } from "@/lib/fiscal/fiscal-engine";
+import {
+  runArcaPreflightValidation,
+  type ArcaPreflightResult
+} from "@/lib/fiscal/arca/arca-preflight";
+import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
+import { prisma } from "@/lib/prisma";
 import { cancelSale } from "@/lib/sale-cancellation";
 
 export type FiscalActionState = {
   error?: string;
   success?: string;
+};
+
+export type ArcaPreflightActionState = {
+  error?: string;
+  result?: ArcaPreflightResult;
 };
 
 export async function prepareFiscalDocumentAction(
@@ -96,6 +107,64 @@ export async function cancelFiscalBeforeIssueAction(
           ? "La venta ya fue emitida fiscalmente. Requiere nota de credito."
           : "Venta anulada antes de emitir comprobante fiscal."
     };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+export async function executeArcaPreflightAction(
+  saleId: string,
+  _state: ArcaPreflightActionState,
+  _formData: FormData
+): Promise<ArcaPreflightActionState> {
+  const user = await requireAdminPage();
+
+  try {
+    const [sale, setting] = await Promise.all([
+      prisma.sale.findUnique({
+        where: { id: saleId },
+        include: {
+          customer: true,
+          fiscalDocument: {
+            include: {
+              items: true
+            }
+          }
+        }
+      }),
+      getFiscalSettingOrDefault()
+    ]);
+
+    const result = await runArcaPreflightValidation({
+      sale,
+      fiscalDocument: sale?.fiscalDocument ?? null,
+      setting,
+      requireConnectionCredentials: true
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: result.canProceedToEmissionFuture
+        ? "ARCA_PREFLIGHT_OK"
+        : "ARCA_PREFLIGHT_FAILED",
+      entity: "Sale",
+      entityId: saleId,
+      description: result.canProceedToEmissionFuture
+        ? "Ejecuto preflight ARCA sin errores bloqueantes."
+        : "Ejecuto preflight ARCA con errores bloqueantes.",
+      metadata: {
+        pointOfSale: result.pointOfSale,
+        voucherType: result.voucherType,
+        lastAuthorizedNumber: result.lastAuthorizedNumber,
+        nextEstimatedNumber: result.nextEstimatedNumber,
+        errors: result.errors,
+        warnings: result.warnings
+      }
+    });
+
+    revalidateFiscalPaths(saleId);
+
+    return { result };
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
