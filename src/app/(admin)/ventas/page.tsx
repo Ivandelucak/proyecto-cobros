@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
+import { fallbackPaymentLabels, providerStatusLabel } from "@/lib/payment-display";
+import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 import { buildReturnToHref, buildSaleDetailHref, buildTicketHref } from "@/lib/return-to";
 
@@ -22,15 +24,6 @@ type VentasPageProps = {
     status?: string;
     method?: string;
   }>;
-};
-
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  DEBIT: "Debito",
-  CREDIT: "Credito",
-  TRANSFER: "Transferencia",
-  MERCADOPAGO: "MercadoPago",
-  CURRENT_ACCOUNT: "Cuenta corriente"
 };
 
 export default async function VentasPage({ searchParams }: VentasPageProps) {
@@ -51,34 +44,41 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
     userId: user?.role === Role.CASHIER ? user.id : null
   });
 
-  const sales = await prisma.sale.findMany({
-    where,
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true
+  const [sales, paymentMethods] = await Promise.all([
+    prisma.sale.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        },
+        cashSession: {
+          select: {
+            id: true,
+            openedAt: true
+          }
+        },
+        customer: {
+          select: { name: true }
+        },
+        payments: {
+          orderBy: { createdAt: "asc" }
+        },
+        _count: {
+          select: { items: true }
         }
       },
-      cashSession: {
-        select: {
-          id: true,
-          openedAt: true
-        }
-      },
-      customer: {
-        select: { name: true }
-      },
-      payments: {
-        orderBy: { createdAt: "asc" }
-      },
-      _count: {
-        select: { items: true }
-      }
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100
-  });
+      orderBy: { createdAt: "desc" },
+      take: 100
+    }),
+    getPaymentMethodSettings()
+  ]);
+  const paymentLabels = {
+    ...fallbackPaymentLabels,
+    ...Object.fromEntries(paymentMethods.map((method) => [method.method, method.label]))
+  } as Record<PaymentMethod, string>;
 
   return (
     <section className="space-y-5">
@@ -91,7 +91,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
         <form className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_170px_220px_auto]">
           <Input
             name="q"
-            placeholder="Buscar por numero, cajero o producto"
+            placeholder="Buscar por numero, cajero, producto o referencia"
             defaultValue={q}
           />
           <Input name="from" type="date" defaultValue={from} />
@@ -179,9 +179,18 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
                         {sale.payments.map((payment) => (
-                          <Badge key={payment.id} tone="gray">
-                            {paymentLabels[payment.method]}
-                          </Badge>
+                          <div key={payment.id} className="min-w-0">
+                            <Badge tone="gray">{paymentLabels[payment.method]}</Badge>
+                            {payment.externalReference || payment.externalId ? (
+                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-gray-400">
+                                {payment.externalReference ?? payment.externalId}
+                              </p>
+                            ) : providerStatusLabel(payment.providerStatus) ? (
+                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-gray-400">
+                                {providerStatusLabel(payment.providerStatus)}
+                              </p>
+                            ) : null}
+                          </div>
                         ))}
                       </div>
                     </td>
@@ -261,7 +270,10 @@ function buildSaleWhere({
     const searchFilters: Prisma.SaleWhereInput[] = [
       { user: { name: { contains: q } } },
       { user: { email: { contains: q } } },
-      { items: { some: { productNameSnapshot: { contains: q } } } }
+      { items: { some: { productNameSnapshot: { contains: q } } } },
+      { payments: { some: { externalId: { contains: q } } } },
+      { payments: { some: { externalReference: { contains: q } } } },
+      { payments: { some: { providerStatus: { contains: q } } } }
     ];
 
     if (Number.isInteger(numberQuery) && numberQuery > 0) {

@@ -13,6 +13,8 @@ export type PriceAdjustmentState = {
   preview?: Array<{
     id: string;
     name: string;
+    brand: string | null;
+    categoryName: string;
     currentPrice: string;
     newPrice: string;
     difference: string;
@@ -22,6 +24,9 @@ export type PriceAdjustmentState = {
 
 type PricePayload = {
   categoryId: string;
+  brand: string;
+  brandMatch: "exact" | "contains";
+  search: string;
   activeOnly: boolean;
   quickAccess: string;
   stock: string;
@@ -102,10 +107,22 @@ async function buildPreview(payload: PricePayload) {
       ...(payload.activeOnly ? { active: true } : {}),
       ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
       ...(payload.quickAccess === "yes" ? { quickAccess: true } : {}),
-      ...(payload.quickAccess === "no" ? { quickAccess: false } : {})
+      ...(payload.quickAccess === "no" ? { quickAccess: false } : {}),
+      ...(payload.search
+        ? {
+            OR: [
+              { name: { contains: payload.search } },
+              { barcode: { contains: payload.search } },
+              { sku: { contains: payload.search } },
+              { brand: { contains: payload.search } }
+            ]
+          }
+        : {})
     },
+    include: { category: { select: { name: true } } },
     orderBy: { name: "asc" }
   });
+  const normalizedBrand = normalizeText(payload.brand);
 
   return products
     .filter((product) => {
@@ -116,6 +133,16 @@ async function buildPreview(payload: PricePayload) {
         return product.stock.lte(0);
       }
       return true;
+    })
+    .filter((product) => {
+      if (!normalizedBrand) {
+        return true;
+      }
+
+      const brand = normalizeText(product.brand);
+      return payload.brandMatch === "contains"
+        ? brand.includes(normalizedBrand)
+        : brand === normalizedBrand;
     })
     .map((product) => {
       const factor =
@@ -130,6 +157,8 @@ async function buildPreview(payload: PricePayload) {
       return {
         id: product.id,
         name: product.name,
+        brand: product.brand,
+        categoryName: product.category.name,
         currentPrice: product.salePrice.toString(),
         newPrice: newPrice.toString(),
         difference: newPrice.minus(product.salePrice).toString()
@@ -147,15 +176,28 @@ function applyRounding(value: Prisma.Decimal, rounding: PricePayload["rounding"]
 }
 
 function readPayload(formData: FormData): PricePayload {
+  const brandMatch = String(formData.get("brandMatch") ?? "exact");
+  const direction = String(formData.get("direction") ?? "increase");
+  const rounding = String(formData.get("rounding") ?? "none");
+
   return {
     categoryId: String(formData.get("categoryId") ?? ""),
+    brand: String(formData.get("brand") ?? "").trim(),
+    brandMatch: brandMatch === "contains" ? "contains" : "exact",
+    search: String(formData.get("search") ?? "").trim(),
     activeOnly: formData.get("activeOnly") === "on",
     quickAccess: String(formData.get("quickAccess") ?? "all"),
     stock: String(formData.get("stock") ?? "all"),
     percent: String(formData.get("percent") ?? ""),
-    direction: String(formData.get("direction") ?? "increase") as PricePayload["direction"],
-    rounding: String(formData.get("rounding") ?? "none") as PricePayload["rounding"]
+    direction: direction === "decrease" ? "decrease" : "increase",
+    rounding: ["10", "50", "100"].includes(rounding)
+      ? (rounding as PricePayload["rounding"])
+      : "none"
   };
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "").trim().toLocaleLowerCase("es-AR");
 }
 
 function getErrorMessage(error: unknown) {

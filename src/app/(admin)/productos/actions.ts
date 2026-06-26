@@ -20,6 +20,19 @@ export type ProductFormState = {
   error?: string;
 };
 
+export type BarcodeCheckResult =
+  | { status: "available" }
+  | { status: "current" }
+  | {
+      status: "duplicate";
+      product: {
+        id: string;
+        name: string;
+        active: boolean;
+        deletedAt: Date | null;
+      };
+    };
+
 type ParsedProductForm = {
   name: string;
   barcode: string | null;
@@ -161,6 +174,38 @@ export async function setProductActiveAction(productId: string, active: boolean)
   });
 
   revalidatePath("/productos");
+}
+
+export async function checkProductBarcodeAction(
+  barcode: string,
+  excludeProductId?: string
+): Promise<BarcodeCheckResult> {
+  await requireAdminUser();
+  const code = barcode.trim();
+
+  if (!code) {
+    return { status: "available" };
+  }
+
+  const product = await prisma.product.findFirst({
+    where: { barcode: code },
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      deletedAt: true
+    }
+  });
+
+  if (!product) {
+    return { status: "available" };
+  }
+
+  if (excludeProductId && product.id === excludeProductId) {
+    return { status: "current" };
+  }
+
+  return { status: "duplicate", product };
 }
 
 async function requireAdminUser() {

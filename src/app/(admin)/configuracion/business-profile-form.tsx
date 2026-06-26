@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
@@ -66,9 +66,32 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
     updateBusinessProfileAction,
     initialState
   );
+  const [logoPreview, setLogoPreview] = useState(initialValues.logoUrl ?? "");
+  const [removeLogo, setRemoveLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleLogoChange(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setLogoPreview(initialValues.logoUrl ?? "");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoPreview(typeof reader.result === "string" ? reader.result : "");
+      setRemoveLogo(false);
+    };
+    reader.readAsDataURL(file);
+  }
 
   return (
     <form action={formAction} className="space-y-5">
+      <input type="hidden" name="logoUrl" value={initialValues.logoUrl ?? ""} />
+      {removeLogo ? <input type="hidden" name="removeLogo" value="on" /> : null}
       <Card className="p-5">
         <SectionTitle
           title="Datos del comercio"
@@ -148,9 +171,9 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
       <Card className="p-5">
         <SectionTitle
           title="Preferencias visuales"
-          description="Ajustes livianos de apariencia. La carga de imagenes queda preparada para una etapa futura."
+          description="Ajustes livianos de apariencia y logo usado en impresiones."
         />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
           <Field label="Tema preferido">
             <Select name="preferredTheme" defaultValue={initialValues.preferredTheme ?? ""}>
               <option value="">Sin preferencia</option>
@@ -158,13 +181,59 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
               <option value="dark">Oscuro</option>
             </Select>
           </Field>
-          <Field label="Logo URL">
-            <Input
-              name="logoUrl"
-              defaultValue={initialValues.logoUrl ?? ""}
-              placeholder="Preparado para uso futuro"
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+            <p className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              Logo del comercio
+            </p>
+            <div className="mt-3 grid min-h-28 place-items-center rounded-md border border-dashed border-slate-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
+              {logoPreview && !removeLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoPreview}
+                  alt="Logo del comercio"
+                  className="max-h-20 max-w-full object-contain"
+                />
+              ) : (
+                <span className="text-center text-xs text-slate-500 dark:text-gray-400">
+                  Sin logo cargado
+                </span>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              name="logoFile"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(event) => handleLogoChange(event.target.files?.[0] ?? null)}
             />
-          </Field>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Reemplazar logo
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setRemoveLogo(true);
+                  setLogoPreview("");
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+              >
+                Quitar
+              </Button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-gray-400">
+              PNG, JPG o WebP. Maximo 1.5 MB.
+            </p>
+          </div>
         </div>
       </Card>
 

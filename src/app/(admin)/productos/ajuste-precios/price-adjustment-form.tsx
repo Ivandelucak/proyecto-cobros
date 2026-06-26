@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { BarcodeFeedback } from "@/components/barcode/barcode-feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
+import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
 import { formatARS } from "@/lib/money";
 import {
   confirmPriceAdjustmentAction,
@@ -18,7 +20,13 @@ type CategoryOption = {
 
 const initialState: PriceAdjustmentState = {};
 
-export function PriceAdjustmentForm({ categories }: { categories: CategoryOption[] }) {
+export function PriceAdjustmentForm({
+  categories,
+  brands
+}: {
+  categories: CategoryOption[];
+  brands: string[];
+}) {
   const [previewState, previewAction, previewPending] = useActionState(
     previewPriceAdjustmentAction,
     initialState
@@ -27,7 +35,17 @@ export function PriceAdjustmentForm({ categories }: { categories: CategoryOption
     confirmPriceAdjustmentAction,
     initialState
   );
+  const [search, setSearch] = useState("");
+  const [scannedCode, setScannedCode] = useState("");
   const state = confirmState.success || confirmState.error ? confirmState : previewState;
+
+  useBarcodeScanner({
+    preventDefaultOnScan: true,
+    onScan: (code) => {
+      setSearch(code);
+      setScannedCode(code);
+    }
+  });
 
   return (
     <div className="space-y-5">
@@ -45,6 +63,42 @@ export function PriceAdjustmentForm({ categories }: { categories: CategoryOption
                 </option>
               ))}
             </Select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Marca
+            </span>
+            <Input name="brand" list="price-adjustment-brands" placeholder="Ej: Coca Cola" />
+            <datalist id="price-adjustment-brands">
+              {brands.map((brand) => (
+                <option key={brand} value={brand} />
+              ))}
+            </datalist>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Coincidencia marca
+            </span>
+            <Select name="brandMatch" defaultValue="exact">
+              <option value="exact">Exacta</option>
+              <option value="contains">Contiene</option>
+            </Select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Busqueda
+            </span>
+            <Input
+              name="search"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                if (!event.target.value.trim()) {
+                  setScannedCode("");
+                }
+              }}
+              placeholder="Nombre, SKU, codigo o marca"
+            />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -107,6 +161,17 @@ export function PriceAdjustmentForm({ categories }: { categories: CategoryOption
             </Button>
           </div>
         </form>
+        <div className="mt-4">
+          <BarcodeFeedback
+            code={scannedCode || null}
+            message={
+              scannedCode
+                ? "Codigo cargado como busqueda para previsualizar el ajuste."
+                : "Escanea un codigo para cargarlo como busqueda."
+            }
+            tone={scannedCode ? "ok" : "info"}
+          />
+        </div>
       </Card>
 
       {state.error ? (
@@ -124,20 +189,22 @@ export function PriceAdjustmentForm({ categories }: { categories: CategoryOption
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
             <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
-              Preview ({previewState.preview.length})
+              Preview ({previewState.preview.length} productos afectados)
             </h2>
             <form action={confirmAction}>
               <input type="hidden" name="payload" value={previewState.payload} />
-              <Button type="submit" variant="primary" disabled={confirmPending}>
+              <Button type="submit" variant="destructive" disabled={confirmPending}>
                 {confirmPending ? "Aplicando..." : "Confirmar ajuste"}
               </Button>
             </form>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-3 font-medium">Producto</th>
+                  <th className="px-4 py-3 font-medium">Categoria</th>
+                  <th className="px-4 py-3 font-medium">Marca</th>
                   <th className="px-4 py-3 font-medium">Actual</th>
                   <th className="px-4 py-3 font-medium">Nuevo</th>
                   <th className="px-4 py-3 font-medium">Diferencia</th>
@@ -148,6 +215,12 @@ export function PriceAdjustmentForm({ categories }: { categories: CategoryOption
                   <tr key={item.id}>
                     <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
                       {item.name}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {item.categoryName}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      {item.brand ?? "-"}
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
                       {formatARS(item.currentPrice)}

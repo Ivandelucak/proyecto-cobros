@@ -6,6 +6,8 @@ import {
   SaleStatus,
   type UnitType
 } from "@prisma/client";
+import { fallbackPaymentLabels } from "@/lib/payment-display";
+import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 
 export type ReportFilters = {
@@ -54,6 +56,7 @@ export type ReportDashboardData = {
     salesMinusPurchases: Prisma.Decimal;
   };
   paymentBreakdown: PaymentBreakdownItem[];
+  paymentLabels: Record<PaymentMethod, string>;
   dailySales: DailySalesItem[];
   topProductsByRevenue: ProductReportItem[];
   topProductsByQuantity: ProductReportItem[];
@@ -161,12 +164,7 @@ export type ReportAlert = {
 const ZERO = new Prisma.Decimal(0);
 
 export const reportPaymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  DEBIT: "Debito",
-  CREDIT: "Credito",
-  TRANSFER: "Transferencia",
-  MERCADOPAGO: "MercadoPago",
-  CURRENT_ACCOUNT: "Cuenta corriente"
+  ...fallbackPaymentLabels
 };
 
 export function buildReportFilters(input: {
@@ -224,7 +222,8 @@ export async function getReportDashboardData(
     recentSales,
     purchases,
     customerMovements,
-    accountPayments
+    accountPayments,
+    paymentMethodSettings
   ] = await Promise.all([
     prisma.sale.findMany({
       where: saleWhere,
@@ -304,8 +303,15 @@ export async function getReportDashboardData(
         createdAt: { gte: period.start, lt: period.end }
       },
       select: { amount: true }
-    })
+    }),
+    getPaymentMethodSettings()
   ]);
+  const paymentLabels = {
+    ...reportPaymentLabels,
+    ...Object.fromEntries(
+      paymentMethodSettings.map((setting) => [setting.method, setting.label])
+    )
+  } as Record<PaymentMethod, string>;
 
   const currentMetrics = summarizeSales(sales);
   const previousMetrics = summarizeSales(previousSales);
@@ -317,7 +323,11 @@ export async function getReportDashboardData(
     paidSalesCount + cancelledSalesCount > 0
       ? (cancelledSalesCount / (paidSalesCount + cancelledSalesCount)) * 100
       : 0;
-  const paymentBreakdown = buildPaymentBreakdown(sales, currentMetrics.totalSold);
+  const paymentBreakdown = buildPaymentBreakdown(
+    sales,
+    currentMetrics.totalSold,
+    paymentLabels
+  );
   const products = buildProductReports(sales);
   const categories = buildCategoryReports(products, currentMetrics.totalSold);
   const lowStockProducts = productsForAlerts
@@ -400,6 +410,7 @@ export async function getReportDashboardData(
       salesMinusPurchases: currentMetrics.totalSold.minus(purchasesTotal)
     },
     paymentBreakdown,
+    paymentLabels,
     dailySales: buildDailySales(sales, period),
     topProductsByRevenue: products.byRevenue,
     topProductsByQuantity: products.byQuantity,
@@ -478,7 +489,8 @@ function summarizeSales(
 
 function buildPaymentBreakdown(
   sales: Array<{ payments: Array<{ method: PaymentMethod; amount: Prisma.Decimal }> }>,
-  totalSold: Prisma.Decimal
+  totalSold: Prisma.Decimal,
+  paymentLabels: Record<PaymentMethod, string>
 ) {
   const totals = new Map<PaymentMethod, { total: Prisma.Decimal; count: number }>();
 
@@ -504,7 +516,7 @@ function buildPaymentBreakdown(
       const current = totals.get(method) ?? { total: ZERO, count: 0 };
       return {
         method,
-        label: reportPaymentLabels[method],
+        label: paymentLabels[method],
         total: current.total,
         count: current.count,
         percent: totalSold.gt(0) ? current.total.div(totalSold).mul(100).toNumber() : 0

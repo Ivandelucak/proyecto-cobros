@@ -44,11 +44,21 @@ export type ProductSearchResult = {
   exactProductId: string | null;
 };
 
+export type BarcodeProductResult =
+  | { status: "found"; product: CashProductResult }
+  | { status: "not_found" }
+  | { status: "inactive"; productName: string }
+  | { status: "deleted"; productName: string }
+  | { status: "out_of_stock"; productName: string };
+
 export type RegisterPaymentInput = {
   method: string;
   amount: string;
   receivedAmount?: string;
   installments?: number;
+  externalId?: string;
+  externalReference?: string;
+  providerStatus?: string;
 };
 
 export type RegisterSaleInput = {
@@ -140,6 +150,45 @@ export async function searchCashProductsAction(query: string): Promise<ProductSe
     exactProductId: exactProduct?.id ?? null,
     products: products.map(mapCashProduct)
   };
+}
+
+export async function findCashProductByBarcodeAction(
+  barcode: string
+): Promise<BarcodeProductResult> {
+  await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting();
+  const code = barcode.trim();
+
+  if (!code) {
+    return { status: "not_found" };
+  }
+
+  const product = await prisma.product.findFirst({
+    where: { barcode: code },
+    include: {
+      category: {
+        select: { name: true }
+      }
+    }
+  });
+
+  if (!product) {
+    return { status: "not_found" };
+  }
+
+  if (product.deletedAt) {
+    return { status: "deleted", productName: product.name };
+  }
+
+  if (!product.active) {
+    return { status: "inactive", productName: product.name };
+  }
+
+  if (!cashSetting.allowNegativeStock && product.stock.lte(0)) {
+    return { status: "out_of_stock", productName: product.name };
+  }
+
+  return { status: "found", product: mapCashProduct(product) };
 }
 
 export async function searchCashCustomersAction(query: string): Promise<CashCustomerResult[]> {
@@ -468,7 +517,10 @@ function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["paym
       return {
         method,
         amount,
-        receivedAmount
+        receivedAmount,
+        externalId: normalizeOptionalPaymentText(payment.externalId),
+        externalReference: normalizeOptionalPaymentText(payment.externalReference),
+        providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
       };
     }
 
@@ -476,13 +528,19 @@ function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["paym
       return {
         method,
         amount,
-        installments: Number(payment.installments ?? 1)
+        installments: Number(payment.installments ?? 1),
+        externalId: normalizeOptionalPaymentText(payment.externalId),
+        externalReference: normalizeOptionalPaymentText(payment.externalReference),
+        providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
       };
     }
 
     return {
       method,
-      amount
+      amount,
+      externalId: normalizeOptionalPaymentText(payment.externalId),
+      externalReference: normalizeOptionalPaymentText(payment.externalReference),
+      providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
     };
   });
 }
@@ -493,6 +551,11 @@ function readText(formData: FormData, key: string) {
 
 function readOptionalText(formData: FormData, key: string) {
   return readText(formData, key) || null;
+}
+
+function normalizeOptionalPaymentText(value: string | undefined) {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, 180) : undefined;
 }
 
 function getErrorMessage(error: unknown) {

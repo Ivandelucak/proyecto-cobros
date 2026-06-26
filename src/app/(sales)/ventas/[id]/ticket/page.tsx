@@ -5,6 +5,7 @@ import { getBusinessProfileOrDefault } from "@/lib/business-profile";
 import { formatDateTimeConfigured } from "@/lib/date-format";
 import { fiscalStatusLabels } from "@/lib/fiscal/fiscal-status";
 import { formatMoney } from "@/lib/money";
+import { providerStatusLabel } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getPrintSetting } from "@/lib/print-settings";
 import { buildSaleDetailHref, getSafeInternalReturnTo, isSafeInternalReturnTo } from "@/lib/return-to";
@@ -125,6 +126,17 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
 
       <article className={sheetClassName}>
         <header className="ticket-section text-center">
+          {business.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={business.logoUrl}
+              alt={business.name}
+              className={cn(
+                "mx-auto mb-2 object-contain",
+                isA4 ? "max-h-24 max-w-44" : "max-h-12 max-w-28"
+              )}
+            />
+          ) : null}
           {ticketSetting.showBusinessName ? (
             <h1 className={titleClassName}>{business.name}</h1>
           ) : null}
@@ -238,6 +250,19 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
                   ) : null}
                   {payment.method === PaymentMethod.CURRENT_ACCOUNT ? (
                     <Line label="Cuenta corriente" value="Saldo cargado al cliente" />
+                  ) : null}
+                  {payment.externalId ? (
+                    <Line label="Operacion" value={payment.externalId} />
+                  ) : null}
+                  {payment.externalReference &&
+                  payment.externalReference !== payment.externalId ? (
+                    <Line label="Referencia" value={payment.externalReference} />
+                  ) : null}
+                  {providerStatusLabel(payment.providerStatus) ? (
+                    <Line
+                      label="Estado"
+                      value={providerStatusLabel(payment.providerStatus) ?? ""}
+                    />
                   ) : null}
                 </div>
               ))}

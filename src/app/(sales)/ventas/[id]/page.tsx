@@ -11,6 +11,7 @@ import {
   fiscalStatusTone
 } from "@/lib/fiscal/fiscal-status";
 import { formatARS } from "@/lib/money";
+import { providerStatusLabel } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import {
   buildReturnToHref,
@@ -326,20 +327,40 @@ function paymentDescription(payment: {
   installments: number | null;
   surchargeRate: unknown;
   surchargeAmount: unknown;
+  externalId: string | null;
+  externalReference: string | null;
+  providerStatus: string | null;
 }) {
+  const details: string[] = [];
+
   if (payment.method === PaymentMethod.CASH && payment.receivedAmount) {
-    return `Recibido ${formatARS(payment.receivedAmount as string)} - Vuelto ${formatARS(
-      (payment.changeAmount as string) ?? 0
-    )}`;
+    details.push(
+      `Recibido ${formatARS(payment.receivedAmount as string)} - Vuelto ${formatARS(
+        (payment.changeAmount as string) ?? 0
+      )}`
+    );
   }
 
   if (payment.method === PaymentMethod.CREDIT && payment.installments) {
-    return `${payment.installments} cuota${
+    details.push(`${payment.installments} cuota${
       payment.installments > 1 ? "s" : ""
-    } - Recargo ${formatARS((payment.surchargeAmount as string) ?? 0)}`;
+    } - Recargo ${formatARS((payment.surchargeAmount as string) ?? 0)}`);
   }
 
-  return "Pago aplicado";
+  if (payment.externalId) {
+    details.push(`Operacion ${payment.externalId}`);
+  }
+
+  if (payment.externalReference && payment.externalReference !== payment.externalId) {
+    details.push(`Referencia ${payment.externalReference}`);
+  }
+
+  const status = providerStatusLabel(payment.providerStatus);
+  if (status) {
+    details.push(`Estado ${status}`);
+  }
+
+  return details.length > 0 ? details.join(" - ") : "Pago aplicado";
 }
 
 function formatQuantity(value: string, unitType: UnitType) {

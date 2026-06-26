@@ -10,8 +10,21 @@ type PaymentSettingsClient = Prisma.TransactionClient | typeof prisma;
 export type PaymentMethodSettingView = {
   method: PaymentMethod;
   label: string;
+  displayName: string;
   enabled: boolean;
   sortOrder: number;
+  instructions: string | null;
+  alias: string | null;
+  cbu: string | null;
+  cvu: string | null;
+  accountHolder: string | null;
+  accountCuit: string | null;
+  bankName: string | null;
+  qrImageDataUrl: string | null;
+  askReference: boolean;
+  defaultProviderStatus: string | null;
+  surchargeRate: string | null;
+  fixedSurcharge: string | null;
 };
 
 export type CreditInstallmentPlanView = {
@@ -27,21 +40,38 @@ export async function getPaymentMethodSettings(client: PaymentSettingsClient = p
   });
 
   if (rows.length === 0) {
-    return DEFAULT_PAYMENT_METHOD_SETTINGS.map((setting) => ({ ...setting }));
+    return DEFAULT_PAYMENT_METHOD_SETTINGS.map((setting) => ({
+      ...setting,
+      displayName: setting.label
+    }));
   }
 
   const rowsByMethod = new Map(rows.map((row) => [row.method, row]));
 
   return DEFAULT_PAYMENT_METHOD_SETTINGS.map((fallback) => {
     const row = rowsByMethod.get(fallback.method);
-    return row
-      ? {
-          method: row.method,
-          label: row.label,
-          enabled: row.enabled,
-          sortOrder: row.sortOrder
-        }
-      : { ...fallback };
+    const label = row?.label ?? fallback.label;
+
+    return {
+      method: row?.method ?? fallback.method,
+      label,
+      displayName: label,
+      enabled: row?.enabled ?? fallback.enabled,
+      sortOrder: row?.sortOrder ?? fallback.sortOrder,
+      instructions: row?.instructions ?? fallback.instructions,
+      alias: row?.alias ?? fallback.alias,
+      cbu: row?.cbu ?? fallback.cbu,
+      cvu: row?.cvu ?? fallback.cvu,
+      accountHolder: row?.accountHolder ?? fallback.accountHolder,
+      accountCuit: row?.accountCuit ?? fallback.accountCuit,
+      bankName: row?.bankName ?? fallback.bankName,
+      qrImageDataUrl: row?.qrImageDataUrl ?? fallback.qrImageDataUrl,
+      askReference: row?.askReference ?? fallback.askReference,
+      defaultProviderStatus:
+        row?.defaultProviderStatus ?? fallback.defaultProviderStatus,
+      surchargeRate: row?.surchargeRate?.toString() ?? fallback.surchargeRate,
+      fixedSurcharge: row?.fixedSurcharge?.toString() ?? fallback.fixedSurcharge
+    };
   }).sort((left, right) => left.sortOrder - right.sortOrder);
 }
 

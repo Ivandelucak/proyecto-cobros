@@ -15,6 +15,11 @@ import { prisma } from "@/lib/prisma";
 import { STOCK_SETTING_ID, parseOptionalStockDecimal } from "@/lib/stock-settings";
 import { TICKET_SETTING_ID } from "@/lib/ticket-settings";
 
+const MAX_LOGO_BYTES = 1_500_000;
+const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_PAYMENT_QR_BYTES = 2_000_000;
+const ALLOWED_PAYMENT_QR_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
 export type BusinessProfileState = {
   error?: string;
   success?: string;
@@ -56,6 +61,7 @@ export async function updateBusinessProfileAction(
       formData.get("activityStartDate"),
       "Inicio de actividades"
     );
+    const logoUrl = await resolveLogoUrl(formData);
 
     await prisma.businessProfile.upsert({
       where: { id: BUSINESS_PROFILE_ID },
@@ -73,7 +79,7 @@ export async function updateBusinessProfileAction(
         locale: readText(formData, "locale") || "es-AR",
         timezone: readText(formData, "timezone") || "America/Argentina/Buenos_Aires",
         preferredTheme: readOptionalText(formData, "preferredTheme"),
-        logoUrl: readOptionalText(formData, "logoUrl"),
+        logoUrl,
         website: readOptionalText(formData, "website"),
         generalFooterText: readOptionalText(formData, "generalFooterText")
       },
@@ -92,7 +98,7 @@ export async function updateBusinessProfileAction(
         locale: readText(formData, "locale") || "es-AR",
         timezone: readText(formData, "timezone") || "America/Argentina/Buenos_Aires",
         preferredTheme: readOptionalText(formData, "preferredTheme"),
-        logoUrl: readOptionalText(formData, "logoUrl"),
+        logoUrl,
         website: readOptionalText(formData, "website"),
         generalFooterText: readOptionalText(formData, "generalFooterText")
       }
@@ -100,6 +106,7 @@ export async function updateBusinessProfileAction(
 
     revalidatePath("/configuracion");
     revalidatePath("/ventas");
+    revalidatePath("/presupuestos");
 
     await createAuditLog({
       userId: user.id,
@@ -273,24 +280,47 @@ export async function updatePaymentSettingsAction(
   const user = await requireAdminPage();
 
   try {
-    const methodSettings = Object.values(PaymentMethod).map((method) => {
-      const fallback = DEFAULT_PAYMENT_METHOD_SETTINGS.find(
-        (setting) => setting.method === method
-      );
-      const label = readText(formData, `method-${method}-label`) || fallback?.label || method;
-      const sortOrder = readPositiveInt(
-        formData,
-        `method-${method}-sortOrder`,
-        fallback?.sortOrder ?? 0
-      );
+    const methodSettings = await Promise.all(
+      Object.values(PaymentMethod).map(async (method) => {
+        const fallback = DEFAULT_PAYMENT_METHOD_SETTINGS.find(
+          (setting) => setting.method === method
+        );
+        const label = readText(formData, `method-${method}-label`) || fallback?.label || method;
+        const sortOrder = readPositiveInt(
+          formData,
+          `method-${method}-sortOrder`,
+          fallback?.sortOrder ?? 0
+        );
 
-      return {
-        method,
-        label,
-        enabled: formData.get(`method-${method}-enabled`) === "on",
-        sortOrder
-      };
-    });
+        return {
+          method,
+          label,
+          enabled: formData.get(`method-${method}-enabled`) === "on",
+          sortOrder,
+          instructions: readOptionalText(formData, `method-${method}-instructions`),
+          alias: readOptionalText(formData, `method-${method}-alias`),
+          cbu: readOptionalText(formData, `method-${method}-cbu`),
+          cvu: readOptionalText(formData, `method-${method}-cvu`),
+          accountHolder: readOptionalText(formData, `method-${method}-accountHolder`),
+          accountCuit: readOptionalText(formData, `method-${method}-accountCuit`),
+          bankName: readOptionalText(formData, `method-${method}-bankName`),
+          qrImageDataUrl: await resolvePaymentQrImageDataUrl(formData, method),
+          askReference: formData.get(`method-${method}-askReference`) === "on",
+          defaultProviderStatus: readOptionalText(
+            formData,
+            `method-${method}-defaultProviderStatus`
+          ),
+          surchargeRate: parseOptionalDecimal(
+            formData.get(`method-${method}-surchargeRate`),
+            "El recargo porcentual"
+          ),
+          fixedSurcharge: parseOptionalDecimal(
+            formData.get(`method-${method}-fixedSurcharge`),
+            "El recargo fijo"
+          )
+        };
+      })
+    );
 
     const enabledMethods = methodSettings.filter((setting) => setting.enabled);
     if (enabledMethods.length === 0) {
@@ -359,7 +389,19 @@ export async function updatePaymentSettingsAction(
           update: {
             label: setting.label,
             enabled: setting.enabled,
-            sortOrder: setting.sortOrder
+            sortOrder: setting.sortOrder,
+            instructions: setting.instructions,
+            alias: setting.alias,
+            cbu: setting.cbu,
+            cvu: setting.cvu,
+            accountHolder: setting.accountHolder,
+            accountCuit: setting.accountCuit,
+            bankName: setting.bankName,
+            qrImageDataUrl: setting.qrImageDataUrl,
+            askReference: setting.askReference,
+            defaultProviderStatus: setting.defaultProviderStatus,
+            surchargeRate: setting.surchargeRate,
+            fixedSurcharge: setting.fixedSurcharge
           },
           create: setting
         });
@@ -403,7 +445,10 @@ export async function updatePaymentSettingsAction(
     });
 
     revalidatePath("/configuracion");
+    revalidatePath("/configuracion/pagos");
     revalidatePath("/caja");
+    revalidatePath("/ventas");
+    revalidatePath("/reportes");
 
     await createAuditLog({
       userId: user.id,
@@ -429,6 +474,93 @@ function readText(formData: FormData, key: string) {
 
 function readOptionalText(formData: FormData, key: string) {
   return readText(formData, key) || null;
+}
+
+async function resolveLogoUrl(formData: FormData) {
+  if (isChecked(formData, "removeLogo")) {
+    return null;
+  }
+
+  const file = formData.get("logoFile");
+  if (!file || typeof file === "string" || file.size === 0) {
+    return normalizeExistingLogo(readOptionalText(formData, "logoUrl"));
+  }
+
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    throw new Error("El logo debe ser PNG, JPG o WebP.");
+  }
+
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error("El logo no puede superar 1.5 MB.");
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return `data:${file.type};base64,${bytes.toString("base64")}`;
+}
+
+function normalizeExistingLogo(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (value.length > MAX_LOGO_BYTES * 2) {
+    throw new Error("El logo guardado supera el tamano permitido.");
+  }
+
+  return value;
+}
+
+async function resolvePaymentQrImageDataUrl(formData: FormData, method: PaymentMethod) {
+  if (isChecked(formData, `method-${method}-removeQr`)) {
+    return null;
+  }
+
+  const file = formData.get(`method-${method}-qrFile`);
+  if (!file || typeof file === "string" || file.size === 0) {
+    return normalizeExistingPaymentQr(
+      readOptionalText(formData, `method-${method}-qrImageDataUrl`)
+    );
+  }
+
+  if (!ALLOWED_PAYMENT_QR_TYPES.has(file.type)) {
+    throw new Error("El QR debe ser PNG, JPG o WebP.");
+  }
+
+  if (file.size > MAX_PAYMENT_QR_BYTES) {
+    throw new Error("El QR no puede superar 2 MB.");
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return `data:${file.type};base64,${bytes.toString("base64")}`;
+}
+
+function normalizeExistingPaymentQr(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (!value.startsWith("data:image/")) {
+    return null;
+  }
+
+  if (value.length > MAX_PAYMENT_QR_BYTES * 2) {
+    throw new Error("El QR guardado supera el tamano permitido.");
+  }
+
+  return value;
+}
+
+function parseOptionalDecimal(value: FormDataEntryValue | null, label: string) {
+  if (!value || typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const parsed = parseLocalizedDecimal(value).toDecimalPlaces(2);
+  if (parsed.lt(0)) {
+    throw new Error(`${label} no puede ser negativo.`);
+  }
+
+  return parsed;
 }
 
 function parseOptionalDate(value: FormDataEntryValue | null, label: string) {

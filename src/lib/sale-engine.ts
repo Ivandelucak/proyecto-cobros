@@ -14,7 +14,7 @@ import { determineFiscalRequirementForSale } from "@/lib/fiscal/fiscal-policy";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import {
   getActiveCreditInstallmentPlans,
-  getEnabledPaymentMethodSettings
+  getPaymentMethodSettings
 } from "@/lib/payment-settings";
 import { assertRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -127,24 +127,48 @@ export async function confirmSale(input: ConfirmSaleInput) {
       };
     });
 
-    const [enabledPaymentMethods, activeCreditPlans, fiscalSetting] = await Promise.all([
-      getEnabledPaymentMethodSettings(tx),
+    const [paymentMethodSettings, activeCreditPlans, fiscalSetting] = await Promise.all([
+      getPaymentMethodSettings(tx),
       getActiveCreditInstallmentPlans(tx),
       getFiscalSettingOrDefault(tx)
     ]);
+    const paymentMethodSettingsByCode = new Map(
+      paymentMethodSettings.map((setting) => [setting.method, setting])
+    );
     const enabledMethodCodes = new Set(
-      enabledPaymentMethods.map((setting) => setting.method)
+      paymentMethodSettings
+        .filter((setting) => setting.enabled)
+        .map((setting) => setting.method)
     );
 
-    for (const payment of input.payments) {
+    const validatedPayments = input.payments.map((payment) => {
       if (!enabledMethodCodes.has(payment.method)) {
         throw new Error("El medio de pago seleccionado no esta habilitado.");
       }
-    }
+
+      const setting = paymentMethodSettingsByCode.get(payment.method);
+      const reference = normalizeOptionalPaymentText(
+        payment.externalReference ?? payment.externalId
+      );
+      if (requiresServerReference(payment.method, setting?.askReference) && !reference) {
+        throw new Error("El medio de pago seleccionado requiere referencia.");
+      }
+
+      return {
+        ...payment,
+        externalId: normalizeOptionalPaymentText(payment.externalId ?? reference),
+        externalReference: normalizeOptionalPaymentText(
+          payment.externalReference ?? reference
+        ),
+        providerStatus: normalizeOptionalPaymentText(
+          payment.providerStatus ?? setting?.defaultProviderStatus ?? null
+        )
+      };
+    });
 
     const discountTotal = new Prisma.Decimal(0);
     const { paymentRecords, surchargeTotal } = buildPaymentRecords(
-      input.payments,
+      validatedPayments,
       subtotal,
       activeCreditPlans
     );
@@ -370,4 +394,22 @@ function groupSaleItems(items: SaleItemInput[]) {
     productId,
     quantity
   }));
+}
+
+function requiresServerReference(method: PaymentMethod, askReference: boolean | undefined) {
+  const methodsRequiringReference = new Set<PaymentMethod>([
+    PaymentMethod.DEBIT,
+    PaymentMethod.CREDIT,
+    PaymentMethod.TRANSFER,
+    PaymentMethod.MERCADOPAGO
+  ]);
+
+  return (
+    Boolean(askReference) && methodsRequiringReference.has(method)
+  );
+}
+
+function normalizeOptionalPaymentText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, 180) : undefined;
 }

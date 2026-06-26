@@ -15,7 +15,6 @@ import { formatARS } from "@/lib/money";
 import {
   buildReportFilters,
   getReportDashboardData,
-  reportPaymentLabels,
   type ReportAlert
 } from "@/lib/reports/report-service";
 import { formatStock } from "@/lib/stock-format";
@@ -37,7 +36,8 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
   const filters = buildReportFilters(params);
   const data = await getReportDashboardData(filters);
   const executive = data.executive;
-  const methodLabel = filters.method ? reportPaymentLabels[filters.method] : "Todos los pagos";
+  const paymentLabels = data.paymentLabels;
+  const methodLabel = filters.method ? paymentLabels[filters.method] : "Todos los pagos";
 
   return (
     <section className="space-y-5">
@@ -63,7 +63,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
             <option value="">Todos los pagos</option>
             {Object.values(PaymentMethod).map((method) => (
               <option key={method} value={method}>
-                {reportPaymentLabels[method]}
+                {paymentLabels[method]}
               </option>
             ))}
           </Select>
@@ -136,7 +136,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
         />
         <MetricCard
           label="Mejor medio"
-          value={executive.bestPaymentMethod ? reportPaymentLabels[executive.bestPaymentMethod] : "-"}
+          value={executive.bestPaymentMethod ? paymentLabels[executive.bestPaymentMethod] : "-"}
           detail="Por importe cobrado."
           compact
         />

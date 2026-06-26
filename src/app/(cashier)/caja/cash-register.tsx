@@ -9,6 +9,7 @@ import {
   type KeyboardEvent
 } from "react";
 import { Badge } from "@/components/ui/badge";
+import { BarcodeFeedback } from "@/components/barcode/barcode-feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TrashIcon } from "@/components/ui/icons";
@@ -16,7 +17,9 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { recordTicketPrintAction } from "@/app/(sales)/ventas/print-actions";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { formatARS } from "@/lib/money";
+import { providerStatusLabel } from "@/lib/payment-display";
 import type {
   CreditInstallmentPlanView,
   PaymentMethodSettingView
@@ -24,9 +27,11 @@ import type {
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import type { PrintSettingView } from "@/lib/print-settings";
 import { buildTicketHref } from "@/lib/return-to";
+import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
 import { cn } from "@/lib/ui";
 import {
   confirmRegisterSaleAction,
+  findCashProductByBarcodeAction,
   searchCashCustomersAction,
   type CashProductResult,
   type CashCustomerResult,
@@ -51,6 +56,9 @@ type PaymentEntry = {
   amount: string;
   receivedAmount?: string;
   installments?: number;
+  externalId?: string;
+  externalReference?: string;
+  providerStatus?: string;
   customerId?: string;
   customerName?: string;
 };
@@ -73,6 +81,12 @@ type SaleSuccess = {
 type Message = {
   text: string;
   tone: "ok" | "error";
+};
+
+type BarcodeMessage = {
+  code: string;
+  message: string;
+  tone: "ok" | "error" | "info";
 };
 
 type CashRegisterProps = {
@@ -130,6 +144,13 @@ export function CashRegister({
       ),
     [paymentMethods]
   );
+  const paymentSettingsByMethod = useMemo(
+    () =>
+      Object.fromEntries(
+        paymentMethods.map((method) => [method.method, method])
+      ) as Record<PaymentMethodValue, PaymentMethodSettingView | undefined>,
+    [paymentMethods]
+  );
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CashProductResult[]>([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
@@ -140,11 +161,14 @@ export function CashRegister({
     useState<PaymentMethodValue>(defaultPaymentMethod);
   const [installments, setInstallments] = useState(defaultInstallments);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
   const [cashReceived, setCashReceived] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerResults, setCustomerResults] = useState<CashCustomerResult[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<CashCustomerResult | null>(null);
   const [pendingFiscalPayments, setPendingFiscalPayments] = useState<PaymentEntry[] | null>(null);
+  const [barcodeMessage, setBarcodeMessage] = useState<BarcodeMessage | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<SaleSuccess | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -200,12 +224,23 @@ export function CashRegister({
   const quickCashAmounts = buildQuickCashAmounts(remaining);
   const compactProducts = true;
   const paymentsDisabled = cart.length === 0;
+  const selectedPaymentSetting = paymentSettingsByMethod[paymentMethod];
+  const showPaymentReference = shouldShowPaymentReference(
+    paymentMethod,
+    selectedPaymentSetting
+  );
   const projectedPaymentMethods = useMemo(
     () => buildProjectedPaymentMethods(payments, paymentMethod, remaining),
     [payments, paymentMethod, remaining]
   );
   const fiscalMode = getFiscalModeForMethods(fiscalSetting, projectedPaymentMethods);
   const willAutoFiscal = fiscalSetting.enabled && fiscalMode === "AUTO";
+
+  useBarcodeScanner({
+    enabled: !pendingFiscalPayments,
+    preventDefaultOnScan: true,
+    onScan: handleBarcodeScan
+  });
 
   useEffect(() => {
     const search = query.trim();
@@ -348,6 +383,39 @@ export function CashRegister({
     }
   }
 
+  function handleBarcodeScan(code: string) {
+    setSaleSuccess(null);
+    startTransition(async () => {
+      const result = await findCashProductByBarcodeAction(code);
+
+      if (result.status === "found") {
+        const added = addProduct(result.product);
+        if (added) {
+          setBarcodeMessage({
+            code,
+            message: `Producto encontrado: ${result.product.name}.`,
+            tone: "ok"
+          });
+        }
+        return;
+      }
+
+      const messageByStatus = {
+        not_found: "No se encontro producto con ese codigo.",
+        inactive: `El producto ${result.status === "inactive" ? result.productName : ""} esta inactivo.`,
+        deleted: `El producto ${result.status === "deleted" ? result.productName : ""} esta eliminado.`,
+        out_of_stock: `El producto ${result.status === "out_of_stock" ? result.productName : ""} no tiene stock disponible.`
+      };
+
+      setBarcodeMessage({
+        code,
+        message: messageByStatus[result.status],
+        tone: "error"
+      });
+      showMessage(messageByStatus[result.status], "error");
+    });
+  }
+
   function addProduct(product: CashProductResult) {
     setSaleSuccess(null);
     setMessage(null);
@@ -357,7 +425,7 @@ export function CashRegister({
       const nextQuantity = increaseQuantity(existing.quantity, product);
       if (!allowNegativeStock && safeNumber(nextQuantity) > safeNumber(product.stock)) {
         showMessage(`Stock insuficiente para ${product.name}.`, "error");
-        return;
+        return false;
       }
 
       setCart((currentCart) =>
@@ -371,6 +439,7 @@ export function CashRegister({
 
     clearSearch();
     inputRef.current?.focus();
+    return true;
   }
 
   function updateQuantity(productId: string, rawQuantity: string) {
@@ -440,6 +509,12 @@ export function CashRegister({
       return;
     }
 
+    const metadata = buildPaymentMetadata(paymentMethod);
+    if (!metadata.ok) {
+      showMessage(metadata.error, "error");
+      return;
+    }
+
     if (paymentMethod === "CASH") {
       const receivedAmount = roundMoney(safeNumber(cashReceived));
       if (receivedAmount <= 0) {
@@ -459,11 +534,13 @@ export function CashRegister({
           id: createPaymentId(),
           method: paymentMethod,
           amount: String(amount),
-          receivedAmount: String(receivedAmount)
+          receivedAmount: String(receivedAmount),
+          ...metadata.data
         }
       ]);
       setCashReceived("");
       setPaymentAmount("");
+      resetPaymentMetadata();
       setMessage(null);
       return;
     }
@@ -486,6 +563,7 @@ export function CashRegister({
         method: paymentMethod,
         amount: String(amount),
         installments: paymentMethod === "CREDIT" ? option?.installments : undefined,
+        ...metadata.data,
         customerId:
           paymentMethod === "CURRENT_ACCOUNT" ? selectedCustomer?.id : undefined,
         customerName:
@@ -494,6 +572,7 @@ export function CashRegister({
     ]);
     setPaymentAmount(shouldAutofillPaymentAmount(paymentMethod) ? AUTO_PAYMENT_AMOUNT : "");
     setCashReceived("");
+    resetPaymentMetadata();
     setCustomerQuery("");
     setCustomerResults([]);
     setMessage(null);
@@ -509,11 +588,13 @@ export function CashRegister({
     setCart([]);
     setPayments([]);
     setPaymentAmount("");
+    setPaymentReference("");
     setCashReceived("");
     setInstallments(defaultInstallments);
     setPaymentMethod(defaultPaymentMethod);
     setPendingFiscalPayments(null);
     setMessage(null);
+    setCopyFeedback(null);
     setSaleSuccess(null);
     clearSearch();
     inputRef.current?.focus();
@@ -584,7 +665,10 @@ export function CashRegister({
           method: payment.method,
           amount: payment.amount,
           receivedAmount: payment.receivedAmount,
-          installments: payment.method === "CREDIT" ? payment.installments : undefined
+          installments: payment.method === "CREDIT" ? payment.installments : undefined,
+          externalId: payment.externalId,
+          externalReference: payment.externalReference,
+          providerStatus: payment.providerStatus
         })),
         customerId: accountPayment?.customerId ?? null,
         fiscalInvoiceRequested: requestedFiscalInvoice
@@ -610,12 +694,14 @@ export function CashRegister({
       setCart([]);
       setPayments([]);
       setPaymentAmount("");
+      setPaymentReference("");
       setCashReceived("");
       setInstallments(defaultInstallments);
       setPaymentMethod(defaultPaymentMethod);
       setCustomerQuery("");
       setCustomerResults([]);
       setSelectedCustomer(null);
+      setCopyFeedback(null);
       clearSearch();
       if (result.suggestedProducts) {
         setSuggestedProducts(result.suggestedProducts);
@@ -691,6 +777,45 @@ export function CashRegister({
     setMessage(null);
   }
 
+  function resetPaymentMetadata() {
+    setPaymentReference("");
+    setCopyFeedback(null);
+  }
+
+  function buildPaymentMetadata(method: PaymentMethodValue):
+    | {
+        ok: true;
+        data: Pick<
+          PaymentEntry,
+          "externalId" | "externalReference" | "providerStatus"
+        >;
+      }
+    | { ok: false; error: string } {
+    const setting = paymentSettingsByMethod[method];
+    const reference = paymentReference.trim();
+
+    if (shouldShowPaymentReference(method, setting) && !reference) {
+      return {
+        ok: false,
+        error: "Ingresa la referencia o numero de operacion del pago."
+      };
+    }
+
+    return {
+      ok: true,
+      data: {
+        externalId: reference || undefined,
+        externalReference: reference || undefined,
+        providerStatus: setting?.defaultProviderStatus ?? undefined
+      }
+    };
+  }
+
+  async function copyPaymentData(label: string, value: string | null | undefined) {
+    const ok = await copyTextToClipboard(value ?? "");
+    setCopyFeedback(ok ? `${label} copiado.` : `No se pudo copiar ${label.toLowerCase()}.`);
+  }
+
   function buildFinalPayments(): FinalPaymentsResult {
     if (paymentsMatch) {
       return { ok: true, payments };
@@ -713,6 +838,10 @@ export function CashRegister({
 
   function buildAutomaticPayment(): AutomaticPaymentResult {
     const amount = roundMoney(remaining);
+    const metadata = buildPaymentMetadata(paymentMethod);
+    if (!metadata.ok) {
+      return metadata;
+    }
 
     if (paymentMethod === "CASH") {
       const receivedAmount = roundMoney(safeNumber(cashReceived));
@@ -732,7 +861,8 @@ export function CashRegister({
           id: createPaymentId(),
           method: "CASH",
           amount: String(amount),
-          receivedAmount: String(receivedAmount)
+          receivedAmount: String(receivedAmount),
+          ...metadata.data
         }
       };
     }
@@ -751,7 +881,8 @@ export function CashRegister({
           id: createPaymentId(),
           method: "CREDIT",
           amount: String(amount),
-          installments: selectedCreditOption.installments
+          installments: selectedCreditOption.installments,
+          ...metadata.data
         }
       };
     }
@@ -770,6 +901,7 @@ export function CashRegister({
           id: createPaymentId(),
           method: "CURRENT_ACCOUNT",
           amount: String(amount),
+          ...metadata.data,
           customerId: selectedCustomer.id,
           customerName: selectedCustomer.name
         }
@@ -781,7 +913,8 @@ export function CashRegister({
       payment: {
         id: createPaymentId(),
         method: paymentMethod,
-        amount: String(amount)
+        amount: String(amount),
+        ...metadata.data
       }
     };
   }
@@ -824,6 +957,14 @@ export function CashRegister({
             <Badge>Enter Agregar</Badge>
             <Badge>F4 Cobrar</Badge>
             <Badge>Esc Limpiar</Badge>
+          </div>
+
+          <div className="mt-3">
+            <BarcodeFeedback
+              code={barcodeMessage?.code ?? null}
+              message={barcodeMessage?.message ?? null}
+              tone={barcodeMessage?.tone}
+            />
           </div>
 
           {results.length > 0 ? (
@@ -1024,8 +1165,12 @@ export function CashRegister({
                       ? AUTO_PAYMENT_AMOUNT
                       : ""
                   );
+                  setPaymentReference("");
+                  setCopyFeedback(null);
                   if (nextMethod !== "CURRENT_ACCOUNT") {
                     setCustomerResults([]);
+                    setSelectedCustomer(null);
+                    setCustomerQuery("");
                   }
                 }}
               >
@@ -1036,6 +1181,14 @@ export function CashRegister({
                 ))}
               </Select>
             </label>
+
+            <PaymentMethodInfo
+              method={paymentMethod}
+              setting={selectedPaymentSetting}
+              disabled={paymentsDisabled}
+              copyFeedback={copyFeedback}
+              onCopy={copyPaymentData}
+            />
 
             {paymentMethod === "CREDIT" ? (
               <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
@@ -1066,6 +1219,23 @@ export function CashRegister({
                   </p>
                 </div>
               </div>
+            ) : null}
+
+            {showPaymentReference ? (
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Referencia / operacion
+                </span>
+                <Input
+                  value={paymentReference}
+                  disabled={paymentsDisabled}
+                  onChange={(event) => setPaymentReference(event.target.value)}
+                  placeholder="Numero de operacion, cupon o autorizacion"
+                />
+                <span className="block text-xs text-amber-700 dark:text-amber-200">
+                  Este medio requiere referencia para finalizar el pago.
+                </span>
+              </label>
             ) : null}
 
             {paymentMethod === "CURRENT_ACCOUNT" ? (
@@ -1273,15 +1443,7 @@ export function CashRegister({
                       {paymentLabels[payment.method]} {formatARS(payment.amount)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {payment.method === "CASH" && payment.receivedAmount
-                        ? `Recibido ${formatARS(payment.receivedAmount)}`
-                        : payment.method === "CREDIT" && payment.installments
-                          ? `${payment.installments} cuota${
-                              payment.installments > 1 ? "s" : ""
-                            }`
-                          : payment.method === "CURRENT_ACCOUNT" && payment.customerName
-                            ? payment.customerName
-                          : "Pago aplicado"}
+                      {paymentEntryDescription(payment)}
                     </p>
                   </div>
                   <Button
@@ -1418,6 +1580,160 @@ export function CashRegister({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function PaymentMethodInfo({
+  method,
+  setting,
+  disabled,
+  copyFeedback,
+  onCopy
+}: {
+  method: PaymentMethodValue;
+  setting: PaymentMethodSettingView | undefined;
+  disabled: boolean;
+  copyFeedback: string | null;
+  onCopy: (label: string, value: string | null | undefined) => void;
+}) {
+  if (!setting) {
+    return null;
+  }
+
+  const hasAccountData = Boolean(
+    setting.alias ||
+      setting.cbu ||
+      setting.cvu ||
+      setting.accountHolder ||
+      setting.bankName ||
+      setting.qrImageDataUrl
+  );
+  const statusLabel = providerStatusLabel(setting.defaultProviderStatus);
+  const shouldRender =
+    hasAccountData ||
+    setting.instructions ||
+    statusLabel ||
+    ["DEBIT", "CREDIT", "TRANSFER", "MERCADOPAGO", "CURRENT_ACCOUNT"].includes(method);
+
+  if (!shouldRender) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-gray-950 dark:text-gray-50">
+            {setting.displayName}
+          </p>
+          {statusLabel ? (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Estado sugerido: {statusLabel}
+            </p>
+          ) : null}
+        </div>
+        {method === "MERCADOPAGO" && setting.qrImageDataUrl ? (
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white p-1 dark:border-neutral-800 dark:bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={setting.qrImageDataUrl}
+              alt="QR Mercado Pago"
+              className="h-full w-full object-contain"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-2">
+        {setting.bankName ? <PaymentDataLine label="Banco" value={setting.bankName} /> : null}
+        {setting.accountHolder ? (
+          <PaymentDataLine label="Titular" value={setting.accountHolder} />
+        ) : null}
+        {setting.alias ? (
+          <PaymentCopyLine
+            label="Alias"
+            value={setting.alias}
+            disabled={disabled}
+            onCopy={onCopy}
+          />
+        ) : null}
+        {setting.cvu ? (
+          <PaymentCopyLine
+            label="CVU"
+            value={setting.cvu}
+            disabled={disabled}
+            onCopy={onCopy}
+          />
+        ) : null}
+        {setting.cbu ? (
+          <PaymentCopyLine
+            label="CBU"
+            value={setting.cbu}
+            disabled={disabled}
+            onCopy={onCopy}
+          />
+        ) : null}
+        {setting.accountCuit ? (
+          <PaymentDataLine label="CUIT" value={setting.accountCuit} />
+        ) : null}
+      </div>
+
+      {setting.instructions ? (
+        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-gray-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-gray-300">
+          {setting.instructions}
+        </p>
+      ) : null}
+      {copyFeedback ? (
+        <p className="text-xs font-medium text-brand-700 dark:text-brand-300">
+          {copyFeedback}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PaymentDataLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+      <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-right font-semibold text-gray-950 dark:text-gray-50">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function PaymentCopyLine({
+  label,
+  value,
+  disabled,
+  onCopy
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onCopy: (label: string, value: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {label}
+        </p>
+        <p className="truncate font-semibold text-gray-950 dark:text-gray-50">{value}</p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => onCopy(label, value)}
+      >
+        Copiar
+      </Button>
+    </div>
   );
 }
 
@@ -1642,6 +1958,41 @@ function roundQuantity(value: number) {
 
 function shouldAutofillPaymentAmount(method: PaymentMethodValue) {
   return ["MERCADOPAGO", "TRANSFER", "DEBIT", "CREDIT"].includes(method);
+}
+
+function shouldShowPaymentReference(
+  method: PaymentMethodValue,
+  setting: PaymentMethodSettingView | undefined
+) {
+  return (
+    Boolean(setting?.askReference) &&
+    ["MERCADOPAGO", "TRANSFER", "DEBIT", "CREDIT"].includes(method)
+  );
+}
+
+function paymentEntryDescription(payment: PaymentEntry) {
+  const details: string[] = [];
+
+  if (payment.method === "CASH" && payment.receivedAmount) {
+    details.push(`Recibido ${formatARS(payment.receivedAmount)}`);
+  } else if (payment.method === "CREDIT" && payment.installments) {
+    details.push(
+      `${payment.installments} cuota${payment.installments > 1 ? "s" : ""}`
+    );
+  } else if (payment.method === "CURRENT_ACCOUNT" && payment.customerName) {
+    details.push(payment.customerName);
+  }
+
+  if (payment.externalReference) {
+    details.push(`Ref. ${payment.externalReference}`);
+  }
+
+  const status = providerStatusLabel(payment.providerStatus);
+  if (status) {
+    details.push(status);
+  }
+
+  return details.length > 0 ? details.join(" - ") : "Pago aplicado";
 }
 
 function buildProjectedPaymentMethods(

@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
+import { BarcodeFeedback } from "@/components/barcode/barcode-feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
-import type { ProductFormState } from "./actions";
+import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
+import { checkProductBarcodeAction, type ProductFormState } from "./actions";
 
 type CategoryOption = {
   id: string;
@@ -35,6 +37,7 @@ type ProductFormProps = {
   action: (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   categories: CategoryOption[];
   initialValues?: ProductFormValues;
+  productId?: string;
   submitLabel: string;
 };
 
@@ -67,9 +70,17 @@ export function ProductForm({
   action,
   categories,
   initialValues,
+  productId,
   submitLabel
 }: ProductFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [isCheckingBarcode, startCheckingBarcode] = useTransition();
+  const [barcode, setBarcode] = useState(initialValues?.barcode ?? "");
+  const [barcodeNotice, setBarcodeNotice] = useState<{
+    message: string;
+    tone: "ok" | "error" | "info";
+    productId?: string;
+  } | null>(null);
   const [unitType, setUnitType] = useState(initialValues?.unitType ?? "UNIT");
   const [allowsDecimal, setAllowsDecimal] = useState(
     Boolean(initialValues?.allowsDecimalQuantity)
@@ -83,6 +94,52 @@ export function ProductForm({
       setAllowsDecimal(true);
     }
   }
+
+  function verifyBarcode(value: string) {
+    const code = value.trim();
+    if (!code) {
+      setBarcodeNotice(null);
+      return;
+    }
+
+    startCheckingBarcode(async () => {
+      const result = await checkProductBarcodeAction(code, productId);
+      if (result.status === "available") {
+        setBarcodeNotice({
+          message: "Codigo disponible.",
+          tone: "ok"
+        });
+        return;
+      }
+
+      if (result.status === "current") {
+        setBarcodeNotice({
+          message: "Es el codigo actual de este producto.",
+          tone: "info"
+        });
+        return;
+      }
+
+      const stateLabel = result.product.deletedAt
+        ? "eliminado"
+        : result.product.active
+          ? "activo"
+          : "inactivo";
+      setBarcodeNotice({
+        message: `Codigo ya existe en otro producto: ${result.product.name} (${stateLabel}).`,
+        tone: "error",
+        productId: result.product.id
+      });
+    });
+  }
+
+  useBarcodeScanner({
+    preventDefaultOnScan: true,
+    onScan: (code) => {
+      setBarcode(code);
+      verifyBarcode(code);
+    }
+  });
 
   return (
     <form action={formAction} className="space-y-5 pb-20">
@@ -114,10 +171,40 @@ export function ProductForm({
           <Field label="Codigo de barras">
             <Input
               name="barcode"
-              defaultValue={initialValues?.barcode ?? ""}
+              value={barcode}
+              onChange={(event) => {
+                const value = event.target.value;
+                setBarcode(value);
+                if (!value.trim()) {
+                  setBarcodeNotice(null);
+                }
+              }}
+              onBlur={(event) => verifyBarcode(event.target.value)}
               placeholder="Escanea o pega el codigo"
               className="h-12 text-base"
             />
+            <div className="mt-2 space-y-2">
+              <BarcodeFeedback
+                code={barcodeNotice ? barcode || null : null}
+                message={
+                  barcodeNotice
+                    ? isCheckingBarcode
+                      ? "Verificando codigo..."
+                      : barcodeNotice.message
+                    : null
+                }
+                tone={barcodeNotice?.tone}
+              />
+              {barcodeNotice?.productId ? (
+                <LinkButton
+                  href={`/productos/${barcodeNotice.productId}/editar`}
+                  size="sm"
+                  variant="outline"
+                >
+                  Abrir producto
+                </LinkButton>
+              ) : null}
+            </div>
           </Field>
           <Field label="SKU">
             <Input name="sku" defaultValue={initialValues?.sku ?? ""} />

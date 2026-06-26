@@ -11,6 +11,7 @@ import { requireAdminPage } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { formatStock, shouldUseDecimalQuantity } from "@/lib/stock-format";
 import { setProductActiveAction } from "./actions";
+import { ProductsBarcodeFilter } from "./products-barcode-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ type ProductsPageProps = {
     status?: string;
     quickAccess?: string;
     stock?: string;
+    barcode?: string;
   }>;
 };
 
@@ -33,6 +35,7 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   const status = params.status ?? "active";
   const quickAccess = params.quickAccess ?? "all";
   const stockFilter = params.stock ?? "all";
+  const barcode = params.barcode?.trim() ?? "";
 
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
@@ -47,10 +50,12 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
         ...(quickAccess === "yes" ? { quickAccess: true } : {}),
         ...(quickAccess === "no" ? { quickAccess: false } : {}),
         ...(categoryId ? { categoryId } : {}),
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q } },
+        ...(barcode
+          ? { barcode }
+          : q
+            ? {
+                OR: [
+                  { name: { contains: q } },
                 { barcode: { contains: q } },
                 { sku: { contains: q } }
               ]
@@ -134,12 +139,19 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
             Filtrar
           </Button>
         </form>
+        <div className="mt-3">
+          <ProductsBarcodeFilter scannedCode={barcode} />
+        </div>
       </Card>
 
       {visibleProducts.length === 0 ? (
         <EmptyState
           title="No hay productos para mostrar"
-          description="Ajusta los filtros o carga un nuevo producto."
+          description={
+            barcode
+              ? "No se encontro producto con ese codigo de barras."
+              : "Ajusta los filtros o carga un nuevo producto."
+          }
         />
       ) : (
         <Card className="overflow-hidden">

@@ -3,17 +3,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Select } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { formatStock } from "@/lib/stock-format";
+import { StockBarcodeFilter } from "./stock-barcode-filter";
 
 export const dynamic = "force-dynamic";
 
 type StockPageProps = {
-  searchParams: Promise<{ categoryId?: string; filter?: string }>;
+  searchParams: Promise<{ categoryId?: string; filter?: string; q?: string; barcode?: string }>;
 };
 
 export default async function StockPage({ searchParams }: StockPageProps) {
@@ -22,6 +23,8 @@ export default async function StockPage({ searchParams }: StockPageProps) {
   const params = await searchParams;
   const categoryId = params.categoryId ?? "";
   const filter = params.filter ?? "low";
+  const q = params.q?.trim() ?? "";
+  const barcode = params.barcode?.trim() ?? "";
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
       orderBy: { name: "asc" },
@@ -31,7 +34,19 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       where: {
         active: true,
         deletedAt: null,
-        ...(categoryId ? { categoryId } : {})
+        ...(categoryId ? { categoryId } : {}),
+        ...(barcode
+          ? { barcode }
+          : q
+            ? {
+                OR: [
+                  { name: { contains: q } },
+                  { barcode: { contains: q } },
+                  { sku: { contains: q } },
+                  { brand: { contains: q } }
+                ]
+              }
+            : {})
       },
       include: { category: { select: { name: true } } },
       orderBy: { stock: "asc" }
@@ -61,7 +76,8 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       />
 
       <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-[minmax(180px,220px)_180px_auto]">
+        <form className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(180px,220px)_180px_auto]">
+          <Input name="q" defaultValue={q} placeholder="Producto, SKU o codigo" />
           <Select name="categoryId" defaultValue={categoryId}>
             <option value="">Todas las categorias</option>
             {categories.map((category) => (
@@ -79,10 +95,20 @@ export default async function StockPage({ searchParams }: StockPageProps) {
             Filtrar
           </Button>
         </form>
+        <div className="mt-3">
+          <StockBarcodeFilter scannedCode={barcode} />
+        </div>
       </Card>
 
       {visibleProducts.length === 0 ? (
-        <EmptyState title="Sin alertas de stock" description="No hay productos para el filtro seleccionado." />
+        <EmptyState
+          title="Sin alertas de stock"
+          description={
+            barcode
+              ? "No se encontro producto con ese codigo."
+              : "No hay productos para el filtro seleccionado."
+          }
+        />
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">

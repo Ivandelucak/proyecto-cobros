@@ -36,6 +36,7 @@ export default async function EditarProductoPage({ params }: EditarProductoPageP
       <ProductForm
         action={updateProductAction.bind(null, product.id)}
         categories={categories}
+        productId={product.id}
         submitLabel="Guardar cambios"
         initialValues={{
           name: product.name,
