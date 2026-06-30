@@ -20,7 +20,7 @@ export function CustomerPaymentForm({ customerId }: { customerId: string }) {
 
   return (
     <Card className="p-5">
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
         Registrar pago
       </h2>
       <form action={formAction} className="mt-4 space-y-3">
@@ -50,10 +50,10 @@ export function CustomerAdjustmentForm({ customerId }: { customerId: string }) {
 
   return (
     <Card className="p-5">
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
         Ajustar saldo
       </h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
         Usa monto positivo para aumentar deuda o negativo para reducirla.
       </p>
       <form action={formAction} className="mt-4 space-y-3">
@@ -78,7 +78,7 @@ function StateMessage({ state }: { state: CustomerFormState }) {
       className={
         state.error
           ? "mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+          : "mt-3 rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
       {state.error ?? state.success}

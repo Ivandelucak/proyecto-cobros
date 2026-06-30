@@ -1,6 +1,12 @@
 "use server";
 
-import { BusinessType, PaymentMethod } from "@prisma/client";
+import {
+  BusinessType,
+  MercadoPagoEnvironment,
+  MercadoPagoOperationMode,
+  PaymentMethod,
+  Prisma
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { createAuditLog } from "@/lib/audit-log";
@@ -11,6 +17,17 @@ import {
 } from "@/lib/cash-register-settings";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { DEFAULT_PAYMENT_METHOD_SETTINGS } from "@/lib/payment-options";
+import {
+  testMercadoPagoAccessToken,
+  testMercadoPagoAccountConnection
+} from "@/lib/mercadopago/mercado-pago-status";
+import {
+  MercadoPagoPosSetupError,
+  type MercadoPagoPosSetupStep,
+  setupMercadoPagoStoreAndPos,
+  testMercadoPagoPosSetup,
+  type MercadoPagoPosSetupInput
+} from "@/lib/mercadopago/mercado-pago-pos";
 import { prisma } from "@/lib/prisma";
 import { STOCK_SETTING_ID, parseOptionalStockDecimal } from "@/lib/stock-settings";
 import { TICKET_SETTING_ID } from "@/lib/ticket-settings";
@@ -317,10 +334,15 @@ export async function updatePaymentSettingsAction(
           fixedSurcharge: parseOptionalDecimal(
             formData.get(`method-${method}-fixedSurcharge`),
             "El recargo fijo"
-          )
+          ),
+          mercadoPagoMode:
+            method === PaymentMethod.MERCADOPAGO
+              ? parseMercadoPagoMode(formData.get(`method-${method}-mercadoPagoMode`))
+              : MercadoPagoOperationMode.MANUAL
         };
       })
     );
+    const mercadoPagoAccounts = parseMercadoPagoAccounts(formData);
 
     const enabledMethods = methodSettings.filter((setting) => setting.enabled);
     if (enabledMethods.length === 0) {
@@ -401,11 +423,14 @@ export async function updatePaymentSettingsAction(
             askReference: setting.askReference,
             defaultProviderStatus: setting.defaultProviderStatus,
             surchargeRate: setting.surchargeRate,
-            fixedSurcharge: setting.fixedSurcharge
+            fixedSurcharge: setting.fixedSurcharge,
+            mercadoPagoMode: setting.mercadoPagoMode
           },
           create: setting
         });
       }
+
+      await saveMercadoPagoAccounts(tx, mercadoPagoAccounts);
 
       for (const plan of planInputs) {
         const data = {
@@ -468,12 +493,373 @@ export async function updatePaymentSettingsAction(
   }
 }
 
+export async function testMercadoPagoAccountAction(accountId: string) {
+  await requireAdminPage();
+
+  try {
+    const result = await testMercadoPagoAccountConnection(accountId);
+    if (result.collectorId) {
+      await prisma.mercadoPagoAccount.update({
+        where: { id: accountId },
+        data: { collectorId: result.collectorId }
+      });
+    }
+    revalidatePath("/configuracion");
+    revalidatePath("/configuracion/pagos");
+    return result;
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo probar la conexion Mercado Pago."
+    };
+  }
+}
+
+export async function testMercadoPagoAccessTokenAction(accessToken: string) {
+  await requireAdminPage();
+
+  try {
+    return await testMercadoPagoAccessToken(accessToken);
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo probar la conexion Mercado Pago.",
+      collectorId: null,
+      nickname: null,
+      email: null,
+      testedAt: new Date().toISOString()
+    };
+  }
+}
+
+export type MercadoPagoPosSetupActionInput = MercadoPagoPosSetupInput;
+
+export async function setupMercadoPagoPosAction(
+  accountId: string,
+  input: MercadoPagoPosSetupActionInput
+) {
+  const user = await requireAdminPage();
+
+  try {
+    const result = await setupMercadoPagoStoreAndPos(accountId, input);
+    await createAuditLog({
+      userId: user.id,
+      action: "MERCADOPAGO_POS_SETUP",
+      entity: "MercadoPagoAccount",
+      entityId: accountId,
+      description: "Configuro sucursal y caja Mercado Pago.",
+      metadata: {
+        externalStoreId: result.externalStoreId,
+        externalPosId: result.externalPosId,
+        status: result.status
+      }
+    });
+    revalidatePath("/configuracion");
+    revalidatePath("/configuracion/pagos");
+    return result;
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo configurar la caja Mercado Pago.",
+      status: "ERROR" as const,
+      storeId: getStepStoreId(error),
+      externalStoreId: getStepExternalStoreId(error) ?? input.externalStoreId,
+      storeName: input.storeName,
+      posId: getStepPosId(error),
+      externalPosId: input.externalPosId,
+      posName: input.posName,
+      steps: getMercadoPagoPosSteps(error),
+      technicalDetail: formatMercadoPagoPosTechnicalDetail(error)
+    };
+  }
+}
+
+export async function testMercadoPagoPosAction(
+  accountId: string,
+  input: Pick<MercadoPagoPosSetupActionInput, "externalStoreId" | "externalPosId">
+) {
+  const user = await requireAdminPage();
+
+  try {
+    const result = await testMercadoPagoPosSetup(accountId, input);
+    await createAuditLog({
+      userId: user.id,
+      action: "MERCADOPAGO_POS_TEST",
+      entity: "MercadoPagoAccount",
+      entityId: accountId,
+      description: "Probo caja Mercado Pago.",
+      metadata: {
+        externalStoreId: result.externalStoreId,
+        externalPosId: result.externalPosId,
+        status: result.status
+      }
+    });
+    revalidatePath("/configuracion");
+    revalidatePath("/configuracion/pagos");
+    return result;
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "No se pudo probar la caja Mercado Pago.",
+      status: "ERROR" as const,
+      storeId: getStepStoreId(error),
+      externalStoreId: input.externalStoreId,
+      storeName: "",
+      posId: getStepPosId(error),
+      externalPosId: input.externalPosId,
+      posName: "",
+      steps: getMercadoPagoPosSteps(error),
+      technicalDetail: formatMercadoPagoPosTechnicalDetail(error)
+    };
+  }
+}
+
+function formatMercadoPagoPosTechnicalDetail(error: unknown) {
+  if (error instanceof MercadoPagoPosSetupError) {
+    return error.technicalDetail;
+  }
+
+  if (error instanceof Error) {
+    return JSON.stringify({ message: error.message }, null, 2);
+  }
+
+  return null;
+}
+
+function getMercadoPagoPosSteps(error: unknown): MercadoPagoPosSetupStep[] {
+  return error instanceof MercadoPagoPosSetupError ? error.steps : [];
+}
+
+function getStepStoreId(error: unknown) {
+  return getMercadoPagoPosSteps(error)
+    .slice()
+    .reverse()
+    .find((step) => step.storeId)?.storeId ?? null;
+}
+
+function getStepExternalStoreId(error: unknown) {
+  return getMercadoPagoPosSteps(error)
+    .slice()
+    .reverse()
+    .find((step) => step.externalStoreId)?.externalStoreId ?? null;
+}
+
+function getStepPosId(error: unknown) {
+  return getMercadoPagoPosSteps(error)
+    .slice()
+    .reverse()
+    .find((step) => step.posId)?.posId ?? null;
+}
+
+type MercadoPagoAccountInput = {
+  id: string | null;
+  name: string;
+  enabled: boolean;
+  environment: MercadoPagoEnvironment;
+  accessToken: string | null;
+  publicKey: string | null;
+  collectorId: string | null;
+  externalPosId: string | null;
+  defaultAccount: boolean;
+  instructions: string | null;
+  enableAmountMatching: boolean;
+  amountMatchingWindowMinutes: number;
+  amountMatchingTolerance: Prisma.Decimal;
+  amountMatchingAutoApprove: boolean;
+  amountMatchingPollSeconds: number;
+  showRecentMovements: boolean;
+  deleteAccount: boolean;
+};
+
+function parseMercadoPagoAccounts(formData: FormData): MercadoPagoAccountInput[] {
+  const defaultAccountValue = readText(formData, "mpDefaultAccount");
+  const accounts = formData.getAll("mpAccountId").map((rawId) => {
+    const id = String(rawId);
+    return parseMercadoPagoAccountInput(formData, id, defaultAccountValue === id);
+  });
+
+  const newName = readText(formData, "newMp-name");
+  const newToken = readText(formData, "newMp-accessToken");
+  if (newName || newToken) {
+    accounts.push(parseMercadoPagoAccountInput(formData, "new", defaultAccountValue === "new"));
+  }
+
+  return accounts;
+}
+
+function parseMercadoPagoAccountInput(
+  formData: FormData,
+  id: string,
+  defaultAccount: boolean
+): MercadoPagoAccountInput {
+  const prefix = id === "new" ? "newMp" : `mp-${id}`;
+  const environment = readText(formData, `${prefix}-environment`);
+
+  if (!Object.values(MercadoPagoEnvironment).includes(environment as MercadoPagoEnvironment)) {
+    throw new Error("Entorno Mercado Pago invalido.");
+  }
+
+  const windowMinutes = readPositiveInt(
+    formData,
+    `${prefix}-amountMatchingWindowMinutes`,
+    10
+  );
+  const pollSeconds = readPositiveInt(
+    formData,
+    `${prefix}-amountMatchingPollSeconds`,
+    20
+  );
+
+  return {
+    id: id === "new" ? null : id,
+    name: readText(formData, `${prefix}-name`),
+    enabled: isChecked(formData, `${prefix}-enabled`),
+    environment: environment as MercadoPagoEnvironment,
+    accessToken: readOptionalText(formData, `${prefix}-accessToken`),
+    publicKey: readOptionalText(formData, `${prefix}-publicKey`),
+    collectorId: readOptionalText(formData, `${prefix}-collectorId`),
+    externalPosId: parseOptionalMercadoPagoExternalId(
+      formData,
+      `${prefix}-externalPosId`,
+      "External POS ID"
+    ),
+    defaultAccount,
+    instructions: readOptionalText(formData, `${prefix}-instructions`),
+    enableAmountMatching: isChecked(formData, `${prefix}-enableAmountMatching`),
+    amountMatchingWindowMinutes: Math.max(1, Math.min(windowMinutes, 60)),
+    amountMatchingTolerance: parseOptionalDecimal(
+      formData.get(`${prefix}-amountMatchingTolerance`),
+      "La tolerancia de match"
+    ) ?? new Prisma.Decimal(0),
+    amountMatchingAutoApprove: isChecked(formData, `${prefix}-amountMatchingAutoApprove`),
+    amountMatchingPollSeconds: Math.max(15, Math.min(pollSeconds, 300)),
+    showRecentMovements: isChecked(formData, `${prefix}-showRecentMovements`),
+    deleteAccount: isChecked(formData, `${prefix}-deleteAccount`)
+  };
+}
+
+async function saveMercadoPagoAccounts(
+  tx: Prisma.TransactionClient,
+  accounts: MercadoPagoAccountInput[]
+) {
+  const activeAccountInputs = accounts.filter((account) => !account.deleteAccount);
+  const defaultCount = activeAccountInputs.filter((account) => account.defaultAccount).length;
+  if (defaultCount > 1) {
+    throw new Error("Solo una cuenta Mercado Pago puede quedar como predeterminada.");
+  }
+
+  if (defaultCount === 1) {
+    await tx.mercadoPagoAccount.updateMany({
+      where: { deletedAt: null },
+      data: { defaultAccount: false }
+    });
+  }
+
+  for (const account of accounts) {
+    if (account.id && account.deleteAccount) {
+      await tx.mercadoPagoAccount.update({
+        where: { id: account.id },
+        data: {
+          enabled: false,
+          defaultAccount: false,
+          deletedAt: new Date()
+        }
+      });
+      continue;
+    }
+
+    if (!account.name) {
+      if (account.id) {
+        throw new Error("Las cuentas Mercado Pago deben tener nombre.");
+      }
+      continue;
+    }
+
+    const data = {
+      name: account.name,
+      enabled: account.enabled,
+      environment: account.environment,
+      publicKey: account.publicKey,
+      collectorId: account.collectorId,
+      externalPosId: account.externalPosId,
+      defaultAccount: account.defaultAccount,
+      instructions: account.instructions,
+      enableAmountMatching: account.enableAmountMatching,
+      amountMatchingWindowMinutes: account.amountMatchingWindowMinutes,
+      amountMatchingTolerance: account.amountMatchingTolerance,
+      amountMatchingAutoApprove: account.amountMatchingAutoApprove,
+      amountMatchingPollSeconds: account.amountMatchingPollSeconds,
+      showRecentMovements: account.showRecentMovements,
+      deletedAt: null
+    };
+
+    if (!account.id) {
+      if (!account.accessToken) {
+        throw new Error("La nueva cuenta Mercado Pago requiere Access Token.");
+      }
+      await tx.mercadoPagoAccount.create({
+        data: {
+          ...data,
+          accessToken: account.accessToken
+        }
+      });
+      continue;
+    }
+
+    await tx.mercadoPagoAccount.update({
+      where: { id: account.id },
+      data: {
+        ...data,
+        ...(account.accessToken ? { accessToken: account.accessToken } : {})
+      }
+    });
+  }
+}
+
+function parseMercadoPagoMode(value: FormDataEntryValue | null) {
+  const mode = String(value ?? MercadoPagoOperationMode.MANUAL);
+  return Object.values(MercadoPagoOperationMode).includes(
+    mode as MercadoPagoOperationMode
+  )
+    ? (mode as MercadoPagoOperationMode)
+    : MercadoPagoOperationMode.MANUAL;
+}
+
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
 function readOptionalText(formData: FormData, key: string) {
   return readText(formData, key) || null;
+}
+
+function parseOptionalMercadoPagoExternalId(
+  formData: FormData,
+  key: string,
+  label: string
+) {
+  const value = readOptionalText(formData, key);
+  if (!value) {
+    return null;
+  }
+  const normalized = value.toUpperCase();
+  if (normalized.length > 39) {
+    throw new Error(`${label} debe tener menos de 40 caracteres.`);
+  }
+  if (!/^[A-Z0-9]+$/.test(normalized)) {
+    throw new Error(`${label} solo puede tener letras y numeros.`);
+  }
+  return normalized;
 }
 
 async function resolveLogoUrl(formData: FormData) {

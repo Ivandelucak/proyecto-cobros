@@ -149,7 +149,7 @@ export default async function FacturacionPage({
 
       <div className="grid gap-3 xl:hidden">
         {sales.length === 0 ? (
-          <Card className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          <Card className="p-4 text-center text-sm text-gray-500 dark:text-[#7F8D9A]">
             Sin ventas para el filtro seleccionado.
           </Card>
         ) : (
@@ -174,14 +174,14 @@ export default async function FacturacionPage({
               <Card key={sale.id} className="p-3 transition-transform duration-150 hover:-translate-y-0.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-950 dark:text-gray-50">
+                    <p className="truncate text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                       #{sale.saleNumber} · {paymentLabel || "Sin pago"}
                     </p>
-                    <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+                    <p className="mt-1 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
                       {customer} · {formatDateTimeStable(sale.createdAt)}
                     </p>
                   </div>
-                  <p className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-950 dark:text-gray-50">
+                  <p className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(sale.total)}
                   </p>
                 </div>
@@ -194,7 +194,7 @@ export default async function FacturacionPage({
                     {pendingAgeLabel(sale)}
                   </Badge>
                   {sale.fiscalDocument ? (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                       {sale.fiscalDocument.letter}
                       {sale.fiscalDocument.pointOfSale
                         ? ` PV ${sale.fiscalDocument.pointOfSale}`
@@ -225,7 +225,7 @@ export default async function FacturacionPage({
       <Card className="hidden overflow-hidden xl:block">
         <div className="overflow-x-auto">
           <table className={`${styles.fiscalTable} w-full min-w-[1080px] text-left text-sm`}>
-            <thead className="border-b border-gray-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+            <thead className="border-b border-gray-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
               <tr>
                 <th className="px-4 py-3 font-medium">Venta</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
@@ -262,19 +262,19 @@ export default async function FacturacionPage({
                       key={sale.id}
                       className="transition-colors duration-150 hover:bg-slate-50/80 dark:hover:bg-neutral-800/50"
                     >
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         #{sale.saleNumber}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {formatDateTimeStable(sale.createdAt)}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {sale.customer?.name ?? sale.fiscalCustomerNameSnapshot ?? "Consumidor final"}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {sale.payments.map((payment) => paymentMethodLabel(payment.method)).join(" + ")}
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(sale.total)}
                       </td>
                       <td className="px-4 py-3">
@@ -338,10 +338,10 @@ function Metric({
   return (
     <Card className="p-4 transition-transform duration-150 hover:-translate-y-0.5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">{label}</p>
         <span className={`h-2 w-2 rounded-full ${toneClass}`} aria-hidden="true" />
       </div>
-      <p className="mt-2 text-2xl font-bold text-gray-950 dark:text-gray-50">
+      <p className="mt-2 text-2xl font-bold text-gray-950 dark:text-[#F3F7FA]">
         {value}
       </p>
     </Card>

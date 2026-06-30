@@ -21,11 +21,11 @@ export function ReportSection({
 }: ReportSectionProps) {
   return (
     <Card className={cn("min-w-0 overflow-hidden", className)}>
-      <div className="flex min-w-0 flex-col gap-3 border-b border-slate-200 px-4 py-4 dark:border-neutral-800 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-3 border-b border-slate-200 px-4 py-4 dark:border-[#273342] sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-gray-950 dark:text-gray-50">{title}</h2>
+          <h2 className="text-sm font-bold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
           {description ? (
-            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-gray-400">
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-[#7F8D9A]">
               {description}
             </p>
           ) : null}

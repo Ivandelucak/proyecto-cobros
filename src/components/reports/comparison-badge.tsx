@@ -24,11 +24,11 @@ export function ComparisonBadge({ comparison, compact = false }: ComparisonBadge
 
 const tones = {
   green:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200",
+    "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]",
   red:
     "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200",
   gray:
-    "border-slate-200 bg-slate-50 text-slate-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-200"
+    "border-slate-200 bg-slate-50 text-slate-700 dark:border-[#344457] dark:bg-[#273342] dark:text-[#A9B6C2]"
 };
 
 function getTone(direction: Comparison["direction"]) {

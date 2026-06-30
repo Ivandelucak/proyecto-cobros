@@ -8,17 +8,17 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variants = {
   primary:
-    "border-brand-600 bg-brand-600 text-white shadow-brand-700/15 hover:border-brand-700 hover:bg-brand-700 hover:shadow-md hover:shadow-brand-600/15 active:scale-[0.98] dark:border-brand-500 dark:bg-brand-600 dark:hover:bg-brand-500",
+    "btn-primary shadow-[0_10px_24px_rgba(46,91,122,0.22)] hover:shadow-[0_14px_30px_rgba(46,91,122,0.28)] active:scale-[0.97]",
   secondary:
-    "border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.98] dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 dark:hover:shadow-none",
+    "btn-secondary hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.98] dark:hover:shadow-none",
   outline:
-    "border-slate-300 bg-transparent text-slate-800 hover:border-brand-300 hover:bg-brand-50/60 hover:text-brand-800 active:scale-[0.98] dark:border-neutral-700 dark:text-gray-100 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-100",
+    "border-[color:var(--panel-border)] bg-transparent text-[var(--text-primary)] hover:border-[color:var(--panel-border-strong)] hover:bg-[var(--primary-soft)] hover:text-[var(--text-primary)] active:scale-[0.98]",
   ghost:
-    "border-transparent bg-transparent text-slate-700 shadow-none hover:bg-slate-100 hover:text-slate-950 active:scale-[0.98] dark:text-gray-200 dark:hover:bg-neutral-800 dark:hover:text-white",
+    "btn-ghost shadow-none active:scale-[0.98]",
   danger:
-    "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100 hover:shadow-md hover:shadow-red-700/10 active:scale-[0.98] dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950 dark:hover:shadow-none",
+    "btn-danger hover:shadow-md hover:shadow-[#C94E4E]/10 active:scale-[0.98] dark:hover:shadow-none",
   destructive:
-    "border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100 hover:shadow-md hover:shadow-red-700/10 active:scale-[0.98] dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950 dark:hover:shadow-none"
+    "btn-danger hover:shadow-md hover:shadow-[#C94E4E]/10 active:scale-[0.98] dark:hover:shadow-none"
 };
 
 const sizes = {
@@ -37,7 +37,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none disabled:transform-none dark:focus-visible:ring-offset-neutral-950",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-65 disabled:shadow-none disabled:transform-none dark:focus-visible:ring-offset-[#0B1015]",
         variants[variant],
         sizes[size],
         className

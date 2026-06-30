@@ -1,15 +1,18 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   useTransition,
-  type KeyboardEvent
+  type KeyboardEvent,
+  type ReactNode
 } from "react";
 import { Badge } from "@/components/ui/badge";
 import { BarcodeFeedback } from "@/components/barcode/barcode-feedback";
+import { MercadoPagoQrModal } from "@/components/payments/mercado-pago-qr-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TrashIcon } from "@/components/ui/icons";
@@ -18,6 +21,11 @@ import { LinkButton } from "@/components/ui/link-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { recordTicketPrintAction } from "@/app/(sales)/ventas/print-actions";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import type {
+  MercadoPagoAccountView,
+  MercadoPagoAttemptView,
+  MercadoPagoMovementView
+} from "@/lib/mercadopago/mercado-pago-types";
 import { formatARS } from "@/lib/money";
 import { providerStatusLabel } from "@/lib/payment-display";
 import type {
@@ -30,12 +38,18 @@ import { buildTicketHref } from "@/lib/return-to";
 import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
 import { cn } from "@/lib/ui";
 import {
+  associateMercadoPagoPaymentAction,
+  cancelMercadoPagoAttemptAction,
   confirmRegisterSaleAction,
+  createMercadoPagoQrAttemptAction,
+  findMercadoPagoAmountMatchesAction,
   findCashProductByBarcodeAction,
+  refreshMercadoPagoAttemptStatusAction,
   searchCashCustomersAction,
   type CashProductResult,
   type CashCustomerResult,
-  searchCashProductsAction
+  searchCashProductsAction,
+  searchRecentMercadoPagoPaymentsAction
 } from "./actions";
 
 type CartItem = CashProductResult & {
@@ -59,6 +73,9 @@ type PaymentEntry = {
   externalId?: string;
   externalReference?: string;
   providerStatus?: string;
+  paymentAttemptId?: string;
+  mercadoPagoAccountName?: string;
+  mercadoPagoOrigin?: string;
   customerId?: string;
   customerName?: string;
 };
@@ -95,6 +112,7 @@ type CashRegisterProps = {
   creditPlans: CreditInstallmentPlanView[];
   printSetting: PrintSettingView;
   fiscalSetting: FiscalSettingView;
+  mercadoPagoAccounts: MercadoPagoAccountView[];
   canAccessFiscalAdmin: boolean;
   allowNegativeStock: boolean;
 };
@@ -127,6 +145,7 @@ export function CashRegister({
   creditPlans,
   printSetting,
   fiscalSetting,
+  mercadoPagoAccounts,
   canAccessFiscalAdmin,
   allowNegativeStock
 }: CashRegisterProps) {
@@ -151,6 +170,10 @@ export function CashRegister({
       ) as Record<PaymentMethodValue, PaymentMethodSettingView | undefined>,
     [paymentMethods]
   );
+  const defaultMercadoPagoAccountId =
+    mercadoPagoAccounts.find((account) => account.defaultAccount)?.id ??
+    mercadoPagoAccounts[0]?.id ??
+    "";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CashProductResult[]>([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
@@ -163,6 +186,23 @@ export function CashRegister({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [cashReceived, setCashReceived] = useState("");
+  const [mercadoPagoAccountId, setMercadoPagoAccountId] = useState(
+    defaultMercadoPagoAccountId
+  );
+  const [mercadoPagoAttempt, setMercadoPagoAttempt] =
+    useState<MercadoPagoAttemptView | null>(null);
+  const [mercadoPagoMovements, setMercadoPagoMovements] = useState<
+    MercadoPagoMovementView[]
+  >([]);
+  const [mercadoPagoMessage, setMercadoPagoMessage] = useState<string | null>(null);
+  const [mercadoPagoTechnicalDetail, setMercadoPagoTechnicalDetail] = useState<
+    string | null
+  >(null);
+  const [mercadoPagoQrModalOpen, setMercadoPagoQrModalOpen] = useState(false);
+  const [mercadoPagoMovementsModalOpen, setMercadoPagoMovementsModalOpen] =
+    useState(false);
+  const [mercadoPagoMatchPollingEnabled, setMercadoPagoMatchPollingEnabled] =
+    useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerResults, setCustomerResults] = useState<CashCustomerResult[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<CashCustomerResult | null>(null);
@@ -173,6 +213,8 @@ export function CashRegister({
   const [saleSuccess, setSaleSuccess] = useState<SaleSuccess | null>(null);
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const mercadoPagoMatchSearchInFlightRef = useRef(false);
+  const mercadoPagoLastMatchSearchAtRef = useRef(0);
 
   const subtotal = useMemo(
     () =>
@@ -225,16 +267,96 @@ export function CashRegister({
   const compactProducts = true;
   const paymentsDisabled = cart.length === 0;
   const selectedPaymentSetting = paymentSettingsByMethod[paymentMethod];
-  const showPaymentReference = shouldShowPaymentReference(
-    paymentMethod,
-    selectedPaymentSetting
+  const isMercadoPagoApiMode =
+    paymentMethod === "MERCADOPAGO" &&
+    selectedPaymentSetting?.mercadoPagoMode === "API_QR";
+  const selectedMercadoPagoAccount =
+    mercadoPagoAccounts.find((account) => account.id === mercadoPagoAccountId) ??
+    mercadoPagoAccounts[0] ??
+    null;
+  const mercadoPagoPollSeconds = normalizeMercadoPagoPollSeconds(
+    selectedMercadoPagoAccount?.amountMatchingPollSeconds
   );
+  const mercadoPagoMatchCandidates = useMemo(
+    () =>
+      selectedMercadoPagoAccount
+        ? mercadoPagoMovements.filter((movement) =>
+            isMercadoPagoMovementAmountMatch({
+              movement,
+              targetAmount: remaining,
+              tolerance: selectedMercadoPagoAccount.amountMatchingTolerance
+            })
+          )
+        : [],
+    [mercadoPagoMovements, remaining, selectedMercadoPagoAccount]
+  );
+  const showPaymentReference =
+    !isMercadoPagoApiMode &&
+    shouldShowPaymentReference(paymentMethod, selectedPaymentSetting);
   const projectedPaymentMethods = useMemo(
     () => buildProjectedPaymentMethods(payments, paymentMethod, remaining),
     [payments, paymentMethod, remaining]
   );
   const fiscalMode = getFiscalModeForMethods(fiscalSetting, projectedPaymentMethods);
   const willAutoFiscal = fiscalSetting.enabled && fiscalMode === "AUTO";
+  const mercadoPagoAttemptId = mercadoPagoAttempt?.id ?? null;
+  const mercadoPagoAttemptStatus = mercadoPagoAttempt?.status ?? null;
+  const applyApprovedMercadoPagoAttempt = useCallback(
+    (attempt: MercadoPagoAttemptView) => {
+      const amount = roundMoney(safeNumber(attempt.amount));
+      if (attempt.status !== "APPROVED" || amount <= 0) {
+        return;
+      }
+
+      setPayments((currentPayments) => {
+        if (
+          currentPayments.some(
+            (payment) =>
+              payment.paymentAttemptId === attempt.id ||
+              (attempt.providerPaymentId &&
+                payment.externalId === attempt.providerPaymentId) ||
+              (!attempt.providerPaymentId &&
+                payment.externalReference === attempt.externalReference)
+          )
+        ) {
+          return currentPayments;
+        }
+
+        const applied = roundMoney(
+          currentPayments.reduce((sum, payment) => sum + safeNumber(payment.amount), 0)
+        );
+        const currentRemaining = Math.max(roundMoney(total - applied), 0);
+        if (amount > currentRemaining + 0.01) {
+          setMessage({
+            text: "El pago aprobado supera el saldo pendiente de esta venta.",
+            tone: "error"
+          });
+          return currentPayments;
+        }
+
+        setMessage({
+          text: "Pago Mercado Pago aprobado y aplicado a la venta.",
+          tone: "ok"
+        });
+        return [
+          ...currentPayments,
+          {
+            id: createPaymentId(),
+            method: "MERCADOPAGO",
+            amount: String(amount),
+            externalId: attempt.providerPaymentId ?? attempt.externalReference,
+            externalReference: attempt.externalReference,
+            providerStatus: "APPROVED",
+            paymentAttemptId: attempt.id,
+            mercadoPagoAccountName: attempt.accountName,
+            mercadoPagoOrigin:
+              attempt.origin === "AMOUNT_MATCH" ? "Match por monto" : "QR API"
+          }
+        ];
+      });
+    },
+    [total]
+  );
 
   useBarcodeScanner({
     enabled: !pendingFiscalPayments,
@@ -288,6 +410,160 @@ export function CashRegister({
       window.clearTimeout(timer);
     };
   }, [customerQuery, paymentMethod, startTransition]);
+
+  useEffect(() => {
+    if (
+      !isMercadoPagoApiMode ||
+      !mercadoPagoAttemptId ||
+      mercadoPagoAttemptStatus !== "PENDING"
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      startTransition(async () => {
+        const result = await refreshMercadoPagoAttemptStatusAction(mercadoPagoAttemptId);
+        if (!result.ok || !result.attempt) {
+          return;
+        }
+        setMercadoPagoAttempt(result.attempt);
+        setMercadoPagoMessage(getMercadoPagoAttemptMessage(result.attempt));
+        applyApprovedMercadoPagoAttempt(result.attempt);
+      });
+    }, 2500);
+
+    return () => window.clearInterval(timer);
+  }, [
+    applyApprovedMercadoPagoAttempt,
+    isMercadoPagoApiMode,
+    mercadoPagoAttemptId,
+    mercadoPagoAttemptStatus,
+    startTransition
+  ]);
+
+  useEffect(() => {
+    if (
+      !isMercadoPagoApiMode ||
+      !selectedMercadoPagoAccount?.enableAmountMatching ||
+      !mercadoPagoMatchPollingEnabled ||
+      remaining <= 0 ||
+      saleSuccess ||
+      mercadoPagoAttemptStatus === "PENDING" ||
+      mercadoPagoAttemptStatus === "APPROVED"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const runSearch = () => {
+      if (mercadoPagoMatchSearchInFlightRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - mercadoPagoLastMatchSearchAtRef.current < 5000) {
+        setMercadoPagoMessage(
+          "La busqueda se pauso para evitar consultas repetidas. Reintenta en unos segundos."
+        );
+        return;
+      }
+
+      mercadoPagoMatchSearchInFlightRef.current = true;
+      mercadoPagoLastMatchSearchAtRef.current = now;
+      setMercadoPagoMessage(
+        `Buscando coincidencias cada ${mercadoPagoPollSeconds}s...`
+      );
+
+      startTransition(async () => {
+        const result = await findMercadoPagoAmountMatchesAction({
+          accountId: selectedMercadoPagoAccount.id,
+          amount: String(roundMoney(remaining))
+        });
+
+        mercadoPagoMatchSearchInFlightRef.current = false;
+        if (cancelled) {
+          return;
+        }
+
+        if (!result.ok) {
+          setMercadoPagoMessage(
+            result.error ?? "No se pudieron consultar cobros recientes."
+          );
+          setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+          return;
+        }
+
+        setMercadoPagoMovements(result.movements);
+        setMercadoPagoTechnicalDetail(null);
+
+        if (result.movements.length === 0) {
+          setMercadoPagoMessage("Sin coincidencias recientes.");
+          return;
+        }
+
+        if (result.movements.length > 1) {
+          setMercadoPagoMessage(
+            "Hay multiples cobros por el mismo monto. Elegi manualmente."
+          );
+          setMercadoPagoMovementsModalOpen(true);
+          return;
+        }
+
+        const candidate = result.movements[0];
+        setMercadoPagoMessage("1 coincidencia encontrada.");
+        setMercadoPagoMovementsModalOpen(true);
+
+        if (
+          selectedMercadoPagoAccount.amountMatchingAutoApprove &&
+          isMercadoPagoMovementApproved(candidate) &&
+          !candidate.alreadyUsed &&
+          isMercadoPagoExactAmountMatch(candidate.amount, remaining)
+        ) {
+          const associateResult = await associateMercadoPagoPaymentAction({
+            accountId: selectedMercadoPagoAccount.id,
+            paymentId: candidate.id,
+            amount: String(roundMoney(remaining))
+          });
+          if (!associateResult.ok || !associateResult.attempt) {
+            setMercadoPagoMessage(
+              associateResult.error ?? "No se pudo asociar el pago."
+            );
+            setMercadoPagoTechnicalDetail(associateResult.technicalDetail ?? null);
+            return;
+          }
+
+          setMercadoPagoMatchPollingEnabled(false);
+          setMercadoPagoMovementsModalOpen(false);
+          setMercadoPagoAttempt(associateResult.attempt);
+          setMercadoPagoMessage("Pago Mercado Pago autoasociado y aplicado.");
+          setMercadoPagoTechnicalDetail(null);
+          applyApprovedMercadoPagoAttempt(associateResult.attempt);
+        }
+      });
+    };
+
+    runSearch();
+    const timer = window.setInterval(runSearch, mercadoPagoPollSeconds * 1000);
+
+    return () => {
+      cancelled = true;
+      mercadoPagoMatchSearchInFlightRef.current = false;
+      window.clearInterval(timer);
+    };
+  }, [
+    applyApprovedMercadoPagoAttempt,
+    isMercadoPagoApiMode,
+    mercadoPagoAttemptStatus,
+    mercadoPagoMatchPollingEnabled,
+    mercadoPagoPollSeconds,
+    remaining,
+    saleSuccess,
+    selectedMercadoPagoAccount?.amountMatchingAutoApprove,
+    selectedMercadoPagoAccount?.enableAmountMatching,
+    selectedMercadoPagoAccount?.id,
+    startTransition
+  ]);
 
   function handleQueryChange(value: string) {
     setQuery(value);
@@ -493,6 +769,11 @@ export function CashRegister({
       return;
     }
 
+    if (isMercadoPagoApiMode) {
+      showMessage("Genera un QR o asocia un pago aprobado de Mercado Pago.", "error");
+      return;
+    }
+
     if (paymentMethod === "CREDIT" && creditPayment) {
       showMessage("Solo se permite un pago con credito por venta.", "error");
       return;
@@ -578,6 +859,187 @@ export function CashRegister({
     setMessage(null);
   }
 
+  function generateMercadoPagoQr() {
+    if (!selectedMercadoPagoAccount) {
+      showMessage("Configura una cuenta Mercado Pago API activa.", "error");
+      return;
+    }
+    if (remaining <= 0) {
+      showMessage("No hay saldo pendiente para generar QR.", "error");
+      return;
+    }
+
+    setMercadoPagoMessage("Generando orden QR...");
+    setMercadoPagoTechnicalDetail(null);
+    startTransition(async () => {
+      const result = await createMercadoPagoQrAttemptAction({
+        accountId: selectedMercadoPagoAccount.id,
+        amount: String(roundMoney(remaining))
+      });
+
+      if (!result.ok) {
+        setMercadoPagoMessage(result.error ?? "No se pudo generar el QR.");
+        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+        showMessage(result.error ?? "No se pudo generar el QR.", "error");
+        return;
+      }
+
+      setMercadoPagoAttempt(result.attempt);
+      setMercadoPagoMessage(getMercadoPagoAttemptMessage(result.attempt));
+      setMercadoPagoTechnicalDetail(null);
+      setMercadoPagoQrModalOpen(true);
+      applyApprovedMercadoPagoAttempt(result.attempt);
+    });
+  }
+
+  function refreshMercadoPagoAttempt(manual = true) {
+    if (!mercadoPagoAttempt) {
+      return;
+    }
+
+    if (manual) {
+      setMercadoPagoMessage("Consultando estado en Mercado Pago...");
+    }
+    startTransition(async () => {
+      const result = await refreshMercadoPagoAttemptStatusAction(mercadoPagoAttempt.id);
+      if (!result.ok || !result.attempt) {
+        setMercadoPagoMessage(result.error ?? "No se pudo consultar Mercado Pago.");
+        return;
+      }
+      setMercadoPagoAttempt(result.attempt);
+      setMercadoPagoMessage(getMercadoPagoAttemptMessage(result.attempt));
+      applyApprovedMercadoPagoAttempt(result.attempt);
+    });
+  }
+
+  function cancelMercadoPagoQrAttempt() {
+    if (!mercadoPagoAttempt) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await cancelMercadoPagoAttemptAction(mercadoPagoAttempt.id);
+      if (!result.ok || !result.attempt) {
+        setMercadoPagoMessage(result.error ?? "No se pudo cancelar el intento.");
+        return;
+      }
+      setMercadoPagoAttempt(null);
+      setMercadoPagoQrModalOpen(false);
+      setMercadoPagoMessage("Intento Mercado Pago cancelado.");
+    });
+  }
+
+  function searchMercadoPagoMovements() {
+    if (!selectedMercadoPagoAccount) {
+      showMessage("Selecciona una cuenta Mercado Pago.", "error");
+      return;
+    }
+
+    setMercadoPagoMovementsModalOpen(true);
+    setMercadoPagoMessage("Buscando ultimos cobros Mercado Pago...");
+    setMercadoPagoTechnicalDetail(null);
+    startTransition(async () => {
+      const result = await searchRecentMercadoPagoPaymentsAction({
+        accountId: selectedMercadoPagoAccount.id,
+        minutes: selectedMercadoPagoAccount.amountMatchingWindowMinutes,
+        limit: 20
+      });
+      if (!result.ok) {
+        setMercadoPagoMessage(
+          result.error ?? "No se pudieron consultar cobros recientes."
+        );
+        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+        return;
+      }
+      setMercadoPagoMovements(result.movements);
+      setMercadoPagoTechnicalDetail(null);
+      setMercadoPagoMessage(
+        result.movements.length > 0
+          ? "Ultimos cobros detectados."
+          : "Mercado Pago no devolvio cobros para esta cuenta."
+      );
+    });
+  }
+
+  function findMercadoPagoMatches() {
+    if (!selectedMercadoPagoAccount) {
+      showMessage("Selecciona una cuenta Mercado Pago.", "error");
+      return;
+    }
+    if (remaining <= 0) {
+      showMessage("No hay saldo pendiente para matchear.", "error");
+      return;
+    }
+
+    setMercadoPagoMovementsModalOpen(true);
+    setMercadoPagoMessage("Buscando coincidencias por monto...");
+    setMercadoPagoTechnicalDetail(null);
+    startTransition(async () => {
+      const result = await findMercadoPagoAmountMatchesAction({
+        accountId: selectedMercadoPagoAccount.id,
+        amount: String(roundMoney(remaining))
+      });
+      if (!result.ok) {
+        setMercadoPagoMessage(
+          result.error ?? "Sin coincidencias por el monto pendiente."
+        );
+        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+        return;
+      }
+      setMercadoPagoMovements(result.movements);
+      setMercadoPagoTechnicalDetail(null);
+      setMercadoPagoMessage(
+        result.movements.length > 0
+          ? "Coincidencias encontradas para el saldo pendiente."
+          : "Sin coincidencias por el monto pendiente."
+      );
+    });
+  }
+
+  function associateMercadoPagoMovement(
+    movement: MercadoPagoMovementView,
+    options?: { skipConfirm?: boolean }
+  ) {
+    if (!selectedMercadoPagoAccount) {
+      return;
+    }
+
+    if (
+      !options?.skipConfirm &&
+      !window.confirm(
+        [
+          "Asociar este cobro Mercado Pago a la venta actual?",
+          `Monto: ${formatARS(movement.amount)}`,
+          `Cuenta: ${selectedMercadoPagoAccount.name}`,
+          `Pago: ${movement.id}`,
+          `Estado: ${mercadoPagoMovementStatusLabel(movement.status)}`
+        ].join("\n")
+      )
+    ) {
+      return;
+    }
+
+    setMercadoPagoMatchPollingEnabled(false);
+    setMercadoPagoTechnicalDetail(null);
+    startTransition(async () => {
+      const result = await associateMercadoPagoPaymentAction({
+        accountId: selectedMercadoPagoAccount.id,
+        paymentId: movement.id,
+        amount: String(roundMoney(remaining))
+      });
+      if (!result.ok || !result.attempt) {
+        setMercadoPagoMessage(result.error ?? "No se pudo asociar el pago.");
+        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+        return;
+      }
+      setMercadoPagoAttempt(result.attempt);
+      setMercadoPagoMovementsModalOpen(false);
+      setMercadoPagoMessage("Pago Mercado Pago asociado y aplicado.");
+      setMercadoPagoTechnicalDetail(null);
+      applyApprovedMercadoPagoAttempt(result.attempt);
+    });
+  }
+
   function removePayment(paymentId: string) {
     setPayments((currentPayments) =>
       currentPayments.filter((payment) => payment.id !== paymentId)
@@ -595,6 +1057,13 @@ export function CashRegister({
     setPendingFiscalPayments(null);
     setMessage(null);
     setCopyFeedback(null);
+    setMercadoPagoAttempt(null);
+    setMercadoPagoMovements([]);
+    setMercadoPagoMessage(null);
+    setMercadoPagoTechnicalDetail(null);
+    setMercadoPagoQrModalOpen(false);
+    setMercadoPagoMovementsModalOpen(false);
+    setMercadoPagoMatchPollingEnabled(false);
     setSaleSuccess(null);
     clearSearch();
     inputRef.current?.focus();
@@ -668,7 +1137,8 @@ export function CashRegister({
           installments: payment.method === "CREDIT" ? payment.installments : undefined,
           externalId: payment.externalId,
           externalReference: payment.externalReference,
-          providerStatus: payment.providerStatus
+          providerStatus: payment.providerStatus,
+          paymentAttemptId: payment.paymentAttemptId
         })),
         customerId: accountPayment?.customerId ?? null,
         fiscalInvoiceRequested: requestedFiscalInvoice
@@ -702,6 +1172,13 @@ export function CashRegister({
       setCustomerResults([]);
       setSelectedCustomer(null);
       setCopyFeedback(null);
+      setMercadoPagoAttempt(null);
+      setMercadoPagoMovements([]);
+      setMercadoPagoMessage(null);
+      setMercadoPagoTechnicalDetail(null);
+      setMercadoPagoQrModalOpen(false);
+      setMercadoPagoMovementsModalOpen(false);
+      setMercadoPagoMatchPollingEnabled(false);
       clearSearch();
       if (result.suggestedProducts) {
         setSuggestedProducts(result.suggestedProducts);
@@ -838,6 +1315,13 @@ export function CashRegister({
 
   function buildAutomaticPayment(): AutomaticPaymentResult {
     const amount = roundMoney(remaining);
+    if (isMercadoPagoApiMode) {
+      return {
+        ok: false,
+        error: "Mercado Pago API QR requiere un pago aprobado antes de finalizar."
+      };
+    }
+
     const metadata = buildPaymentMetadata(paymentMethod);
     if (!metadata.ok) {
       return metadata;
@@ -925,9 +1409,9 @@ export function CashRegister({
       onKeyDown={handlePanelKeyDown}
     >
       <div className="min-w-0 space-y-3 2xl:space-y-4">
-        <Card className="border-slate-300 bg-gradient-to-b from-white to-slate-50/50 p-3 shadow-lg shadow-slate-300/30 ring-1 ring-white/70 dark:bg-none dark:shadow-none dark:ring-0 2xl:p-4">
+        <Card className="pos-accent-line p-3 pl-4 shadow-lg shadow-[#5B6B79]/10 ring-1 ring-white/70 dark:shadow-none dark:ring-0 2xl:p-4 2xl:pl-5">
           <form
-            className="flex flex-col gap-2 sm:flex-row sm:gap-3"
+            className="input-base flex flex-col gap-2 rounded-lg p-2 shadow-inner shadow-[#5B6B79]/10 dark:shadow-none sm:flex-row sm:gap-3"
             onSubmit={(event) => {
               event.preventDefault();
               handleSearchSubmit();
@@ -940,23 +1424,23 @@ export function CashRegister({
               onChange={(event) => handleQueryChange(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Escanear codigo o buscar producto"
-              className="h-12 border-slate-400/80 bg-white text-base shadow-inner shadow-slate-100/70 focus:border-brand-600 focus:ring-brand-100 dark:shadow-none"
+              className="h-12 border-transparent bg-transparent text-base font-semibold shadow-none focus:border-transparent focus:ring-0 dark:bg-transparent dark:text-[#F3F7FA] dark:placeholder:text-[#7F8D9A] dark:shadow-none"
             />
             <Button
               type="submit"
               variant="primary"
               disabled={isPending || query.trim().length === 0}
-              className="shrink-0"
+              className="shrink-0 px-6"
             >
               Buscar
             </Button>
           </form>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <Badge>F1 Buscar</Badge>
-            <Badge>Enter Agregar</Badge>
-            <Badge>F4 Cobrar</Badge>
-            <Badge>Esc Limpiar</Badge>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
+            <Badge tone="blue">F1 Buscar</Badge>
+            <Badge tone="green">Enter Agregar</Badge>
+            <Badge tone="amber">F4 Cobrar</Badge>
+            <Badge tone="neutral">Esc Limpiar</Badge>
           </div>
 
           <div className="mt-3">
@@ -985,10 +1469,10 @@ export function CashRegister({
           )}
         </Card>
 
-        <Card className="overflow-hidden border-slate-300 shadow-lg shadow-slate-300/25 dark:shadow-none">
+        <Card className="overflow-hidden shadow-lg shadow-[#5B6B79]/10 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b-2 border-slate-300 bg-slate-200 text-xs uppercase tracking-wide text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Producto</th>
                   <th className="px-4 py-3 font-semibold">Cantidad</th>
@@ -997,10 +1481,10 @@ export function CashRegister({
                   <th className="px-4 py-3 text-right font-semibold">Accion</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-neutral-800">
+              <tbody className="divide-y divide-[var(--panel-border)]">
                 {cart.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-[var(--text-muted)]">
                       Agrega productos para iniciar la venta.
                     </td>
                   </tr>
@@ -1019,13 +1503,13 @@ export function CashRegister({
                     return (
                       <tr
                         key={item.id}
-                        className="transition-colors hover:bg-slate-50 dark:hover:bg-neutral-800/60"
+                        className="transition-colors hover:bg-[var(--panel-bg-elevated)]"
                       >
                         <td className="px-4 py-3.5">
-                          <div className="font-medium text-gray-950 dark:text-gray-50">
+                          <div className="font-medium text-[var(--text-primary)]">
                             {item.name}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="text-xs text-[var(--text-muted)]">
                             {item.categoryName} - {formatStock(item.stock, item.unitType)}
                           </div>
                         </td>
@@ -1055,26 +1539,26 @@ export function CashRegister({
                             >
                               +
                             </Button>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs text-[var(--text-muted)]">
                               {unitLabel(item.unitType)}
                             </span>
                           </div>
                           {invalid ? (
-                            <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                            <p className="mt-1 text-xs text-[var(--danger)]">
                               {stockExceeded
                                 ? "Supera el stock disponible."
                                 : "Cantidad invalida."}
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-gray-200">{formatARS(item.salePrice)}</td>
-                        <td className="px-4 py-3.5 font-semibold text-slate-900 dark:text-gray-50">
+                        <td className="px-4 py-3.5 font-medium text-[var(--text-secondary)]">{formatARS(item.salePrice)}</td>
+                        <td className="px-4 py-3.5 font-semibold text-[var(--text-primary)]">
                           {formatARS(subtotalItem)}
                         </td>
                         <td className="px-4 py-3.5 text-right">
                           <button
                             type="button"
-                            className="inline-flex h-9 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-colors duration-150 hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:shadow dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300 dark:shadow-none dark:hover:border-red-900/50 dark:hover:bg-red-950/35 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                            className="btn-danger inline-flex h-9 w-10 items-center justify-center rounded-md border shadow-sm transition-colors duration-150 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--danger)] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#0B1015]"
                             aria-label="Quitar producto"
                             title="Quitar producto"
                             onClick={() => removeItem(item.id)}
@@ -1093,16 +1577,19 @@ export function CashRegister({
       </div>
 
       <aside className="min-w-0 space-y-3 xl:sticky xl:top-4 xl:self-start 2xl:space-y-4">
-        <Card className="border-t-4 border-t-brand-500 border-slate-300/90 bg-gradient-to-b from-white to-slate-50/70 p-4 shadow-xl shadow-slate-300/40 ring-1 ring-white/80 dark:bg-none dark:shadow-none dark:ring-0 2xl:p-5">
+        <Card className="border-t-4 border-t-[color:var(--primary)] p-4 shadow-xl shadow-[#5B6B79]/14 ring-1 ring-white/80 dark:shadow-none dark:ring-0 2xl:p-5">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--text-secondary)]">
+              Consola de cobro
+            </p>
+            <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
               Total final
             </p>
-            <p className="mt-1 text-4xl font-extrabold tracking-tight text-slate-950 dark:text-gray-50 2xl:text-5xl">
+            <p className="mt-1 text-4xl font-black tracking-tight text-[var(--text-primary)] 2xl:text-5xl">
               {formatARS(total)}
             </p>
             {surchargeAmount > 0 ? (
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 Subtotal {formatARS(subtotal)} - Recargo {formatARS(surchargeAmount)}
               </p>
             ) : null}
@@ -1121,12 +1608,12 @@ export function CashRegister({
             className={cn(
               "mt-4 rounded-lg border px-3 py-2.5 text-sm font-semibold text-center transition-colors duration-150",
               paymentsDisabled
-                ? "border-slate-300 bg-slate-50 text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400"
+                ? "badge-neutral"
                 : remaining === 0 && overpaid === 0
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  ? "badge-success"
                   : overpaid > 0
-                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-                    : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+                    ? "badge-danger"
+                    : "badge-warning"
             )}
           >
             {paymentsDisabled
@@ -1138,7 +1625,7 @@ export function CashRegister({
                   : `Pendiente ${formatARS(remaining)}`}
           </div>
 
-          <p className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+          <p className="app-panel-elevated mt-3 rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)]">
             {paymentsDisabled
               ? "Agrega productos para elegir el medio de pago."
               : payments.length === 0
@@ -1148,9 +1635,9 @@ export function CashRegister({
                   : `Pagos parciales cargados. Pendiente ${formatARS(remaining)}.`}
           </p>
 
-          <div className={cn("mt-4 space-y-4", paymentsDisabled && "opacity-60")}>
+          <div className={cn("mt-4 space-y-4", paymentsDisabled && "opacity-75")}>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              <span className="text-sm font-medium text-[var(--text-primary)]">
                 Medio de pago
               </span>
               <Select
@@ -1167,6 +1654,11 @@ export function CashRegister({
                   );
                   setPaymentReference("");
                   setCopyFeedback(null);
+                  setMercadoPagoMessage(null);
+                  setMercadoPagoTechnicalDetail(null);
+                  setMercadoPagoMovements([]);
+                  setMercadoPagoMovementsModalOpen(false);
+                  setMercadoPagoMatchPollingEnabled(false);
                   if (nextMethod !== "CURRENT_ACCOUNT") {
                     setCustomerResults([]);
                     setSelectedCustomer(null);
@@ -1182,18 +1674,53 @@ export function CashRegister({
               </Select>
             </label>
 
-            <PaymentMethodInfo
-              method={paymentMethod}
-              setting={selectedPaymentSetting}
-              disabled={paymentsDisabled}
-              copyFeedback={copyFeedback}
-              onCopy={copyPaymentData}
-            />
+            {isMercadoPagoApiMode ? (
+              <MercadoPagoApiPanel
+                accounts={mercadoPagoAccounts}
+                selectedAccountId={mercadoPagoAccountId}
+                selectedAccount={selectedMercadoPagoAccount}
+                attempt={mercadoPagoAttempt}
+                message={mercadoPagoMessage}
+                technicalDetail={mercadoPagoTechnicalDetail}
+                disabled={paymentsDisabled || isPending}
+                remaining={remaining}
+                matchCount={mercadoPagoMatchCandidates.length}
+                pollSeconds={mercadoPagoPollSeconds}
+                pollingEnabled={mercadoPagoMatchPollingEnabled}
+                onAccountChange={(accountId) => {
+                  setMercadoPagoAccountId(accountId);
+                  setMercadoPagoAttempt(null);
+                  setMercadoPagoMovements([]);
+                  setMercadoPagoMessage(null);
+                  setMercadoPagoTechnicalDetail(null);
+                  setMercadoPagoQrModalOpen(false);
+                  setMercadoPagoMovementsModalOpen(false);
+                  setMercadoPagoMatchPollingEnabled(false);
+                }}
+                onGenerate={generateMercadoPagoQr}
+                onOpenQr={() => setMercadoPagoQrModalOpen(true)}
+                onRefresh={() => refreshMercadoPagoAttempt(true)}
+                onCancel={cancelMercadoPagoQrAttempt}
+                onSearchRecent={searchMercadoPagoMovements}
+                onFindMatches={findMercadoPagoMatches}
+                onTogglePolling={() =>
+                  setMercadoPagoMatchPollingEnabled((enabled) => !enabled)
+                }
+              />
+            ) : (
+              <PaymentMethodInfo
+                method={paymentMethod}
+                setting={selectedPaymentSetting}
+                disabled={paymentsDisabled}
+                copyFeedback={copyFeedback}
+                onCopy={copyPaymentData}
+              />
+            )}
 
             {paymentMethod === "CREDIT" ? (
-              <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+              <div className="app-panel-elevated space-y-3 rounded-lg p-4 shadow-sm dark:shadow-none">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
                     Cuotas
                   </span>
                   <Select
@@ -1209,7 +1736,7 @@ export function CashRegister({
                     ))}
                   </Select>
                 </label>
-                <div className="text-sm text-gray-600 dark:text-gray-300">
+                <div className="text-sm text-[var(--text-secondary)]">
                   <p>Recargo estimado: {formatARS(surchargeAmount)}</p>
                   <p>
                     Valor por cuota estimado:{" "}
@@ -1223,7 +1750,7 @@ export function CashRegister({
 
             {showPaymentReference ? (
               <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <span className="text-sm font-medium text-[var(--text-primary)]">
                   Referencia / operacion
                 </span>
                 <Input
@@ -1232,19 +1759,19 @@ export function CashRegister({
                   onChange={(event) => setPaymentReference(event.target.value)}
                   placeholder="Numero de operacion, cupon o autorizacion"
                 />
-                <span className="block text-xs text-amber-700 dark:text-amber-200">
+                <span className="block text-xs text-[var(--warning)]">
                   Este medio requiere referencia para finalizar el pago.
                 </span>
               </label>
             ) : null}
 
-            {paymentMethod === "CURRENT_ACCOUNT" ? (
-              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/20">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+            {isMercadoPagoApiMode ? null : paymentMethod === "CURRENT_ACCOUNT" ? (
+              <div className="badge-warning space-y-3 rounded-lg p-4">
+                <p className="text-sm font-medium">
                   Esta venta se cargara a cuenta corriente.
                 </p>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
                     Cliente
                   </span>
                   <Input
@@ -1266,17 +1793,17 @@ export function CashRegister({
                       <button
                         key={customer.id}
                         type="button"
-                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+                        className="app-panel-elevated w-full rounded-md px-3 py-2 text-left text-sm transition hover:bg-[var(--primary-soft)]"
                         onClick={() => {
                           setSelectedCustomer(customer);
                           setCustomerQuery(customer.name);
                           setCustomerResults([]);
                         }}
                       >
-                        <span className="block font-medium text-gray-950 dark:text-gray-50">
+                        <span className="block font-medium text-[var(--text-primary)]">
                           {customer.name}
                         </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs text-[var(--text-secondary)]">
                           {[customer.document, customer.phone].filter(Boolean).join(" - ") ||
                             "Sin documento"}
                           {" · "}Saldo {formatARS(customer.balance)}
@@ -1286,17 +1813,17 @@ export function CashRegister({
                   </div>
                 ) : null}
                 {selectedCustomer ? (
-                  <div className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm dark:border-amber-900/60 dark:bg-neutral-950">
-                    <p className="font-medium text-gray-950 dark:text-gray-50">
+                  <div className="app-panel-elevated rounded-md px-3 py-2 text-sm">
+                    <p className="font-medium text-[var(--text-primary)]">
                       {selectedCustomer.name}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-[var(--text-secondary)]">
                       Saldo actual {formatARS(selectedCustomer.balance)}
                     </p>
                   </div>
                 ) : null}
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
                     Importe a fiar
                   </span>
                   <Input
@@ -1314,7 +1841,7 @@ export function CashRegister({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  className="border-amber-200 bg-white text-amber-800 hover:bg-amber-50 dark:border-amber-900/60 dark:bg-neutral-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                  className="btn-secondary"
                   disabled={paymentsDisabled || remaining <= 0}
                   onClick={fillPendingAmount}
                 >
@@ -1324,7 +1851,7 @@ export function CashRegister({
             ) : paymentMethod === "CASH" ? (
               <>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
                     Monto recibido
                   </span>
                   <Input
@@ -1344,7 +1871,7 @@ export function CashRegister({
                       key={`${amount}-${index}`}
                       type="button"
                       size="sm"
-                      className="border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                      className="btn-secondary"
                       disabled={paymentsDisabled}
                       onClick={() => setCashReceived(String(amount))}
                     >
@@ -1370,7 +1897,7 @@ export function CashRegister({
             ) : (
               <div className="space-y-3">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
                     Importe
                   </span>
                   <Input
@@ -1388,7 +1915,7 @@ export function CashRegister({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  className="border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                  className="btn-secondary"
                   disabled={paymentsDisabled || remaining <= 0}
                   onClick={fillPendingAmount}
                 >
@@ -1397,32 +1924,34 @@ export function CashRegister({
               </div>
             )}
 
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
-              disabled={
-                isPending ||
-                paymentsDisabled ||
-                (paymentMethod === "CREDIT" && creditPlans.length === 0)
-              }
-              onClick={addPayment}
-            >
-              Agregar pago parcial
-            </Button>
+            {!isMercadoPagoApiMode ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="btn-secondary w-full"
+                disabled={
+                  isPending ||
+                  paymentsDisabled ||
+                  (paymentMethod === "CREDIT" && creditPlans.length === 0)
+                }
+                onClick={addPayment}
+              >
+                Agregar pago parcial
+              </Button>
+            ) : null}
           </div>
 
           {fiscalSetting.enabled && cart.length > 0 && fiscalMode !== "ASK" ? (
-            <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
-              <p className="font-semibold text-gray-950 dark:text-gray-50">
+            <div className="app-panel-elevated mt-4 rounded-lg p-3 text-sm shadow-sm dark:shadow-none">
+              <p className="font-semibold text-[var(--text-primary)]">
                 Facturacion
               </p>
-              <p className="mt-1 text-gray-600 dark:text-gray-300">
+              <p className="mt-1 text-[var(--text-secondary)]">
                 {willAutoFiscal
                   ? "Esta venta quedara pendiente de facturacion."
                   : "Esta venta quedara como ticket interno."}
               </p>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
                 No se emite comprobante real en ARCA en esta etapa.
               </p>
             </div>
@@ -1430,39 +1959,22 @@ export function CashRegister({
 
           {payments.length > 0 ? (
             <div className="mt-5 space-y-2">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 Pagos cargados
               </h2>
               {payments.map((payment) => (
-                <div
+                <PaymentEntryRow
                   key={payment.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none"
-                >
-                  <div>
-                    <p className="font-medium text-gray-950 dark:text-gray-50">
-                      {paymentLabels[payment.method]} {formatARS(payment.amount)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {paymentEntryDescription(payment)}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`Quitar pago ${paymentLabels[payment.method]}`}
-                    title="Quitar pago"
-                    onClick={() => removePayment(payment.id)}
-                  >
-                    Quitar
-                  </Button>
-                </div>
+                  payment={payment}
+                  label={paymentLabels[payment.method]}
+                  onRemove={() => removePayment(payment.id)}
+                />
               ))}
             </div>
           ) : null}
 
           {saleSuccess ? (
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <div className="badge-success mt-4 rounded-md px-3 py-3 text-sm">
               <p className="font-medium">Venta #{saleSuccess.saleNumber} confirmada.</p>
               {saleSuccess.fiscalStatus ? (
                 <p className="mt-1">
@@ -1501,8 +2013,8 @@ export function CashRegister({
             <p
               className={
                 message.tone === "ok"
-                  ? "mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
-                  : "mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
+                  ? "badge-success mt-4 rounded-md px-3 py-2 text-sm"
+                  : "badge-danger mt-4 rounded-md px-3 py-2 text-sm"
               }
             >
               {message.text}
@@ -1514,7 +2026,7 @@ export function CashRegister({
               type="button"
               variant="primary"
               disabled={!canFinish}
-              className="h-14 text-base font-bold tracking-wide w-full shadow-md shadow-brand-600/10 hover:shadow-brand-600/20 active:scale-[0.99] transition-all duration-200 disabled:shadow-none"
+              className="h-14 w-full text-base font-bold tracking-wide shadow-[0_14px_30px_rgba(46,91,122,0.18)] transition-all duration-200 hover:shadow-[0_18px_36px_rgba(46,91,122,0.28)] active:scale-[0.99] disabled:shadow-none"
               onClick={finishSale}
             >
               {isPending ? "Confirmando..." : "Finalizar venta"}
@@ -1522,7 +2034,7 @@ export function CashRegister({
             <Button
               type="button"
               variant="secondary"
-              className="border-slate-200 hover:bg-slate-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+              className="btn-secondary"
               onClick={cancelSale}
             >
               Cancelar venta
@@ -1530,6 +2042,33 @@ export function CashRegister({
           </div>
         </Card>
       </aside>
+      <MercadoPagoQrModal
+        open={mercadoPagoQrModalOpen}
+        attempt={mercadoPagoAttempt}
+        account={selectedMercadoPagoAccount}
+        message={mercadoPagoMessage}
+        technicalDetail={mercadoPagoTechnicalDetail}
+        pending={isPending}
+        onClose={() => setMercadoPagoQrModalOpen(false)}
+        onRefresh={() => refreshMercadoPagoAttempt(true)}
+        onCancel={cancelMercadoPagoQrAttempt}
+        onGenerateNew={generateMercadoPagoQr}
+      />
+      <MercadoPagoMovementsModal
+        open={mercadoPagoMovementsModalOpen}
+        account={selectedMercadoPagoAccount}
+        movements={mercadoPagoMovements}
+        targetAmount={remaining}
+        matchCount={mercadoPagoMatchCandidates.length}
+        message={mercadoPagoMessage}
+        technicalDetail={mercadoPagoTechnicalDetail}
+        pending={isPending}
+        qrPending={mercadoPagoAttemptStatus === "PENDING"}
+        onClose={() => setMercadoPagoMovementsModalOpen(false)}
+        onRefresh={searchMercadoPagoMovements}
+        onFindMatches={findMercadoPagoMatches}
+        onAssociate={associateMercadoPagoMovement}
+      />
       {pendingFiscalPayments ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
@@ -1537,14 +2076,14 @@ export function CashRegister({
           aria-modal="true"
           aria-labelledby="fiscal-sale-dialog-title"
         >
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
+          <div className="app-panel w-full max-w-md rounded-lg p-5 shadow-xl dark:shadow-none">
             <h2
               id="fiscal-sale-dialog-title"
-              className="text-lg font-semibold text-gray-950 dark:text-gray-50"
+              className="text-lg font-semibold text-[var(--text-primary)]"
             >
               Facturacion de la venta
             </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               {getFiscalModalDescription(
                 pendingFiscalPayments.map((payment) => payment.method)
               )}
@@ -1580,6 +2119,662 @@ export function CashRegister({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function MercadoPagoApiPanel({
+  accounts,
+  selectedAccountId,
+  selectedAccount,
+  attempt,
+  message,
+  technicalDetail,
+  disabled,
+  remaining,
+  matchCount,
+  pollSeconds,
+  pollingEnabled,
+  onAccountChange,
+  onGenerate,
+  onOpenQr,
+  onRefresh,
+  onCancel,
+  onSearchRecent,
+  onFindMatches,
+  onTogglePolling
+}: {
+  accounts: MercadoPagoAccountView[];
+  selectedAccountId: string;
+  selectedAccount: MercadoPagoAccountView | null;
+  attempt: MercadoPagoAttemptView | null;
+  message: string | null;
+  technicalDetail: string | null;
+  disabled: boolean;
+  remaining: number;
+  matchCount: number;
+  pollSeconds: number;
+  pollingEnabled: boolean;
+  onAccountChange: (accountId: string) => void;
+  onGenerate: () => void;
+  onOpenQr: () => void;
+  onRefresh: () => void;
+  onCancel: () => void;
+  onSearchRecent: () => void;
+  onFindMatches: () => void;
+  onTogglePolling: () => void;
+}) {
+  const pendingAttempt = attempt?.status === "PENDING";
+  const approvedAttempt = attempt?.status === "APPROVED";
+  const failedAttempt = Boolean(
+    attempt && !["PENDING", "APPROVED"].includes(attempt.status)
+  );
+  const canOpenQr = Boolean(attempt?.qrCodeDataUrl || attempt);
+  const sidebarMessage = getMercadoPagoSidebarMessage(message, attempt);
+
+  if (approvedAttempt && attempt) {
+    return (
+      <div className="badge-success space-y-2 rounded-lg p-3 text-sm shadow-sm dark:shadow-none">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-[var(--text-primary)]">
+              Mercado Pago aprobado
+            </p>
+            <p className="mt-1 text-lg font-extrabold text-[var(--success)]">
+              {formatARS(attempt.amount)} aplicado a la venta
+            </p>
+            <p
+              className="mt-1 truncate text-xs text-[var(--text-secondary)]"
+              title={attempt.accountName}
+            >
+              Cuenta: {attempt.accountName}
+            </p>
+          </div>
+          <MercadoPagoStatusBadge status={attempt.status} />
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {canOpenQr ? (
+            <Button type="button" size="sm" variant="secondary" onClick={onOpenQr}>
+              Ver QR
+            </Button>
+          ) : null}
+        </div>
+
+        <MercadoPagoAttemptTechnicalDetails
+          attempt={attempt}
+          account={selectedAccount}
+          technicalDetail={technicalDetail}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-panel-elevated space-y-3 rounded-lg p-3 text-sm shadow-sm dark:shadow-none">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-[var(--text-primary)]">
+            Mercado Pago
+          </p>
+          {attempt ? (
+            <p className="mt-1 text-lg font-extrabold text-[var(--text-primary)]">
+              {formatARS(attempt.amount)}{" "}
+              <span className="text-sm font-semibold text-[var(--text-secondary)]">
+                - {mercadoPagoAttemptStatusLabel(attempt.status)}
+              </span>
+            </p>
+          ) : null}
+        </div>
+        {attempt ? <MercadoPagoStatusBadge status={attempt.status} /> : null}
+      </div>
+
+      {attempt ? (
+        <div className="space-y-1 text-xs text-[var(--text-secondary)]">
+          <p className="truncate" title={attempt.accountName}>
+            Cuenta: {attempt.accountName}
+          </p>
+          <p className="truncate" title={attempt.externalReference}>
+            Ref: {shortReference(attempt.externalReference)}
+          </p>
+        </div>
+      ) : (
+        <>
+          <label className="space-y-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+              Cuenta
+            </span>
+            <Select
+              value={selectedAccountId}
+              disabled={disabled || accounts.length === 0}
+              onChange={(event) => onAccountChange(event.target.value)}
+            >
+              {accounts.length === 0 ? (
+                <option value="">Sin cuentas activas</option>
+              ) : (
+                accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} {account.defaultAccount ? "(predeterminada)" : ""}
+                  </option>
+                ))
+              )}
+            </Select>
+          </label>
+
+          {selectedAccount ? (
+            <div className="flex flex-wrap gap-1.5">
+              <MercadoPagoInfoBadge>
+                {mercadoPagoEnvironmentLabel(selectedAccount.environment)}
+              </MercadoPagoInfoBadge>
+              <MercadoPagoInfoBadge>
+                Match{" "}
+                {selectedAccount.enableAmountMatching ? "activo" : "deshabilitado"}
+              </MercadoPagoInfoBadge>
+            </div>
+          ) : null}
+        </>
+      )}
+
+      {!attempt ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          className="w-full"
+          disabled={disabled || !selectedAccount || remaining <= 0}
+          onClick={onGenerate}
+        >
+          Generar QR
+        </Button>
+      ) : null}
+
+      {pendingAttempt || failedAttempt ? (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={onOpenQr}>
+            Ver QR
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onRefresh}>
+            Refrescar
+          </Button>
+          {pendingAttempt ? (
+            <Button type="button" size="sm" variant="danger" onClick={onCancel}>
+              Cancelar intento
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              disabled={disabled || !selectedAccount || remaining <= 0}
+              onClick={onGenerate}
+            >
+              Nuevo QR
+            </Button>
+          )}
+        </div>
+      ) : null}
+
+      {!attempt ? (
+        <div className="app-panel-secondary space-y-2 rounded-md px-3 py-2 text-xs">
+          {selectedAccount?.enableAmountMatching ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-semibold text-[var(--text-primary)]">
+                  Match por monto
+                </p>
+                <p className="truncate text-[var(--text-secondary)]">
+                  {pollingEnabled
+                    ? `Buscando cada ${pollSeconds}s`
+                    : matchCount > 0
+                      ? `${matchCount} coincidencia${matchCount === 1 ? "" : "s"}`
+                      : `Pendiente ${formatARS(remaining)}`}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={pollingEnabled ? "secondary" : "outline"}
+                disabled={disabled || remaining <= 0}
+                onClick={onTogglePolling}
+              >
+                {pollingEnabled ? "Pausar" : "Auto"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[var(--text-secondary)]">
+              Match por monto deshabilitado para esta cuenta.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={disabled || !selectedAccount || !selectedAccount.showRecentMovements}
+              onClick={onSearchRecent}
+            >
+              Ultimos cobros
+            </Button>
+            {selectedAccount?.enableAmountMatching ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled || remaining <= 0}
+                onClick={onFindMatches}
+              >
+                Buscar match
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {attempt ? (
+        <MercadoPagoAttemptTechnicalDetails
+          attempt={attempt}
+          account={selectedAccount}
+          technicalDetail={technicalDetail}
+        />
+      ) : null}
+
+      {sidebarMessage ? (
+        <div
+          className={cn(
+            "rounded-md border px-3 py-2 text-xs",
+            attempt?.status === "ERROR" || failedAttempt
+              ? "badge-danger"
+              : "badge-neutral"
+          )}
+        >
+          <p>{sidebarMessage}</p>
+          {technicalDetail ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer font-semibold">
+                Ver detalle tecnico
+              </summary>
+              <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-2 text-[11px] leading-4 text-[var(--text-secondary)]">
+                {technicalDetail}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MercadoPagoInfoBadge({ children }: { children: ReactNode }) {
+  return (
+    <span className="badge-neutral rounded-full px-2 py-0.5 text-[11px] font-semibold">
+      {children}
+    </span>
+  );
+}
+
+function MercadoPagoStatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold",
+        status === "APPROVED" && "badge-success",
+        status === "PENDING" && "badge-warning",
+        status === "ERROR" && "badge-danger",
+        !["APPROVED", "PENDING", "ERROR"].includes(status) &&
+          "badge-neutral"
+      )}
+    >
+      {mercadoPagoAttemptStatusLabel(status)}
+    </span>
+  );
+}
+
+function MercadoPagoAttemptTechnicalDetails({
+  attempt,
+  account,
+  technicalDetail
+}: {
+  attempt: MercadoPagoAttemptView;
+  account: MercadoPagoAccountView | null;
+  technicalDetail: string | null;
+}) {
+  return (
+    <details className="app-panel-secondary rounded-md px-3 py-2 text-xs">
+      <summary className="cursor-pointer font-semibold text-[var(--text-primary)]">
+        Ver detalle
+      </summary>
+      <dl className="mt-3 grid gap-2 text-[var(--text-secondary)]">
+        <CompactDetailLine label="Cuenta" value={account?.name ?? attempt.accountName} />
+        <CompactDetailLine
+          label="Origen"
+          value={attempt.origin === "QR_ORDER" ? "QR API" : "Match por monto"}
+        />
+        <CompactDetailLine label="Referencia" value={attempt.externalReference} />
+        <CompactDetailLine label="Orden MP" value={attempt.providerOrderId ?? "-"} />
+        <CompactDetailLine label="Pago MP" value={attempt.providerPaymentId ?? "-"} />
+        <CompactDetailLine label="Raw status" value={attempt.rawStatus ?? "-"} />
+        <CompactDetailLine label="Status detail" value={attempt.rawStatusDetail ?? "-"} />
+        <CompactDetailLine label="Aprobado" value={formatMercadoPagoDate(attempt.approvedAt)} />
+        {technicalDetail ? (
+          <CompactDetailLine label="Error" value={technicalDetail} />
+        ) : null}
+      </dl>
+    </details>
+  );
+}
+
+function CompactDetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="font-semibold text-[var(--text-primary)]">{label}</dt>
+      <dd className="break-all font-mono text-[11px]">{value}</dd>
+    </div>
+  );
+}
+
+function MercadoPagoMovementsModal({
+  open,
+  account,
+  movements,
+  targetAmount,
+  matchCount,
+  message,
+  technicalDetail,
+  pending,
+  qrPending,
+  onClose,
+  onRefresh,
+  onFindMatches,
+  onAssociate
+}: {
+  open: boolean;
+  account: MercadoPagoAccountView | null;
+  movements: MercadoPagoMovementView[];
+  targetAmount: number;
+  matchCount: number;
+  message: string | null;
+  technicalDetail: string | null;
+  pending: boolean;
+  qrPending: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onFindMatches: () => void;
+  onAssociate: (movement: MercadoPagoMovementView) => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-3 py-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Cobros recientes Mercado Pago"
+    >
+      <div className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl shadow-2xl dark:shadow-none">
+        <div className="flex items-start justify-between gap-3 border-b border-[color:var(--panel-border)] px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">
+              Cobros recientes Mercado Pago
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {account
+                ? `${account.name} - pendiente ${formatARS(targetAmount)}`
+                : "Cuenta Mercado Pago"}
+            </p>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <p className="app-panel-secondary rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)]">
+            Mercado Pago puede devolver pagos/cobros recientes de la cuenta.
+            Algunos envios manuales podrian no aparecer segun el tipo de operacion.
+          </p>
+
+          {qrPending ? (
+            <p className="badge-warning mt-3 rounded-lg px-3 py-2 text-xs">
+              Hay un QR pendiente. Asociar otro cobro puede duplicar el pago.
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="secondary" onClick={onRefresh}>
+              Refrescar
+            </Button>
+            {account?.enableAmountMatching ? (
+              <Button type="button" size="sm" variant="primary" onClick={onFindMatches}>
+                Buscar coincidencias
+              </Button>
+            ) : null}
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
+              {matchCount > 0
+                ? `${matchCount} coincidencia${matchCount === 1 ? "" : "s"}`
+                : "Sin coincidencias destacadas"}
+            </span>
+          </div>
+
+          {message ? (
+            <p className="app-panel-elevated mt-3 rounded-md px-3 py-2 text-xs text-[var(--text-secondary)]">
+              {message}
+            </p>
+          ) : null}
+
+          {technicalDetail ? (
+            <details className="badge-danger mt-3 rounded-md px-3 py-2 text-xs">
+              <summary className="cursor-pointer font-semibold">
+                Ver detalle tecnico
+              </summary>
+              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-[color:var(--panel-border)] bg-[var(--app-bg)] p-2 text-[11px] leading-4 text-[var(--danger)]">
+                {technicalDetail}
+              </pre>
+            </details>
+          ) : null}
+
+          <div className="mt-4 space-y-2">
+            {movements.length === 0 ? (
+              <div className="app-panel-secondary rounded-lg px-3 py-6 text-center text-sm text-[var(--text-muted)]">
+                Sin cobros recientes detectados.
+              </div>
+            ) : (
+              movements.map((movement) => (
+                <MercadoPagoMovementRow
+                  key={movement.id}
+                  movement={movement}
+                  account={account}
+                  targetAmount={targetAmount}
+                  disabled={pending}
+                  onAssociate={() => onAssociate(movement)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MercadoPagoMovementRow({
+  movement,
+  account,
+  targetAmount,
+  disabled,
+  onAssociate
+}: {
+  movement: MercadoPagoMovementView;
+  account: MercadoPagoAccountView | null;
+  targetAmount: number;
+  disabled: boolean;
+  onAssociate: () => void;
+}) {
+  const matchesAmount = account
+    ? isMercadoPagoMovementAmountMatch({
+        movement,
+        targetAmount,
+        tolerance: account.amountMatchingTolerance
+      })
+    : false;
+  const approved = isMercadoPagoMovementApproved(movement);
+
+  return (
+    <div className="app-panel-elevated rounded-lg p-3 text-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-extrabold text-[var(--text-primary)]">
+              {formatARS(movement.amount)}
+            </p>
+            <MercadoPagoMovementBadge tone={approved ? "ok" : "muted"}>
+              {mercadoPagoMovementStatusLabel(movement.status)}
+            </MercadoPagoMovementBadge>
+            {matchesAmount ? (
+              <MercadoPagoMovementBadge tone="warn">Coincide</MercadoPagoMovementBadge>
+            ) : null}
+            {movement.alreadyUsed ? (
+              <MercadoPagoMovementBadge tone="muted">Usado</MercadoPagoMovementBadge>
+            ) : null}
+          </div>
+          <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+            {formatMercadoPagoDate(movement.dateApproved ?? movement.dateCreated)} - ID{" "}
+            {shortReference(movement.id)}
+          </p>
+          <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+            {[movement.paymentMethod, movement.paymentType, movement.operationType]
+              .filter(Boolean)
+              .join(" - ") || "Metodo no informado"}
+          </p>
+          {movement.payerLabel || movement.externalReference ? (
+            <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+              {[movement.payerLabel, movement.externalReference]
+                .filter(Boolean)
+                .join(" - ")}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={matchesAmount && approved ? "primary" : "secondary"}
+          disabled={disabled || movement.alreadyUsed || !approved}
+          onClick={onAssociate}
+        >
+          Usar en esta venta
+        </Button>
+      </div>
+      <details className="mt-2 text-xs">
+        <summary className="cursor-pointer font-semibold text-[var(--text-primary)]">
+          Ver detalle tecnico
+        </summary>
+        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-[color:var(--panel-border)] bg-[var(--app-bg)] p-2 text-[11px] text-[var(--text-secondary)]">
+          {JSON.stringify(movement.rawSummary, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+function MercadoPagoMovementBadge({
+  children,
+  tone
+}: {
+  children: ReactNode;
+  tone: "ok" | "warn" | "muted";
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-full border px-2 py-0.5 text-xs font-semibold",
+        tone === "ok" && "badge-success",
+        tone === "warn" && "badge-warning",
+        tone === "muted" && "badge-neutral"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function PaymentEntryRow({
+  payment,
+  label,
+  onRemove
+}: {
+  payment: PaymentEntry;
+  label: string;
+  onRemove: () => void;
+}) {
+  if (payment.method === "MERCADOPAGO") {
+    const status = mercadoPagoAttemptStatusLabel(payment.providerStatus ?? "");
+    const detail = [
+      payment.mercadoPagoOrigin ?? "QR API",
+      payment.externalReference ? `Ref: ${shortReference(payment.externalReference)}` : null
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    return (
+      <div className="badge-success flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm shadow-sm dark:shadow-none">
+        <div className="min-w-0">
+          <p className="font-semibold text-[var(--text-primary)]">
+            {label}
+          </p>
+          <p className="text-sm font-bold text-[var(--success)]">
+            {formatARS(payment.amount)}
+            {status ? (
+              <span className="font-semibold text-[var(--text-secondary)]">
+                {" "}- {status}
+              </span>
+            ) : null}
+          </p>
+          <p
+            className="truncate text-xs text-[var(--text-secondary)]"
+            title={paymentEntryDescription(payment)}
+          >
+            {detail || "Pago aplicado"}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label={`Quitar pago ${label}`}
+          title="Quitar pago"
+          onClick={onRemove}
+        >
+          Quitar
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-panel-elevated flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm shadow-sm dark:shadow-none">
+      <div className="min-w-0">
+        <p className="font-medium text-[var(--text-primary)]">
+          {label} {formatARS(payment.amount)}
+        </p>
+        <p
+          className="truncate text-xs text-[var(--text-secondary)]"
+          title={paymentEntryDescription(payment)}
+        >
+          {paymentEntryDescription(payment)}
+        </p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        aria-label={`Quitar pago ${label}`}
+        title="Quitar pago"
+        onClick={onRemove}
+      >
+        Quitar
+      </Button>
+    </div>
   );
 }
 
@@ -1620,20 +2815,20 @@ function PaymentMethodInfo({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
+    <div className="app-panel-elevated space-y-3 rounded-lg p-3 text-sm shadow-sm dark:shadow-none">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-gray-950 dark:text-gray-50">
+          <p className="font-semibold text-[var(--text-primary)]">
             {setting.displayName}
           </p>
           {statusLabel ? (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
               Estado sugerido: {statusLabel}
             </p>
           ) : null}
         </div>
         {method === "MERCADOPAGO" && setting.qrImageDataUrl ? (
-          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white p-1 dark:border-neutral-800 dark:bg-white">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-[color:var(--panel-border)] bg-white p-1 dark:bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={setting.qrImageDataUrl}
@@ -1679,12 +2874,12 @@ function PaymentMethodInfo({
       </div>
 
       {setting.instructions ? (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-gray-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-gray-300">
+        <p className="app-panel-secondary rounded-md px-3 py-2 text-xs text-[var(--text-secondary)]">
           {setting.instructions}
         </p>
       ) : null}
       {copyFeedback ? (
-        <p className="text-xs font-medium text-brand-700 dark:text-brand-300">
+        <p className="text-xs font-medium text-[var(--primary)]">
           {copyFeedback}
         </p>
       ) : null}
@@ -1694,11 +2889,11 @@ function PaymentMethodInfo({
 
 function PaymentDataLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
-      <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <div className="app-panel-secondary flex items-center justify-between gap-3 rounded-md px-3 py-2">
+      <span className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
         {label}
       </span>
-      <span className="min-w-0 truncate text-right font-semibold text-gray-950 dark:text-gray-50">
+      <span className="min-w-0 truncate text-right font-semibold text-[var(--text-primary)]">
         {value}
       </span>
     </div>
@@ -1717,12 +2912,12 @@ function PaymentCopyLine({
   onCopy: (label: string, value: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+    <div className="app-panel-secondary flex items-center justify-between gap-2 rounded-md px-3 py-2">
       <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
           {label}
         </p>
-        <p className="truncate font-semibold text-gray-950 dark:text-gray-50">{value}</p>
+        <p className="truncate font-semibold text-[var(--text-primary)]">{value}</p>
       </div>
       <Button
         type="button"
@@ -1758,7 +2953,7 @@ function ProductGrid({
     <div className={compact ? "mt-3" : "mt-5"}>
       <h2
         className={cn(
-          "font-bold text-slate-800 dark:text-gray-50",
+          "font-black uppercase tracking-[0.12em] text-[var(--text-primary)]",
           compact ? "text-xs" : "text-sm"
         )}
       >
@@ -1778,24 +2973,24 @@ function ProductGrid({
             type="button"
             onClick={() => onAddProduct(product)}
             className={cn(
-              "group flex min-w-0 cursor-pointer flex-col rounded-lg border border-slate-300 bg-gradient-to-b from-white to-slate-50/80 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-150 border-l-4 border-l-slate-300/80 hover:-translate-y-0.5 hover:border-brand-400/80 hover:border-l-brand-500 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 active:scale-[0.99] dark:border-neutral-800 dark:bg-none dark:bg-neutral-950 dark:shadow-none dark:hover:bg-neutral-900 dark:border-l-neutral-700 dark:hover:border-l-brand-500",
+              "group flex min-w-0 cursor-pointer flex-col rounded-lg border border-[color:var(--panel-border)] bg-[var(--panel-bg)] text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-150 border-l-4 border-l-[color:var(--panel-border-strong)] hover:-translate-y-0.5 hover:border-[color:var(--primary)] hover:border-l-[color:var(--primary)] hover:bg-[var(--panel-bg-elevated)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--primary)] active:scale-[0.98] dark:shadow-none",
               compact ? "min-h-[92px] p-2" : "min-h-[116px] p-3",
               selectedIndex === index &&
-                "border-brand-500 bg-brand-50/50 border-l-brand-600 ring-2 ring-brand-100 dark:border-brand-400 dark:bg-brand-950/40 dark:ring-brand-900/70"
+                "border-[color:var(--primary)] bg-[var(--primary-soft)] border-l-[color:var(--primary)] ring-2 ring-[color:var(--panel-border-strong)]"
             )}
           >
             <span
               className={cn(
-                "line-clamp-2 font-semibold text-slate-800 transition-colors group-hover:text-brand-700 dark:text-gray-200 dark:group-hover:text-brand-400",
+                "line-clamp-2 font-bold text-[var(--text-primary)] transition-colors group-hover:text-[var(--text-primary)]",
                 compact ? "min-h-8 text-xs" : "min-h-10 text-sm"
               )}
             >
               {product.name}
             </span>
-            <span className={cn("mt-auto block truncate font-extrabold text-brand-700 dark:text-brand-400", compact ? "pt-2 text-sm" : "pt-3 text-base")}>
+            <span className={cn("mt-auto block truncate font-black text-[var(--text-primary)]", compact ? "pt-2 text-sm" : "pt-3 text-base")}>
               {formatARS(product.salePrice)}
             </span>
-            <span className={cn("mt-1 block truncate text-gray-500 dark:text-gray-400", compact ? "text-[11px]" : "text-xs")}>
+            <span className={cn("mt-1 block truncate text-[var(--text-secondary)]", compact ? "text-[11px]" : "text-xs")}>
               {product.categoryName} - {formatStock(product.stock, product.unitType)}
             </span>
           </button>
@@ -1818,20 +3013,20 @@ function SummaryValue({
     <div
       className={cn(
         "rounded-lg border p-3 shadow-sm transition-colors duration-200",
-        tone === "default" && "border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-neutral-950",
-        tone === "ok" && "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/60 dark:bg-neutral-950",
-        tone === "error" && "border-red-200 bg-red-50/50 dark:border-red-900/60 dark:bg-neutral-950"
+        tone === "default" && "badge-warning",
+        tone === "ok" && "badge-success",
+        tone === "error" && "badge-danger"
       )}
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
         {label}
       </p>
       <p
         className={cn(
-          "mt-1 text-base font-semibold 2xl:text-lg",
-          tone === "default" && "text-amber-800 dark:text-amber-200",
-          tone === "ok" && "text-emerald-800 dark:text-emerald-300",
-          tone === "error" && "text-red-800 dark:text-red-300"
+          "mt-1 text-base font-black 2xl:text-lg",
+          tone === "default" && "text-[var(--warning)]",
+          tone === "ok" && "text-[var(--success)]",
+          tone === "error" && "text-[var(--danger)]"
         )}
       >
         {value}
@@ -1850,12 +3045,12 @@ function PaymentPreview({
   hint: string;
 }) {
   return (
-    <div className="rounded-lg border border-brand-200 bg-brand-50/30 p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none">
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
+    <div className="app-panel-elevated rounded-lg p-4 shadow-sm dark:shadow-none">
+      <p className="text-sm text-[var(--text-secondary)]">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">
         {value}
       </p>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{hint}</p>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">{hint}</p>
     </div>
   );
 }
@@ -1956,6 +3151,123 @@ function roundQuantity(value: number) {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
 }
 
+function mercadoPagoAttemptStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Pendiente",
+    APPROVED: "Aprobado",
+    REJECTED: "Rechazado",
+    CANCELLED: "Cancelado",
+    EXPIRED: "Vencido",
+    ERROR: "Error"
+  };
+
+  return labels[status] ?? status;
+}
+
+function mercadoPagoEnvironmentLabel(environment: string) {
+  return environment === "SANDBOX" ? "Sandbox" : "Produccion";
+}
+
+function mercadoPagoMovementStatusLabel(status: string | null | undefined) {
+  const normalized = String(status ?? "").toLowerCase();
+  const labels: Record<string, string> = {
+    approved: "Aprobado",
+    accredited: "Acreditado",
+    paid: "Aprobado",
+    pending: "Pendiente",
+    rejected: "Rechazado",
+    cancelled: "Cancelado",
+    canceled: "Cancelado",
+    refunded: "Devuelto"
+  };
+
+  return labels[normalized] ?? String(status ?? "-");
+}
+
+function isMercadoPagoMovementApproved(movement: MercadoPagoMovementView) {
+  return ["approved", "accredited", "paid"].includes(movement.status.toLowerCase());
+}
+
+function normalizeMercadoPagoPollSeconds(value: number | null | undefined) {
+  return Math.max(15, Math.min(Math.trunc(value ?? 20), 300));
+}
+
+function isMercadoPagoMovementAmountMatch({
+  movement,
+  targetAmount,
+  tolerance
+}: {
+  movement: MercadoPagoMovementView;
+  targetAmount: number;
+  tolerance: string | number;
+}) {
+  const amount = roundMoney(safeNumber(movement.amount));
+  const target = roundMoney(targetAmount);
+  const allowedDifference = Math.max(roundMoney(safeNumber(tolerance)), 0);
+
+  return Math.abs(amount - target) <= allowedDifference + 0.001;
+}
+
+function isMercadoPagoExactAmountMatch(amount: string | number, targetAmount: number) {
+  return roundMoney(safeNumber(amount)) === roundMoney(targetAmount);
+}
+
+function getMercadoPagoAttemptMessage(attempt: MercadoPagoAttemptView) {
+  if (attempt.status === "APPROVED") {
+    return "Pago aprobado y aplicado a la venta.";
+  }
+  if (attempt.status === "PENDING") {
+    return "Esperando aprobacion del pago.";
+  }
+  if (attempt.status === "ERROR") {
+    return attempt.rawStatusDetail ?? "Mercado Pago devolvio un error.";
+  }
+
+  return `Estado Mercado Pago: ${mercadoPagoAttemptStatusLabel(attempt.status)}.`;
+}
+
+function getMercadoPagoSidebarMessage(
+  message: string | null,
+  attempt: MercadoPagoAttemptView | null
+) {
+  if (!message) {
+    return null;
+  }
+
+  if (attempt?.status === "APPROVED") {
+    return null;
+  }
+
+  if (
+    attempt?.status === "PENDING" &&
+    (message.includes("Esperando aprobacion") ||
+      message.includes("QR generado") ||
+      message.includes("Consultando estado"))
+  ) {
+    return null;
+  }
+
+  return message;
+}
+
+function formatMercadoPagoDate(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function shouldAutofillPaymentAmount(method: PaymentMethodValue) {
   return ["MERCADOPAGO", "TRANSFER", "DEBIT", "CREDIT"].includes(method);
 }
@@ -1970,6 +3282,13 @@ function shouldShowPaymentReference(
   );
 }
 
+function shortReference(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+  return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-5)}` : value;
+}
+
 function paymentEntryDescription(payment: PaymentEntry) {
   const details: string[] = [];
 
@@ -1981,13 +3300,22 @@ function paymentEntryDescription(payment: PaymentEntry) {
     );
   } else if (payment.method === "CURRENT_ACCOUNT" && payment.customerName) {
     details.push(payment.customerName);
+  } else if (payment.method === "MERCADOPAGO" && payment.mercadoPagoAccountName) {
+    details.push(payment.mercadoPagoAccountName);
+  }
+
+  if (payment.mercadoPagoOrigin) {
+    details.push(payment.mercadoPagoOrigin);
   }
 
   if (payment.externalReference) {
-    details.push(`Ref. ${payment.externalReference}`);
+    details.push(`Ref. ${shortReference(payment.externalReference)}`);
   }
 
-  const status = providerStatusLabel(payment.providerStatus);
+  const status =
+    payment.method === "MERCADOPAGO"
+      ? mercadoPagoAttemptStatusLabel(payment.providerStatus ?? "")
+      : providerStatusLabel(payment.providerStatus);
   if (status) {
     details.push(status);
   }

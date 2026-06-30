@@ -60,13 +60,13 @@ export default async function PresupuestoDetallePage({ params }: PresupuestoDeta
           <Card className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+                <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   Cliente
                 </h2>
-                <p className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">
+                <p className="mt-2 text-lg font-bold text-gray-950 dark:text-[#F3F7FA]">
                   {quote.customerNameSnapshot}
                 </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
+                <p className="mt-1 text-sm text-slate-500 dark:text-[#7F8D9A]">
                   {[
                     quote.customerDocumentSnapshot,
                     quote.customerPhoneSnapshot,
@@ -85,7 +85,7 @@ export default async function PresupuestoDetallePage({ params }: PresupuestoDeta
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3">Producto</th>
                     <th className="px-4 py-3">Cantidad</th>
@@ -96,21 +96,21 @@ export default async function PresupuestoDetallePage({ params }: PresupuestoDeta
                 <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
                   {quote.items.map((item) => (
                     <tr key={item.id}>
-                      <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-semibold text-gray-950 dark:text-[#F3F7FA]">
                         {item.productNameSnapshot}
                         {item.notes ? (
-                          <p className="mt-1 text-xs font-normal text-slate-500 dark:text-gray-400">
+                          <p className="mt-1 text-xs font-normal text-slate-500 dark:text-[#7F8D9A]">
                             {item.notes}
                           </p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-slate-700 dark:text-[#A9B6C2]">
                         {formatQuantity(item.quantity.toString())} {unitLabel(item.unitTypeSnapshot)}
                       </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-slate-700 dark:text-[#A9B6C2]">
                         {formatARS(item.unitPrice)}
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 text-right font-semibold text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(item.subtotal)}
                       </td>
                     </tr>
@@ -130,14 +130,14 @@ export default async function PresupuestoDetallePage({ params }: PresupuestoDeta
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Estado
             </h2>
             <form action={changeQuoteStatusAction.bind(null, quote.id)} className="mt-4 space-y-3">
               <select
                 name="status"
                 defaultValue={quote.status}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-gray-950 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-50"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-gray-950 dark:border-[#344457] dark:bg-[#121922] dark:text-[#F3F7FA]"
               >
                 {Object.values(QuoteStatus).map((status) => (
                   <option key={status} value={status}>
@@ -152,14 +152,14 @@ export default async function PresupuestoDetallePage({ params }: PresupuestoDeta
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Totales
             </h2>
             <div className="mt-4 space-y-2 text-sm">
               <Line label="Subtotal" value={formatARS(quote.subtotal)} />
               <Line label="Descuento" value={formatARS(quote.discountTotal)} />
               <Line label="Recargo" value={formatARS(quote.surchargeTotal)} />
-              <div className="flex justify-between border-t border-slate-200 pt-3 text-xl font-bold dark:border-neutral-800">
+              <div className="flex justify-between border-t border-slate-200 pt-3 text-xl font-bold dark:border-[#273342]">
                 <span>Total</span>
                 <span>{formatARS(quote.total)}</span>
               </div>
@@ -198,8 +198,8 @@ function TextBlock({ title, value }: { title: string; value: string | null }) {
 
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-gray-300">
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-[#A9B6C2]">
         {value}
       </p>
     </div>
@@ -209,8 +209,8 @@ function TextBlock({ title, value }: { title: string; value: string | null }) {
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-slate-500 dark:text-gray-400">{label}</span>
-      <span className="font-semibold text-gray-950 dark:text-gray-50">{value}</span>
+      <span className="text-slate-500 dark:text-[#7F8D9A]">{label}</span>
+      <span className="font-semibold text-gray-950 dark:text-[#F3F7FA]">{value}</span>
     </div>
   );
 }

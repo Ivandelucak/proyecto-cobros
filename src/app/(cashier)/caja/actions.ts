@@ -14,6 +14,18 @@ import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { calculateCashSessionSummary } from "@/lib/cash-session";
+import { MercadoPagoApiError } from "@/lib/mercadopago/mercado-pago-client";
+import {
+  cancelMercadoPagoAttempt,
+  createMercadoPagoQrOrder,
+  getMercadoPagoOrderStatus,
+  toAttemptView
+} from "@/lib/mercadopago/mercado-pago-orders";
+import {
+  associateMercadoPagoPaymentByAmount,
+  findAmountMatchingCandidates,
+  searchRecentMercadoPagoPayments
+} from "@/lib/mercadopago/mercado-pago-search";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { confirmSale, type ConfirmSaleInput } from "@/lib/sale-engine";
@@ -59,6 +71,7 @@ export type RegisterPaymentInput = {
   externalId?: string;
   externalReference?: string;
   providerStatus?: string;
+  paymentAttemptId?: string;
 };
 
 export type RegisterSaleInput = {
@@ -85,6 +98,170 @@ export type CashSessionFormState = {
   error?: string;
   success?: string;
 };
+
+export async function createMercadoPagoQrAttemptAction(input: {
+  accountId: string;
+  amount: string;
+}) {
+  const user = await requireCashierUser();
+
+  try {
+    const attempt = await createMercadoPagoQrOrder({
+      accountId: input.accountId,
+      amount: parseLocalizedDecimal(input.amount)
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "MERCADOPAGO_QR_CREATED",
+      entity: "PaymentAttempt",
+      entityId: attempt.id,
+      description: "Genero QR dinamico Mercado Pago.",
+      metadata: {
+        accountId: input.accountId,
+        amount: attempt.amount,
+        externalReference: attempt.externalReference
+      }
+    });
+
+    return { ok: true as const, attempt };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "No se pudo generar el QR.",
+      technicalDetail: formatMercadoPagoTechnicalDetail(error)
+    };
+  }
+}
+
+export async function refreshMercadoPagoAttemptStatusAction(attemptId: string) {
+  await requireCashierUser();
+
+  try {
+    const attempt = await getMercadoPagoOrderStatus({ attemptId });
+    return { ok: true as const, attempt };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error ? error.message : "No se pudo consultar Mercado Pago."
+    };
+  }
+}
+
+function formatMercadoPagoTechnicalDetail(error: unknown) {
+  if (error instanceof MercadoPagoApiError) {
+    return JSON.stringify(error.details, null, 2);
+  }
+
+  if (error instanceof Error) {
+    return JSON.stringify({ message: error.message }, null, 2);
+  }
+
+  return null;
+}
+
+export async function cancelMercadoPagoAttemptAction(attemptId: string) {
+  await requireCashierUser();
+
+  try {
+    const attempt = await cancelMercadoPagoAttempt({ attemptId });
+    return { ok: true as const, attempt };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error ? error.message : "No se pudo cancelar el intento."
+    };
+  }
+}
+
+export async function searchRecentMercadoPagoPaymentsAction(input: {
+  accountId: string;
+  minutes?: number;
+  limit?: number;
+}) {
+  await requireCashierUser();
+
+  try {
+    const movements = await searchRecentMercadoPagoPayments({
+      accountId: input.accountId,
+      minutes: input.minutes,
+      limit: input.limit
+    });
+    return { ok: true as const, movements };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudieron consultar cobros recientes.",
+      technicalDetail: formatMercadoPagoTechnicalDetail(error)
+    };
+  }
+}
+
+export async function findMercadoPagoAmountMatchesAction(input: {
+  accountId: string;
+  amount: string;
+}) {
+  await requireCashierUser();
+
+  try {
+    const movements = await findAmountMatchingCandidates({
+      accountId: input.accountId,
+      amount: parseLocalizedDecimal(input.amount)
+    });
+    return { ok: true as const, movements };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Sin coincidencias por el monto pendiente.",
+      technicalDetail: formatMercadoPagoTechnicalDetail(error)
+    };
+  }
+}
+
+export async function associateMercadoPagoPaymentAction(input: {
+  accountId: string;
+  paymentId: string;
+  amount: string;
+}) {
+  const user = await requireCashierUser();
+
+  try {
+    const attempt = await associateMercadoPagoPaymentByAmount({
+      accountId: input.accountId,
+      paymentId: input.paymentId,
+      amount: parseLocalizedDecimal(input.amount),
+      userId: user.id
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "MERCADOPAGO_AMOUNT_MATCH_ASSOCIATED",
+      entity: "PaymentAttempt",
+      entityId: attempt.id,
+      description: "Asocio pago Mercado Pago por match de monto.",
+      metadata: { accountId: input.accountId, paymentId: input.paymentId }
+    });
+
+    return { ok: true as const, attempt: await toAttemptView(attempt) };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo asociar el pago Mercado Pago.",
+      technicalDetail: formatMercadoPagoTechnicalDetail(error)
+    };
+  }
+}
 
 export async function getSuggestedCashProductsAction() {
   await requireCashierUser();
@@ -520,7 +697,8 @@ function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["paym
         receivedAmount,
         externalId: normalizeOptionalPaymentText(payment.externalId),
         externalReference: normalizeOptionalPaymentText(payment.externalReference),
-        providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
+        providerStatus: normalizeOptionalPaymentText(payment.providerStatus),
+        paymentAttemptId: normalizeOptionalPaymentText(payment.paymentAttemptId)
       };
     }
 
@@ -531,7 +709,8 @@ function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["paym
         installments: Number(payment.installments ?? 1),
         externalId: normalizeOptionalPaymentText(payment.externalId),
         externalReference: normalizeOptionalPaymentText(payment.externalReference),
-        providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
+        providerStatus: normalizeOptionalPaymentText(payment.providerStatus),
+        paymentAttemptId: normalizeOptionalPaymentText(payment.paymentAttemptId)
       };
     }
 
@@ -540,7 +719,8 @@ function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["paym
       amount,
       externalId: normalizeOptionalPaymentText(payment.externalId),
       externalReference: normalizeOptionalPaymentText(payment.externalReference),
-      providerStatus: normalizeOptionalPaymentText(payment.providerStatus)
+      providerStatus: normalizeOptionalPaymentText(payment.providerStatus),
+      paymentAttemptId: normalizeOptionalPaymentText(payment.paymentAttemptId)
     };
   });
 }

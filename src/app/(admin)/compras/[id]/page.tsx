@@ -45,7 +45,7 @@ export default async function CompraDetallePage({ params }: CompraDetallePagePro
           <Info label="Total" value={formatARS(purchase.total)} />
         </div>
         {purchase.notes ? (
-          <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-neutral-950 dark:text-gray-300">
+          <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-[#121922] dark:text-[#A9B6C2]">
             {purchase.notes}
           </p>
         ) : null}
@@ -54,7 +54,7 @@ export default async function CompraDetallePage({ params }: CompraDetallePagePro
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
                 <th className="px-4 py-3 font-medium">Cantidad</th>
@@ -65,16 +65,16 @@ export default async function CompraDetallePage({ params }: CompraDetallePagePro
             <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
               {purchase.items.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {item.productNameSnapshot}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                  <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                     {formatStock(item.quantity, item.product.unitType)}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                  <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                     {formatARS(item.unitCost)}
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(item.subtotal)}
                   </td>
                 </tr>
@@ -90,8 +90,8 @@ export default async function CompraDetallePage({ params }: CompraDetallePagePro
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 font-medium text-gray-950 dark:text-gray-50">{value}</p>
+      <p className="text-sm text-gray-500 dark:text-[#7F8D9A]">{label}</p>
+      <p className="mt-1 font-medium text-gray-950 dark:text-[#F3F7FA]">{value}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { PaymentMethod, Prisma } from "@prisma/client";
+import { MercadoPagoOperationMode, PaymentMethod, Prisma } from "@prisma/client";
 import {
   CREDIT_INSTALLMENT_OPTIONS,
   DEFAULT_PAYMENT_METHOD_SETTINGS
@@ -25,6 +25,7 @@ export type PaymentMethodSettingView = {
   defaultProviderStatus: string | null;
   surchargeRate: string | null;
   fixedSurcharge: string | null;
+  mercadoPagoMode: MercadoPagoOperationMode;
 };
 
 export type CreditInstallmentPlanView = {
@@ -70,7 +71,9 @@ export async function getPaymentMethodSettings(client: PaymentSettingsClient = p
       defaultProviderStatus:
         row?.defaultProviderStatus ?? fallback.defaultProviderStatus,
       surchargeRate: row?.surchargeRate?.toString() ?? fallback.surchargeRate,
-      fixedSurcharge: row?.fixedSurcharge?.toString() ?? fallback.fixedSurcharge
+      fixedSurcharge: row?.fixedSurcharge?.toString() ?? fallback.fixedSurcharge,
+      mercadoPagoMode:
+        row?.mercadoPagoMode ?? fallback.mercadoPagoMode ?? MercadoPagoOperationMode.MANUAL
     };
   }).sort((left, right) => left.sortOrder - right.sortOrder);
 }

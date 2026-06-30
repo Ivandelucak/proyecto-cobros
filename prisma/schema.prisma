@@ -47,6 +47,35 @@ enum PaymentMethod {
   CURRENT_ACCOUNT
 }
 
+enum MercadoPagoOperationMode {
+  MANUAL
+  API_QR
+}
+
+enum MercadoPagoEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+enum PaymentProvider {
+  MERCADOPAGO
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  ERROR
+}
+
+enum PaymentAttemptOrigin {
+  QR_ORDER
+  AMOUNT_MATCH
+  MANUAL_REFERENCE
+}
+
 enum SaleStatus {
   PAID
   CANCELLED
@@ -191,6 +220,7 @@ model User {
   quotes             Quote[]                   @relation("QuoteCreatedBy")
   auditLogs          AuditLog[]
   fiscalEvents       FiscalEvent[]
+  associatedPayments PaymentAttempt[]          @relation("PaymentAttemptAssociatedBy")
 
   @@index([role])
 }
@@ -218,27 +248,65 @@ model BusinessProfile {
 }
 
 model PaymentMethodSetting {
-  method                PaymentMethod @id
+  method                PaymentMethod            @id
   label                 String
-  enabled               Boolean       @default(true)
-  sortOrder             Int           @default(0)
-  instructions          String?       @db.Text
+  enabled               Boolean                  @default(true)
+  sortOrder             Int                      @default(0)
+  instructions          String?                  @db.Text
   alias                 String?
   cbu                   String?
   cvu                   String?
   accountHolder         String?
   accountCuit           String?
   bankName              String?
-  qrImageDataUrl        String?       @db.LongText
-  askReference          Boolean       @default(false)
+  qrImageDataUrl        String?                  @db.LongText
+  askReference          Boolean                  @default(false)
   defaultProviderStatus String?
-  surchargeRate         Decimal?      @db.Decimal(5, 2)
-  fixedSurcharge        Decimal?      @db.Decimal(12, 2)
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  surchargeRate         Decimal?                 @db.Decimal(5, 2)
+  fixedSurcharge        Decimal?                 @db.Decimal(12, 2)
+  mercadoPagoMode       MercadoPagoOperationMode @default(MANUAL)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
 
   @@index([enabled])
   @@index([sortOrder])
+}
+
+model MercadoPagoAccount {
+  id                          String                 @id @default(cuid())
+  name                        String
+  enabled                     Boolean                @default(true)
+  environment                 MercadoPagoEnvironment @default(SANDBOX)
+  accessToken                 String                 @db.Text
+  publicKey                   String?
+  collectorId                 String?
+  storeId                     String?
+  externalStoreId             String?
+  storeName                   String?
+  posId                       String?
+  externalPosId               String?
+  posName                     String?
+  posCategory                 String?
+  posCreatedAt                DateTime?
+  lastPosSetupAt              DateTime?
+  lastPosSetupStep            String?
+  lastPosSetupStatus          String?
+  lastPosSetupError           String?                @db.Text
+  defaultAccount              Boolean                @default(false)
+  instructions                String?                @db.Text
+  enableAmountMatching        Boolean                @default(false)
+  amountMatchingWindowMinutes Int                    @default(10)
+  amountMatchingTolerance     Decimal                @default(0) @db.Decimal(12, 2)
+  amountMatchingAutoApprove   Boolean                @default(false)
+  amountMatchingPollSeconds   Int                    @default(20)
+  showRecentMovements         Boolean                @default(true)
+  deletedAt                   DateTime?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  paymentAttempts             PaymentAttempt[]
+
+  @@index([enabled, deletedAt])
+  @@index([defaultAccount])
 }
 
 model CreditInstallmentPlan {
@@ -590,6 +658,7 @@ model Sale {
   updatedAt                  DateTime                    @updatedAt
   items                      SaleItem[]
   payments                   Payment[]
+  paymentAttempts            PaymentAttempt[]
   accountMovements           CustomerAccountMovement[]
   fiscalDocuments            FiscalDocument[]            @relation("FiscalDocumentSale")
   fiscalEvents               FiscalEvent[]
@@ -686,23 +755,62 @@ model SaleItem {
 }
 
 model Payment {
-  id                String        @id @default(cuid())
+  id                String          @id @default(cuid())
   saleId            String
-  sale              Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale              Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
   method            PaymentMethod
-  amount            Decimal       @db.Decimal(12, 2)
-  receivedAmount    Decimal?      @db.Decimal(12, 2)
-  changeAmount      Decimal?      @db.Decimal(12, 2)
+  amount            Decimal         @db.Decimal(12, 2)
+  receivedAmount    Decimal?        @db.Decimal(12, 2)
+  changeAmount      Decimal?        @db.Decimal(12, 2)
   installments      Int?
-  surchargeRate     Decimal?      @db.Decimal(5, 2)
-  surchargeAmount   Decimal?      @db.Decimal(12, 2)
+  surchargeRate     Decimal?        @db.Decimal(5, 2)
+  surchargeAmount   Decimal?        @db.Decimal(12, 2)
   externalId        String?
   externalReference String?
   providerStatus    String?
-  createdAt         DateTime      @default(now())
+  paymentAttemptId  String?         @unique
+  paymentAttempt    PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  createdAt         DateTime        @default(now())
 
   @@index([saleId])
   @@index([method])
+  @@index([paymentAttemptId])
+}
+
+model PaymentAttempt {
+  id                   String               @id @default(cuid())
+  saleId               String?
+  sale                 Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  method               PaymentMethod        @default(MERCADOPAGO)
+  provider             PaymentProvider      @default(MERCADOPAGO)
+  mercadoPagoAccountId String
+  mercadoPagoAccount   MercadoPagoAccount   @relation(fields: [mercadoPagoAccountId], references: [id], onDelete: Restrict)
+  payment              Payment?
+  externalReference    String               @unique
+  providerOrderId      String?
+  providerPaymentId    String?
+  amount               Decimal              @db.Decimal(12, 2)
+  status               PaymentAttemptStatus @default(PENDING)
+  origin               PaymentAttemptOrigin
+  qrData               String?              @db.Text
+  checkoutUrl          String?
+  rawStatus            String?
+  rawStatusDetail      String?
+  lastCheckedAt        DateTime?
+  approvedAt           DateTime?
+  associatedByUserId   String?
+  associatedByUser     User?                @relation("PaymentAttemptAssociatedBy", fields: [associatedByUserId], references: [id], onDelete: SetNull)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([saleId])
+  @@index([mercadoPagoAccountId])
+  @@index([providerOrderId])
+  @@index([providerPaymentId])
+  @@index([status])
+  @@index([origin])
+  @@index([createdAt])
+  @@index([associatedByUserId])
 }
 
 model StockMovement {

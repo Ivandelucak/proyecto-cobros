@@ -57,7 +57,7 @@ export default async function VentaDetallePage({
   ) as Record<PaymentMethod, string>;
 
   return (
-    <main className="min-h-screen bg-gray-100 p-6 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
+    <main className="min-h-screen bg-[var(--app-bg)] p-6 text-[var(--text-primary)]">
       <section className="mx-auto max-w-6xl space-y-5">
         <PageHeader
           title={`Venta #${sale.saleNumber}`}
@@ -80,14 +80,14 @@ export default async function VentaDetallePage({
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Productos
               </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Producto</th>
                     <th className="px-4 py-3 font-medium">Cantidad</th>
@@ -98,16 +98,16 @@ export default async function VentaDetallePage({
                 <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
                   {sale.items.map((item) => (
                     <tr key={item.id}>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {item.productNameSnapshot}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {formatQuantity(item.quantity.toString(), item.unitTypeSnapshot)}
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {formatARS(item.unitPrice)}
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(item.subtotal)}
                       </td>
                     </tr>
@@ -121,7 +121,7 @@ export default async function VentaDetallePage({
             <Card className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">
                     Estado
                   </p>
                   <div className="mt-2">
@@ -131,23 +131,23 @@ export default async function VentaDetallePage({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">
                     Total
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
+                  <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(sale.total)}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-neutral-800">
+              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-[#273342]">
                 <TotalRow label="Subtotal" value={formatARS(sale.subtotal)} />
                 <TotalRow label="Descuento" value={formatARS(sale.discountTotal)} />
                 <TotalRow label="Recargo" value={formatARS(sale.surchargeTotal)} />
                 <TotalRow label="Total" value={formatARS(sale.total)} strong />
               </div>
 
-              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-neutral-800">
+              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-[#273342]">
                 <TotalRow
                   label="Cliente"
                   value={sale.customer ? sale.customer.name : "Consumidor final"}
@@ -164,12 +164,12 @@ export default async function VentaDetallePage({
             </Card>
 
             <Card className="p-5">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Estado fiscal
               </h2>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-gray-600 dark:text-gray-300">Estado</span>
+                  <span className="text-gray-600 dark:text-[#A9B6C2]">Estado</span>
                   <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
                     {fiscalStatusLabels[sale.fiscalStatus]}
                   </Badge>
@@ -241,25 +241,25 @@ export default async function VentaDetallePage({
             ) : null}
 
             <Card className="p-5">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Pagos
               </h2>
               <div className="mt-4 space-y-3">
                 {sale.payments.map((payment) => (
                   <div
                     key={payment.id}
-                    className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-[#273342] dark:bg-[#121922]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium text-gray-950 dark:text-gray-50">
+                        <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                           {paymentLabels[payment.method]}
                         </p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
                           {paymentDescription(payment)}
                         </p>
                       </div>
-                      <p className="font-semibold text-gray-950 dark:text-gray-50">
+                      <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(payment.amount)}
                       </p>
                     </div>
@@ -275,10 +275,10 @@ export default async function VentaDetallePage({
 
             {canCancelSale ? (
               <Card className="border-red-200 p-5 dark:border-red-900/60">
-                <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+                <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   Anular venta
                 </h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
                   Se devolvera el stock y la venta quedara fuera de reportes y caja.
                 </p>
                 <div className="mt-4">
@@ -310,8 +310,8 @@ function TotalRow({
     <div
       className={
         strong
-          ? "flex justify-between text-base font-semibold text-gray-950 dark:text-gray-50"
-          : "flex justify-between text-gray-600 dark:text-gray-300"
+          ? "flex justify-between text-base font-semibold text-gray-950 dark:text-[#F3F7FA]"
+          : "flex justify-between text-gray-600 dark:text-[#A9B6C2]"
       }
     >
       <span>{label}</span>
@@ -330,6 +330,19 @@ function paymentDescription(payment: {
   externalId: string | null;
   externalReference: string | null;
   providerStatus: string | null;
+  paymentAttempt: {
+    externalReference: string;
+    providerOrderId: string | null;
+    providerPaymentId: string | null;
+    status: string;
+    origin: string;
+    rawStatus: string | null;
+    rawStatusDetail: string | null;
+    mercadoPagoAccount: {
+      name: string;
+      environment: string;
+    };
+  } | null;
 }) {
   const details: string[] = [];
 
@@ -347,6 +360,20 @@ function paymentDescription(payment: {
     } - Recargo ${formatARS((payment.surchargeAmount as string) ?? 0)}`);
   }
 
+  if (payment.paymentAttempt) {
+    details.push(
+      `Mercado Pago ${payment.paymentAttempt.mercadoPagoAccount.name} (${payment.paymentAttempt.mercadoPagoAccount.environment})`
+    );
+    details.push(paymentAttemptOriginLabel(payment.paymentAttempt.origin));
+    details.push(`Estado ${paymentAttemptStatusLabel(payment.paymentAttempt.status)}`);
+    if (payment.paymentAttempt.providerOrderId) {
+      details.push(`Orden ${payment.paymentAttempt.providerOrderId}`);
+    }
+    if (payment.paymentAttempt.providerPaymentId) {
+      details.push(`Pago ${payment.paymentAttempt.providerPaymentId}`);
+    }
+  }
+
   if (payment.externalId) {
     details.push(`Operacion ${payment.externalId}`);
   }
@@ -361,6 +388,29 @@ function paymentDescription(payment: {
   }
 
   return details.length > 0 ? details.join(" - ") : "Pago aplicado";
+}
+
+function paymentAttemptStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Pendiente",
+    APPROVED: "Aprobado",
+    REJECTED: "Rechazado",
+    CANCELLED: "Cancelado",
+    EXPIRED: "Vencido",
+    ERROR: "Error"
+  };
+
+  return labels[status] ?? status;
+}
+
+function paymentAttemptOriginLabel(origin: string) {
+  const labels: Record<string, string> = {
+    QR_ORDER: "QR API",
+    AMOUNT_MATCH: "Match por monto",
+    MANUAL_REFERENCE: "Referencia manual"
+  };
+
+  return labels[origin] ?? origin;
 }
 
 function formatQuantity(value: string, unitType: UnitType) {

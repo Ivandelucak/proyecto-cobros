@@ -99,28 +99,28 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
               <Info label="Razon social" value={customer.businessName} />
               <Info label="Domicilio fiscal" value={customer.taxAddress} />
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Saldo actual</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">
+                <p className="text-sm text-gray-500 dark:text-[#7F8D9A]">Saldo actual</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   {formatARS(balance)}
                 </p>
               </div>
             </div>
             {customer.notes ? (
-              <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-neutral-950 dark:text-gray-300">
+              <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-[#121922] dark:text-[#A9B6C2]">
                 {customer.notes}
               </p>
             ) : null}
           </Card>
 
           <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Movimientos de cuenta
               </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Fecha</th>
                     <th className="px-4 py-3 font-medium">Tipo</th>
@@ -132,7 +132,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
                 <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
                   {customer.accountMovements.map((movement) => (
                     <tr key={movement.id}>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {formatDateTimeStable(movement.createdAt)}
                       </td>
                       <td className="px-4 py-3">
@@ -140,14 +140,14 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
                           {movementLabels[movement.type]}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {movement.reason}
                         {movement.sale ? ` (#${movement.sale.saleNumber})` : ""}
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(movement.amount)}
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(movement.newBalance)}
                       </td>
                     </tr>
@@ -158,29 +158,29 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
           </Card>
 
           <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Ventas asociadas
               </h2>
             </div>
             <div className="divide-y divide-gray-100 dark:divide-neutral-800">
               {customer.sales.length === 0 ? (
-                <p className="p-5 text-sm text-gray-500 dark:text-gray-400">
+                <p className="p-5 text-sm text-gray-500 dark:text-[#7F8D9A]">
                   Sin ventas asociadas.
                 </p>
               ) : (
                 customer.sales.map((sale) => (
                   <div key={sale.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                     <div>
-                      <p className="font-medium text-gray-950 dark:text-gray-50">
+                      <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                         Venta #{sale.saleNumber}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                         {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-950 dark:text-gray-50">
+                      <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(sale.total)}
                       </p>
                       <LinkButton href={buildSaleDetailHref(sale.id, returnTo)} size="sm">
@@ -206,8 +206,8 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
 function Info({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 font-medium text-gray-950 dark:text-gray-50">{value || "-"}</p>
+      <p className="text-sm text-gray-500 dark:text-[#7F8D9A]">{label}</p>
+      <p className="mt-1 font-medium text-gray-950 dark:text-[#F3F7FA]">{value || "-"}</p>
     </div>
   );
 }

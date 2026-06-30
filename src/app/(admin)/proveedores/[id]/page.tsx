@@ -54,36 +54,36 @@ export default async function ProveedorDetallePage({ params }: ProveedorDetalleP
           <Info label="Estado" value={supplier.active ? "Activo" : "Inactivo"} />
         </div>
         {supplier.notes ? (
-          <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-neutral-950 dark:text-gray-300">
+          <p className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-[#121922] dark:text-[#A9B6C2]">
             {supplier.notes}
           </p>
         ) : null}
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+        <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Compras asociadas
           </h2>
         </div>
         <div className="divide-y divide-gray-100 dark:divide-neutral-800">
           {supplier.purchases.length === 0 ? (
-            <p className="p-5 text-sm text-gray-500 dark:text-gray-400">
+            <p className="p-5 text-sm text-gray-500 dark:text-[#7F8D9A]">
               Sin compras registradas.
             </p>
           ) : (
             supplier.purchases.map((purchase) => (
               <div key={purchase.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                 <div>
-                  <p className="font-medium text-gray-950 dark:text-gray-50">
+                  <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     Compra #{purchase.purchaseNumber}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                     {formatDateTimeStable(purchase.createdAt)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-950 dark:text-gray-50">
+                  <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(purchase.total)}
                   </p>
                   <LinkButton href={`/compras/${purchase.id}`} size="sm">
@@ -102,8 +102,8 @@ export default async function ProveedorDetallePage({ params }: ProveedorDetalleP
 function Info({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 font-medium text-gray-950 dark:text-gray-50">{value || "-"}</p>
+      <p className="text-sm text-gray-500 dark:text-[#7F8D9A]">{label}</p>
+      <p className="mt-1 font-medium text-gray-950 dark:text-[#F3F7FA]">{value || "-"}</p>
     </div>
   );
 }

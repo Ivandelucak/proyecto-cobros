@@ -30,7 +30,7 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       aria-label={label}
       title={label}
-      className="group inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-100 dark:hover:shadow-none dark:focus-visible:ring-offset-neutral-950"
+      className="btn-secondary group inline-flex h-10 w-10 items-center justify-center rounded-md shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:hover:shadow-none dark:focus-visible:ring-offset-[#0B1015]"
     >
       <span className="sr-only">{label}</span>
       {isDark ? <SunIcon /> : <MoonIcon />}

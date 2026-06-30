@@ -62,7 +62,7 @@ export default async function MantenimientoPage({
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Control</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
@@ -94,9 +94,9 @@ export default async function MantenimientoPage({
               Crear backup ahora
             </Button>
           </form>
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-4 text-sm text-gray-500 dark:text-[#7F8D9A]">
             Ultimo backup:{" "}
-            <span className="font-medium text-gray-800 dark:text-gray-100">
+            <span className="font-medium text-gray-800 dark:text-[#F3F7FA]">
               {health.lastBackupAt ? formatDateTime(health.lastBackupAt) : "sin backups"}
             </span>
           </p>
@@ -121,7 +121,7 @@ export default async function MantenimientoPage({
           <form
             action="/configuracion/mantenimiento/exportaciones/ventas"
             method="get"
-            className="mt-4 grid gap-3 rounded-lg border border-slate-200 p-3 dark:border-neutral-800 sm:grid-cols-[1fr_1fr_auto]"
+            className="mt-4 grid gap-3 rounded-lg border border-slate-200 p-3 dark:border-[#273342] sm:grid-cols-[1fr_1fr_auto]"
           >
             <Input name="from" type="date" defaultValue={from} aria-label="Desde" />
             <Input name="to" type="date" defaultValue={to} aria-label="Hasta" />
@@ -146,7 +146,7 @@ export default async function MantenimientoPage({
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Archivo</th>
                     <th className="px-4 py-3 font-medium">Fecha</th>
@@ -189,13 +189,13 @@ function BackupRow({ backup }: { backup: BackupFile }) {
 
   return (
     <tr className="align-middle hover:bg-slate-50 dark:hover:bg-neutral-800/60">
-      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
         {backup.name}
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
         {formatDateTime(backup.createdAt)}
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
         {formatBytes(backup.sizeBytes)}
       </td>
       <td className="px-4 py-3">
@@ -236,13 +236,13 @@ function BackupRow({ backup }: { backup: BackupFile }) {
 function HealthRow({ check }: { check: SystemHealthCheck }) {
   return (
     <tr className="hover:bg-slate-50 dark:hover:bg-neutral-800/60">
-      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
         {check.label}
       </td>
       <td className="px-4 py-3">
         <StatusBadge status={check.status} />
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{check.detail}</td>
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">{check.detail}</td>
     </tr>
   );
 }
@@ -259,7 +259,7 @@ function Alert({ tone, message }: { tone: "success" | "error"; message: string }
     <div
       className={
         tone === "success"
-          ? "rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100"
+          ? "rounded-lg border border-[#BFE3D2] bg-[#E8F6EF] px-4 py-3 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
           : "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
       }
     >
@@ -277,11 +277,11 @@ function SectionTitle({
 }) {
   return (
     <div>
-      <h2 className="text-base font-semibold text-gray-950 dark:text-gray-50">
+      <h2 className="text-base font-semibold text-gray-950 dark:text-[#F3F7FA]">
         {title}
       </h2>
       {description ? (
-        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-[#A9B6C2]">
           {description}
         </p>
       ) : null}
@@ -292,8 +292,8 @@ function SectionTitle({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-4">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-gray-950 dark:text-gray-50">
+      <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">
         {value}
       </p>
     </Card>

@@ -17,7 +17,7 @@ export default function RootLayout({
       <head>
         <meta name="color-scheme" content="light dark" />
       </head>
-      <body className="bg-gray-100 text-gray-950 antialiased dark:bg-neutral-950 dark:text-gray-50">
+      <body className="app-bg antialiased">
         <Script id="theme-init" src="/theme.js" strategy="beforeInteractive" />
         {children}
       </body>

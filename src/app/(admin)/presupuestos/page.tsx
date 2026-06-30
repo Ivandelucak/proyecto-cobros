@@ -96,7 +96,7 @@ export default async function PresupuestosPage({ searchParams }: PresupuestosPag
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3">Presupuesto</th>
                   <th className="px-4 py-3">Cliente</th>
@@ -114,25 +114,25 @@ export default async function PresupuestosPage({ searchParams }: PresupuestosPag
                     className="transition-colors hover:bg-slate-50 dark:hover:bg-neutral-800/60"
                   >
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-gray-950 dark:text-gray-50">
+                      <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                         #{quote.quoteNumber}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-gray-400">
+                      <p className="text-xs text-slate-500 dark:text-[#7F8D9A]">
                         {quote._count.items} items - {quote.createdBy.name}
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-950 dark:text-gray-50">
+                      <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {quote.customerNameSnapshot}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-gray-400">
+                      <p className="text-xs text-slate-500 dark:text-[#7F8D9A]">
                         {quote.customerDocumentSnapshot ?? quote.customerPhoneSnapshot ?? "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-slate-700 dark:text-[#A9B6C2]">
                       {formatDateTimeStable(quote.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-slate-700 dark:text-[#A9B6C2]">
                       {quote.validUntil ? formatDateInput(quote.validUntil) : "-"}
                     </td>
                     <td className="px-4 py-3">
@@ -140,7 +140,7 @@ export default async function PresupuestosPage({ searchParams }: PresupuestosPag
                         {quoteStatusLabels[quote.status]}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-950 dark:text-gray-50">
+                    <td className="px-4 py-3 text-right font-bold text-gray-950 dark:text-[#F3F7FA]">
                       {formatARS(quote.total)}
                     </td>
                     <td className="px-4 py-3">

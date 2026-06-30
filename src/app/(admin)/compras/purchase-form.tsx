@@ -70,7 +70,7 @@ export function PurchaseForm({
       <Card className="p-5">
         <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Proveedor
             </span>
             <Select name="supplierId" defaultValue="">
@@ -83,7 +83,7 @@ export function PurchaseForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Observacion
             </span>
             <Input name="notes" placeholder="Opcional" />
@@ -92,14 +92,14 @@ export function PurchaseForm({
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+        <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Productos
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[780px] text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
                 <th className="px-4 py-3 font-medium">Cantidad</th>
@@ -143,7 +143,7 @@ export function PurchaseForm({
                       }
                     />
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(safeNumber(row.quantity) * safeNumber(row.unitCost))}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -166,7 +166,7 @@ export function PurchaseForm({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-4 dark:border-neutral-800">
+        <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-4 dark:border-[#273342]">
           <Button
             type="button"
             onClick={() =>
@@ -178,7 +178,7 @@ export function PurchaseForm({
           >
             Agregar producto
           </Button>
-          <p className="text-lg font-semibold text-gray-950 dark:text-gray-50">
+          <p className="text-lg font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Total {formatARS(total)}
           </p>
         </div>

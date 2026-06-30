@@ -10,6 +10,7 @@ import {
   getActiveCreditInstallmentPlans,
   getEnabledPaymentMethodSettings
 } from "@/lib/payment-settings";
+import { getActiveMercadoPagoAccountViews } from "@/lib/mercadopago/mercado-pago-accounts";
 import { getPrintSetting } from "@/lib/print-settings";
 
 export default async function CajaPage() {
@@ -21,6 +22,7 @@ export default async function CajaPage() {
     printSetting,
     cashSetting,
     fiscalSetting,
+    mercadoPagoAccounts,
     user
   ] = await Promise.all([
     getOpenCashSessionSnapshot(),
@@ -30,6 +32,7 @@ export default async function CajaPage() {
     getPrintSetting(),
     getCashRegisterSetting(),
     getFiscalSettingOrDefault(),
+    getActiveMercadoPagoAccountViews(),
     getCurrentUser()
   ]);
 
@@ -42,6 +45,7 @@ export default async function CajaPage() {
           creditPlans={creditPlans}
           printSetting={printSetting}
           fiscalSetting={fiscalSetting}
+          mercadoPagoAccounts={mercadoPagoAccounts}
           canAccessFiscalAdmin={user?.role === Role.ADMIN}
           allowNegativeStock={cashSetting.allowNegativeStock}
         />

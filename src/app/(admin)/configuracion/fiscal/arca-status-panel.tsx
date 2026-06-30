@@ -49,10 +49,10 @@ export function ArcaStatusPanel({
     <Card className="p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Conexion ARCA homologacion
           </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
             Pruebas tecnicas sin emision de comprobantes ni solicitud de CAE.
           </p>
         </div>
@@ -128,11 +128,11 @@ export function ArcaStatusPanel({
           pendingLabel="Consultando..."
           state={wsfeState}
         />
-        <div className="rounded-lg border border-slate-200 p-4 dark:border-neutral-800">
-          <h3 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+        <div className="rounded-lg border border-slate-200 p-4 dark:border-[#273342]">
+          <h3 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Ultimo comprobante
           </h3>
-          <p className="mt-1 min-h-10 text-sm text-gray-600 dark:text-gray-300">
+          <p className="mt-1 min-h-10 text-sm text-gray-600 dark:text-[#A9B6C2]">
             Consulta el ultimo numero autorizado para punto de venta y tipo.
           </p>
           <form action={voucherAction} className="mt-4 space-y-3">
@@ -177,9 +177,9 @@ function ActionBox({
   state: ArcaTestState;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-4 dark:border-neutral-800">
-      <h3 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h3>
-      <p className="mt-1 min-h-10 text-sm text-gray-600 dark:text-gray-300">
+    <div className="rounded-lg border border-slate-200 p-4 dark:border-[#273342]">
+      <h3 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h3>
+      <p className="mt-1 min-h-10 text-sm text-gray-600 dark:text-[#A9B6C2]">
         {description}
       </p>
       <form action={action} className="mt-4">
@@ -194,11 +194,11 @@ function ActionBox({
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-950">
-      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-[#273342] dark:bg-[#121922]">
+      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
         {label}
       </span>
-      <span className="mt-1 block break-words text-sm font-semibold text-gray-950 dark:text-gray-50">
+      <span className="mt-1 block break-words text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
         {value}
       </span>
     </div>
@@ -209,8 +209,8 @@ function StatusPill({ status }: { status: string | null }) {
   const normalized = status ?? "SIN PRUEBAS";
   const isOk = normalized === "OK";
   const className = isOk
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
-    : "border-slate-200 bg-slate-50 text-slate-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-200";
+    ? "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
+    : "border-slate-200 bg-slate-50 text-slate-700 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>
@@ -259,7 +259,7 @@ function ActionResult({ state }: { state: ArcaTestState }) {
       className={
         state.error
           ? "mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
-          : "mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100"
+          : "mt-3 rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
       <p className="font-medium">{state.error ?? state.success}</p>

@@ -312,13 +312,13 @@ export function ProductForm({
               ))}
             </Select>
           </Field>
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]">
             {fiscalTaxHelp(fiscalTax)}
           </div>
         </div>
       </Card>
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-100/95 px-1 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-100/95 px-1 py-3 backdrop-blur dark:border-[#273342] dark:bg-[#121922]/95">
         <LinkButton href="/productos" variant="ghost">
           Cancelar
         </LinkButton>
@@ -386,8 +386,8 @@ function SectionTitle({
 }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{description}</p>
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">{description}</p>
     </div>
   );
 }
@@ -401,7 +401,7 @@ function Field({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
       {children}
     </label>
   );
@@ -423,7 +423,7 @@ function CheckCard({
   onChange?: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-200">
+    <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm dark:border-[#344457] dark:bg-[#121922] dark:text-[#A9B6C2]">
       <input
         type="checkbox"
         name={name}
@@ -433,8 +433,8 @@ function CheckCard({
         className="mt-0.5 h-4 w-4 accent-brand-600"
       />
       <span>
-        <span className="block font-medium text-gray-950 dark:text-gray-50">{title}</span>
-        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+        <span className="block font-medium text-gray-950 dark:text-[#F3F7FA]">{title}</span>
+        <span className="mt-1 block text-xs text-gray-500 dark:text-[#7F8D9A]">
           {description}
         </span>
       </span>

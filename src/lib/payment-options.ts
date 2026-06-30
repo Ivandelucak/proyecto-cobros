@@ -1,4 +1,4 @@
-import { PaymentMethod } from "@prisma/client";
+import { MercadoPagoOperationMode, PaymentMethod } from "@prisma/client";
 
 export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
   {
@@ -17,7 +17,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: null,
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   },
   {
     method: PaymentMethod.DEBIT,
@@ -35,7 +36,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: "ACREDITADO",
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   },
   {
     method: PaymentMethod.CREDIT,
@@ -53,7 +55,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: "ACREDITADO",
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   },
   {
     method: PaymentMethod.TRANSFER,
@@ -71,7 +74,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: "MANUAL_CONFIRMED",
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   },
   {
     method: PaymentMethod.MERCADOPAGO,
@@ -89,7 +93,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: "MANUAL_CONFIRMED",
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   },
   {
     method: PaymentMethod.CURRENT_ACCOUNT,
@@ -107,7 +112,8 @@ export const DEFAULT_PAYMENT_METHOD_SETTINGS = [
     askReference: false,
     defaultProviderStatus: null,
     surchargeRate: null,
-    fixedSurcharge: null
+    fixedSurcharge: null,
+    mercadoPagoMode: MercadoPagoOperationMode.MANUAL
   }
 ] as const;
 

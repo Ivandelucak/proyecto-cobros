@@ -32,7 +32,27 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
         }
       },
       payments: {
-        orderBy: { createdAt: "asc" }
+        orderBy: { createdAt: "asc" },
+        include: {
+          paymentAttempt: {
+            select: {
+              id: true,
+              externalReference: true,
+              providerOrderId: true,
+              providerPaymentId: true,
+              status: true,
+              origin: true,
+              rawStatus: true,
+              rawStatusDetail: true,
+              mercadoPagoAccount: {
+                select: {
+                  name: true,
+                  environment: true
+                }
+              }
+            }
+          }
+        }
       },
       cashSession: {
         select: {

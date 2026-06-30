@@ -56,7 +56,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     ? "left: 50% !important; transform: translateX(-50%) !important;"
     : "left: 0 !important;";
   const sheetClassName = cn(
-    "ticket-sheet mx-auto border border-gray-200 bg-white font-mono text-gray-950 shadow-sm dark:border-neutral-800 dark:bg-white dark:text-gray-950",
+    "ticket-sheet mx-auto border border-gray-200 bg-white font-mono text-gray-950 shadow-sm dark:border-[#273342] dark:bg-white dark:text-gray-950",
     isA4
       ? "rounded-md p-8 text-[13px] leading-6"
       : isTicket58
@@ -69,7 +69,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
   );
 
   return (
-    <main className="ticket-print-page min-h-screen bg-gray-100 px-4 py-6 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
+    <main className="ticket-print-page min-h-screen bg-[var(--app-bg)] px-4 py-6 text-[var(--text-primary)]">
       <style>{`
         .ticket-sheet {
           width: ${ticketWidth};
@@ -251,6 +251,34 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
                   {payment.method === PaymentMethod.CURRENT_ACCOUNT ? (
                     <Line label="Cuenta corriente" value="Saldo cargado al cliente" />
                   ) : null}
+                  {payment.paymentAttempt ? (
+                    <>
+                      <Line
+                        label="MP cuenta"
+                        value={payment.paymentAttempt.mercadoPagoAccount.name}
+                      />
+                      <Line
+                        label="MP origen"
+                        value={paymentAttemptOriginLabel(payment.paymentAttempt.origin)}
+                      />
+                      <Line
+                        label="MP estado"
+                        value={paymentAttemptStatusLabel(payment.paymentAttempt.status)}
+                      />
+                      {payment.paymentAttempt.providerOrderId ? (
+                        <Line
+                          label="MP orden"
+                          value={payment.paymentAttempt.providerOrderId}
+                        />
+                      ) : null}
+                      {payment.paymentAttempt.providerPaymentId ? (
+                        <Line
+                          label="MP pago"
+                          value={payment.paymentAttempt.providerPaymentId}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
                   {payment.externalId ? (
                     <Line label="Operacion" value={payment.externalId} />
                   ) : null}
@@ -331,6 +359,29 @@ function ticketFiscalStatusLabel(status: FiscalStatus) {
   }
 
   return fiscalStatusLabels[status];
+}
+
+function paymentAttemptStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Pendiente",
+    APPROVED: "Aprobado",
+    REJECTED: "Rechazado",
+    CANCELLED: "Cancelado",
+    EXPIRED: "Vencido",
+    ERROR: "Error"
+  };
+
+  return labels[status] ?? status;
+}
+
+function paymentAttemptOriginLabel(origin: string) {
+  const labels: Record<string, string> = {
+    QR_ORDER: "QR API",
+    AMOUNT_MATCH: "Match por monto",
+    MANUAL_REFERENCE: "Referencia manual"
+  };
+
+  return labels[origin] ?? origin;
 }
 
 function Divider() {

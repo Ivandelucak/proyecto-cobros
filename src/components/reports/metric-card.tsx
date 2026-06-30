@@ -22,20 +22,20 @@ export function MetricCard({
   compact = false
 }: MetricCardProps) {
   return (
-    <Card className={cn("min-w-0 p-4", !compact && "2xl:p-5")}>
-      <p className="text-xs font-semibold uppercase tracking-normal text-slate-500 dark:text-gray-400">
+    <Card className={cn("pos-accent-line min-w-0 p-4 pl-5", !compact && "2xl:p-5 2xl:pl-6")}>
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500 dark:text-[#7F8D9A]">
         {label}
       </p>
       <p
         className={cn(
-          "mt-2 break-words font-bold tracking-normal text-gray-950 dark:text-gray-50",
+          "mt-2 break-words font-black tracking-tight text-gray-950 dark:text-[#F3F7FA]",
           compact ? "text-xl" : "text-2xl",
           valueTones[tone]
         )}
       >
         {value}
       </p>
-      <div className="mt-3 flex min-h-5 flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+      <div className="mt-3 flex min-h-5 flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-[#7F8D9A]">
         {comparison ? <ComparisonBadge comparison={comparison} compact /> : null}
         {detail ? <span className="min-w-0 break-words">{detail}</span> : null}
       </div>
@@ -45,8 +45,8 @@ export function MetricCard({
 
 const valueTones = {
   default: "",
-  green: "text-emerald-700 dark:text-emerald-200",
-  amber: "text-amber-700 dark:text-amber-200",
-  red: "text-red-700 dark:text-red-200",
+  green: "text-[#1F8F63] dark:text-[#D4F2E1]",
+  amber: "text-[#C98A26] dark:text-[#FFE4A6]",
+  red: "text-[#C94E4E] dark:text-[#FFD9D9]",
   blue: "text-brand-700 dark:text-brand-100"
 };

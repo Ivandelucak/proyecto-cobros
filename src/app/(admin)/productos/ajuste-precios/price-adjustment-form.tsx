@@ -52,7 +52,7 @@ export function PriceAdjustmentForm({
       <Card className="p-5">
         <form action={previewAction} className="grid gap-4 md:grid-cols-3">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Categoria
             </span>
             <Select name="categoryId" defaultValue="">
@@ -65,7 +65,7 @@ export function PriceAdjustmentForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Marca
             </span>
             <Input name="brand" list="price-adjustment-brands" placeholder="Ej: Coca Cola" />
@@ -76,7 +76,7 @@ export function PriceAdjustmentForm({
             </datalist>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Coincidencia marca
             </span>
             <Select name="brandMatch" defaultValue="exact">
@@ -85,7 +85,7 @@ export function PriceAdjustmentForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Busqueda
             </span>
             <Input
@@ -101,7 +101,7 @@ export function PriceAdjustmentForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Acceso rapido
             </span>
             <Select name="quickAccess" defaultValue="all">
@@ -111,7 +111,7 @@ export function PriceAdjustmentForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Stock
             </span>
             <Select name="stock" defaultValue="all">
@@ -121,13 +121,13 @@ export function PriceAdjustmentForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Porcentaje
             </span>
             <Input name="percent" inputMode="decimal" placeholder="Ej: 10" required />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Tipo
             </span>
             <Select name="direction" defaultValue="increase">
@@ -136,7 +136,7 @@ export function PriceAdjustmentForm({
             </Select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Redondeo
             </span>
             <Select name="rounding" defaultValue="none">
@@ -146,7 +146,7 @@ export function PriceAdjustmentForm({
               <option value="100">Multiplo de 100</option>
             </Select>
           </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-[#A9B6C2]">
             <input
               type="checkbox"
               name="activeOnly"
@@ -180,15 +180,15 @@ export function PriceAdjustmentForm({
         </p>
       ) : null}
       {state.success ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+        <p className="rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]">
           {state.success}
         </p>
       ) : null}
 
       {previewState.preview ? (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Preview ({previewState.preview.length} productos afectados)
             </h2>
             <form action={confirmAction}>
@@ -200,7 +200,7 @@ export function PriceAdjustmentForm({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Producto</th>
                   <th className="px-4 py-3 font-medium">Categoria</th>
@@ -213,22 +213,22 @@ export function PriceAdjustmentForm({
               <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
                 {previewState.preview.map((item) => (
                   <tr key={item.id}>
-                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                       {item.name}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {item.categoryName}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {item.brand ?? "-"}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {formatARS(item.currentPrice)}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {formatARS(item.newPrice)}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {formatARS(item.difference)}
                     </td>
                   </tr>

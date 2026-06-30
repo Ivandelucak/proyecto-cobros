@@ -64,7 +64,7 @@ export function QuotePrintTemplate({ business, quote }: QuotePrintTemplateProps)
   const hasSurcharge = quote.surchargeTotal.gt(0);
 
   return (
-    <article className="quote-print-sheet relative mx-auto min-w-[760px] max-w-[210mm] overflow-hidden rounded-xl border border-slate-200 bg-white p-8 text-slate-950 shadow-xl shadow-slate-950/10 dark:border-neutral-800 dark:bg-white dark:text-slate-950 print:min-w-0 print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+    <article className="quote-print-sheet relative mx-auto min-w-[760px] max-w-[210mm] overflow-hidden rounded-xl border border-slate-200 bg-white p-8 text-slate-950 shadow-xl shadow-slate-950/10 dark:border-[#273342] dark:bg-white dark:text-slate-950 print:min-w-0 print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
       <div className="pointer-events-none absolute right-8 top-44 select-none text-7xl font-black uppercase tracking-normal text-slate-100/70 print:text-slate-100/55">
         Presupuesto
       </div>

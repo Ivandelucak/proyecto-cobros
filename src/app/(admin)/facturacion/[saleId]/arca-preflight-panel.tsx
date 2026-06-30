@@ -52,10 +52,10 @@ export function ArcaPreflightPanel({
     <Card className="p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Preflight ARCA
           </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
             Validacion no destructiva con consulta de numeracion WSFEv1.
           </p>
         </div>
@@ -113,7 +113,7 @@ export function ArcaPreflightPanel({
         />
       </div>
 
-      <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-gray-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+      <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-gray-600 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]">
         Este control no emite comprobantes ni reserva numeracion. El proximo
         numero es estimado y se confirmara al emitir.
       </p>
@@ -148,7 +148,7 @@ export function ArcaPreflightPanel({
         </details>
       ) : null}
 
-      <div className="mt-5 flex flex-col gap-3 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="mt-5 flex flex-col gap-3 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <form action={formAction}>
             <Button type="submit" variant="primary" disabled={pending}>
@@ -159,22 +159,22 @@ export function ArcaPreflightPanel({
             Emitir en ARCA
           </Button>
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-300">
+        <p className="text-sm text-gray-600 dark:text-[#A9B6C2]">
           {hasErrors
             ? "Corregi los errores antes de emitir en una etapa futura."
             : "Listo para etapa futura de emision en homologacion."}
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
           Pendiente de implementacion. El preflight solo valida y consulta
           numeracion.
         </p>
       </div>
 
-      <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-gray-50">
+      <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
           Request tecnico con preflight
         </summary>
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-black dark:text-gray-100">
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-[#0B1015] dark:text-[#F3F7FA]">
           {JSON.stringify(requestWithPreflight, null, 2)}
         </pre>
       </details>
@@ -192,8 +192,8 @@ function PreflightInfo({
   tone?: ArcaPreflightStatusTone;
 }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-950">
-      <p className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-[#273342] dark:bg-[#121922]">
+      <p className="text-xs font-medium uppercase text-gray-500 dark:text-[#7F8D9A]">
         {label}
       </p>
       <p className={`mt-1 text-sm font-semibold ${toneTextClass(tone)}`}>
@@ -221,7 +221,7 @@ function PreflightList({
 
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+      <p className="text-xs font-medium uppercase text-gray-500 dark:text-[#7F8D9A]">
         {title}
       </p>
       {items.length > 0 ? (
@@ -233,7 +233,7 @@ function PreflightList({
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{emptyText}</p>
+        <p className="mt-2 text-sm text-gray-600 dark:text-[#A9B6C2]">{emptyText}</p>
       )}
     </div>
   );
@@ -241,7 +241,7 @@ function PreflightList({
 
 function toneTextClass(tone?: ArcaPreflightStatusTone) {
   if (tone === "OK") {
-    return "text-emerald-700 dark:text-emerald-200";
+    return "text-[#1F8F63] dark:text-[#D4F2E1]";
   }
   if (tone === "WARNING") {
     return "text-amber-800 dark:text-amber-200";
@@ -250,7 +250,7 @@ function toneTextClass(tone?: ArcaPreflightStatusTone) {
     return "text-red-700 dark:text-red-200";
   }
 
-  return "text-gray-950 dark:text-gray-50";
+  return "text-gray-950 dark:text-[#F3F7FA]";
 }
 
 function formatDateTime(value: string | null) {

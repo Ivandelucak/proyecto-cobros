@@ -12,14 +12,14 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-100 px-6 py-10 text-gray-950 dark:bg-neutral-950 dark:text-gray-50">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] px-6 py-10 text-[var(--text-primary)]">
       <section className="w-full max-w-sm">
         <div className="mb-5 flex items-center justify-between">
           <AppLogo />
           <ThemeToggle />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-[#273342] dark:bg-[#18212B]">
           <h1 className="mb-5 text-xl font-semibold">Ingresar</h1>
           <LoginForm />
         </div>

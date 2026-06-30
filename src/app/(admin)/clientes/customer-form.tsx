@@ -70,7 +70,7 @@ export function CustomerForm({ action, submitLabel, initialValues }: CustomerFor
           <Field label="Direccion">
             <Input name="address" defaultValue={initialValues?.address ?? ""} />
           </Field>
-          <label className="flex items-center gap-2 self-end rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-200">
+          <label className="flex items-center gap-2 self-end rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm dark:border-[#344457] dark:bg-[#121922] dark:text-[#A9B6C2]">
             <input
               type="checkbox"
               name="active"
@@ -80,20 +80,20 @@ export function CustomerForm({ action, submitLabel, initialValues }: CustomerFor
             Activo
           </label>
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Notas
             </span>
             <textarea
               name="notes"
               defaultValue={initialValues?.notes ?? ""}
-              className="min-h-24 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-50 dark:focus:ring-brand-900/60"
+              className="min-h-24 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-[#344457] dark:bg-[#121922] dark:text-[#F3F7FA] dark:focus:ring-brand-900/60"
             />
           </label>
         </div>
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-950 dark:text-gray-50">
+        <h2 className="mb-4 text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
           Datos fiscales
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
@@ -145,7 +145,7 @@ export function CustomerForm({ action, submitLabel, initialValues }: CustomerFor
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
       {children}
     </label>
   );

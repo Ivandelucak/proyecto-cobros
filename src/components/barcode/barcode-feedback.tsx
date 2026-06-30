@@ -12,7 +12,7 @@ export function BarcodeFeedback({ code, message, tone = "info" }: BarcodeFeedbac
   }
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]">
       {code ? <Badge tone={tone === "error" ? "red" : tone === "ok" ? "green" : "blue"}>Codigo escaneado: {code}</Badge> : null}
       {message ? <span className="min-w-0 break-words">{message}</span> : null}
     </div>

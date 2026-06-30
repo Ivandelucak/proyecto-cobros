@@ -27,7 +27,7 @@ export function AppShell({
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-slate-100 text-gray-950 transition-colors duration-200 dark:bg-neutral-950 dark:text-gray-50">
+    <div className="app-shell min-h-screen overflow-x-hidden transition-colors duration-200">
       {sidebarOpen ? (
         <button
           type="button"
@@ -46,20 +46,29 @@ export function AppShell({
         )}
       >
         {sidebarOpen ? (
-          <aside className="fixed inset-y-0 left-0 z-40 w-[224px] border-r border-slate-200 bg-white/95 px-3 py-4 shadow-2xl shadow-slate-950/15 backdrop-blur transition-[background-color,border-color,box-shadow] duration-200 dark:border-neutral-800 dark:bg-neutral-900/95 dark:shadow-black/30 md:static md:z-auto md:w-auto md:shadow-[2px_0_10px_rgba(15,23,42,0.03)] lg:px-3 2xl:px-4 2xl:py-5 print:hidden">
+          <aside className="fixed inset-y-0 left-0 z-40 w-[232px] border-r border-[color:var(--panel-border)] bg-[var(--panel-bg)]/95 px-3 py-4 shadow-2xl shadow-slate-950/15 backdrop-blur transition-[background-color,border-color,box-shadow] duration-200 dark:bg-[#0B1015]/98 dark:shadow-black/30 md:static md:z-auto md:w-auto md:shadow-[2px_0_18px_rgba(11,16,21,0.22)] lg:px-3 2xl:px-4 2xl:py-5 print:hidden relative">
+            <div className="absolute inset-y-0 right-0 hidden w-px bg-gradient-to-b from-transparent via-[#344457] to-transparent dark:block" aria-hidden="true" />
             <Link
               href={user.role === "ADMIN" ? "/admin" : "/caja"}
               title={user.role === "ADMIN" ? "Panel administrativo" : "Caja"}
-              className="block rounded-md px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="block rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               <AppLogo />
             </Link>
+            <div className="app-panel-secondary mt-4 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)]">
+              <p className="font-black uppercase tracking-[0.14em] text-[var(--text-primary)]">
+                {user.role === "CASHIER" ? "Modo caja" : "Centro operativo"}
+              </p>
+              <p className="mt-1 truncate">
+                {user.role === "CASHIER" ? "Listo para cobrar" : "Gestion comercial"}
+              </p>
+            </div>
             <AdminNav role={user.role} />
           </aside>
         ) : null}
 
         <div className="flex min-w-0 flex-col overflow-x-hidden">
-          <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 shadow-[0_2px_12px_rgba(15,23,42,0.04)] backdrop-blur transition-colors duration-200 dark:border-neutral-800 dark:bg-neutral-900/90 dark:shadow-none md:px-4 xl:px-5 xl:py-3 print:hidden">
+          <header className="pos-operational-strip flex min-h-16 flex-wrap items-center justify-between gap-3 border-b px-3 py-2.5 shadow-[0_2px_18px_rgba(11, 16, 21,0.06)] backdrop-blur transition-colors duration-200 dark:shadow-none md:px-4 xl:px-5 xl:py-3 print:hidden">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -68,10 +77,10 @@ export function AppShell({
                 title={sidebarOpen ? "Cerrar menu" : "Abrir menu"}
                 onClick={() => setSidebarOpen((current) => !current)}
                 className={cn(
-                  "group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-slate-700 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:hover:shadow-none dark:focus-visible:ring-offset-neutral-900",
+                  "group inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:hover:shadow-none dark:focus-visible:ring-offset-[#0B1015]",
                   sidebarOpen
-                    ? "border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-500/30 dark:bg-brand-600/20 dark:text-white"
-                    : "border-slate-300 bg-white hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-200 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+                    ? "border-[color:var(--primary)] bg-[var(--primary-soft)] text-[var(--text-primary)]"
+                    : "btn-secondary"
                 )}
               >
                 <span className="sr-only">
@@ -85,12 +94,15 @@ export function AppShell({
               </button>
 
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-gray-950 dark:text-gray-50">
+                <p className="truncate text-sm font-bold text-[var(--text-primary)]">
                   {user.name}
                 </p>
-                <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                  {user.email} · {roleLabel(user.role)}
+                <p className="truncate text-xs text-[var(--text-secondary)]">
+                  {user.email} - {roleLabel(user.role)}
                 </p>
+              </div>
+              <div className="badge-info hidden rounded-full px-3 py-1 text-xs font-bold sm:inline-flex">
+                {user.role === "CASHIER" ? "Caja operativa" : "Admin operativo"}
               </div>
             </div>
 

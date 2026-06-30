@@ -46,14 +46,14 @@ export function CategoryForm({
       <Card className="p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Nombre
             </span>
             <Input name="name" defaultValue={initialValues?.name ?? ""} required />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Categoría padre
             </span>
             <Select name="parentId" defaultValue={initialValues?.parentId ?? ""}>
@@ -67,7 +67,7 @@ export function CategoryForm({
           </label>
 
           <div className="flex items-end">
-            <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-200">
+            <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm dark:border-[#344457] dark:bg-[#121922] dark:text-[#A9B6C2]">
               <input
                 type="checkbox"
                 name="active"

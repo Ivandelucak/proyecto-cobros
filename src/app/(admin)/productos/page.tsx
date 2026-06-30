@@ -157,7 +157,7 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Producto</th>
                   <th className="px-4 py-3 font-medium">Categoria</th>
@@ -181,10 +181,10 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                       className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-950 dark:text-gray-50">
+                        <div className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                           {product.name}
                         </div>
-                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
                           {[product.barcode, product.sku].filter(Boolean).join(" - ") ||
                             "Sin codigo"}
                         </div>
@@ -196,15 +196,15 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                           {!product.barcode ? <Badge tone="gray">Sin codigo</Badge> : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {product.category.name}
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         <CurrencyText value={product.salePrice} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-800 dark:text-gray-100">
+                          <span className="text-gray-800 dark:text-[#F3F7FA]">
                             {formatStock(product.stock, product.unitType)}
                           </span>
                           {stockOut ? (
@@ -214,7 +214,7 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {unitLabel(product.unitType)}
                       </td>
                       <td className="px-4 py-3">

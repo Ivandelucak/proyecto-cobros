@@ -8,28 +8,35 @@ type AppLogoProps = {
 export function AppLogo({ compact = false, className }: AppLogoProps) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <div className="relative grid h-10 w-10 place-items-center rounded-lg border border-brand-100 bg-white text-brand-700 shadow-sm ring-1 ring-brand-50 transition-colors duration-200 dark:border-brand-500/30 dark:bg-neutral-950 dark:text-brand-100 dark:ring-brand-500/10">
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/40" />
-        <svg viewBox="0 0 32 32" aria-hidden="true" className="h-6 w-6" fill="none">
+      <div className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-xl border border-brand-300/70 bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 text-white shadow-[0_10px_28px_rgba(76, 127, 163,0.28)] ring-1 ring-white/20 transition-colors duration-200 dark:border-[#344457] dark:from-brand-400 dark:via-brand-500 dark:to-brand-800 dark:ring-brand-300/10">
+        <span className="absolute left-0 top-0 h-full w-1 bg-signal-accent" />
+        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-signal-accent shadow-sm shadow-signal-accent/40" />
+        <svg viewBox="0 0 32 32" aria-hidden="true" className="h-7 w-7" fill="none">
           <path
-            d="M7 8.5A2.5 2.5 0 0 1 9.5 6h13A2.5 2.5 0 0 1 25 8.5v15A2.5 2.5 0 0 1 22.5 26h-13A2.5 2.5 0 0 1 7 23.5v-15Z"
+            d="M8 7.5A2.5 2.5 0 0 1 10.5 5h11A2.5 2.5 0 0 1 24 7.5v14.2A2.3 2.3 0 0 1 22.6 24L16 27l-6.6-3A2.3 2.3 0 0 1 8 21.7V7.5Z"
             className="stroke-current"
-            strokeWidth="2"
+            strokeWidth="2.2"
           />
           <path
-            d="M11 11h10M11 15h4M19 15h2M11 20h2M16 20h2M21 20h.5"
+            d="M12 10h8M12 14h3M18 14h2M12 19h2M16 19h2M20 19h.5"
             className="stroke-current"
             strokeLinecap="round"
-            strokeWidth="2"
+            strokeWidth="2.2"
+          />
+          <path
+            d="M11.5 23.5h9"
+            className="stroke-current opacity-70"
+            strokeLinecap="round"
+            strokeWidth="1.6"
           />
         </svg>
       </div>
       {!compact ? (
         <div className="min-w-0">
-          <p className="truncate text-sm font-extrabold uppercase tracking-wide text-slate-950 dark:text-white">
+          <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-950 dark:text-white">
             POS Universal
           </p>
-          <p className="truncate text-xs font-medium text-slate-500 dark:text-gray-400">
+          <p className="truncate text-xs font-semibold text-brand-700 dark:text-brand-300">
             Comercio agil
           </p>
         </div>

@@ -89,12 +89,12 @@ export function CashSessionPanel({
 
   if (!cashSession) {
     return (
-      <Card className="border-slate-300 border-l-4 border-l-red-500 bg-white p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
+      <Card className="border-l-4 border-l-[color:var(--danger)] p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="red">Caja cerrada</Badge>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-[var(--text-muted)]">
                 {requireOpenSession
                   ? "Las ventas estan bloqueadas."
                   : "Ventas habilitadas sin apertura obligatoria."}
@@ -114,7 +114,7 @@ export function CashSessionPanel({
         {mode === "open" ? (
           <form
             action={openAction}
-            className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
+            className="app-panel-secondary mt-3 grid gap-3 rounded-lg p-3 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
           >
             <Input
               name="openingAmount"
@@ -136,11 +136,11 @@ export function CashSessionPanel({
   const recentMovements = cashSession.movements.slice(0, 3);
 
   return (
-    <Card className="border-slate-300 border-l-4 border-l-emerald-500 bg-white p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
+    <Card className="border-l-4 border-l-[color:var(--success)] p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone="green">Caja abierta</Badge>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-[var(--text-muted)]">
             Abierta desde {formatTimeStable(cashSession.openedAt)}
           </span>
         </div>
@@ -148,7 +148,7 @@ export function CashSessionPanel({
           type="button"
           size="sm"
           variant="secondary"
-          className="gap-2 border-slate-300 bg-slate-50 hover:bg-white dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+          className="gap-2"
           onClick={toggleDetails}
           aria-expanded={detailsVisible}
         >
@@ -162,10 +162,10 @@ export function CashSessionPanel({
       </div>
 
       {detailsVisible ? (
-        <div className="mt-3 border-t border-slate-300 pt-3 dark:border-neutral-800">
+        <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-[var(--text-muted)]">
                 Abierta por {cashSession.openedByName} el{" "}
                 {formatDateTimeStable(cashSession.openedAt)}
               </p>
@@ -213,7 +213,7 @@ export function CashSessionPanel({
               {recentMovements.map((movement) => (
                 <span
                   key={movement.id}
-                  className="rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-slate-700 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:shadow-none"
+                  className="badge-neutral rounded-full px-2.5 py-1 shadow-sm dark:shadow-none"
                   title={movement.reason}
                 >
                   {movementLabels[movement.type]} {formatARS(movement.amount)} -{" "}
@@ -226,7 +226,7 @@ export function CashSessionPanel({
           {mode === "movement" ? (
             <form
               action={movementAction}
-              className="mt-3 grid gap-3 rounded-lg border border-slate-300 bg-slate-50 p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-none md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(0,1fr)_auto]"
+              className="app-panel-secondary mt-3 grid gap-3 rounded-lg p-3 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(0,1fr)_auto]"
             >
               <Select name="type" defaultValue="EXPENSE">
                 {Object.entries(movementLabels).map(([value, label]) => (
@@ -247,7 +247,7 @@ export function CashSessionPanel({
           {mode === "close" ? (
             <form
               action={closeAction}
-              className="mt-3 grid gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/70 dark:bg-red-950/20 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
+              className="mt-3 grid gap-3 rounded-lg border p-3 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto] badge-danger"
             >
               <Input
                 name="countedCashAmount"
@@ -278,15 +278,15 @@ function Summary({
   strong?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <div className="app-panel-elevated min-w-0 rounded-md px-3 py-2 shadow-sm dark:shadow-none">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
         {label}
       </p>
       <p
         className={
           strong
-            ? "mt-0.5 break-words text-base font-semibold text-gray-950 dark:text-gray-50 2xl:text-lg"
-            : "mt-0.5 break-words text-sm font-semibold text-gray-950 dark:text-gray-50"
+            ? "mt-0.5 break-words text-base font-semibold text-[var(--text-primary)] 2xl:text-lg"
+            : "mt-0.5 break-words text-sm font-semibold text-[var(--text-primary)]"
         }
       >
         {value}
@@ -304,8 +304,8 @@ function StateMessage({ state }: { state: CashSessionFormState }) {
     <p
       className={
         state.error
-          ? "mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+          ? "badge-danger mt-3 rounded-md px-3 py-2 text-sm"
+          : "badge-success mt-3 rounded-md px-3 py-2 text-sm"
       }
     >
       {state.error ?? state.success}

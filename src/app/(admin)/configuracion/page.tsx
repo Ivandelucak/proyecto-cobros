@@ -7,6 +7,7 @@ import {
   getCreditInstallmentPlans,
   getPaymentMethodSettings
 } from "@/lib/payment-settings";
+import { getMercadoPagoAccountViews } from "@/lib/mercadopago/mercado-pago-accounts";
 import { getStockSetting } from "@/lib/stock-settings";
 import { getTicketSetting } from "@/lib/ticket-settings";
 import { BusinessProfileForm } from "./business-profile-form";
@@ -23,6 +24,7 @@ export default async function ConfiguracionPage() {
     profile,
     paymentMethods,
     creditPlans,
+    mercadoPagoAccounts,
     ticketSetting,
     cashSetting,
     stockSetting
@@ -30,6 +32,7 @@ export default async function ConfiguracionPage() {
     getBusinessProfileOrDefault(),
     getPaymentMethodSettings(),
     getCreditInstallmentPlans(),
+    getMercadoPagoAccountViews(),
     getTicketSetting(),
     getCashRegisterSetting(),
     getStockSetting()
@@ -78,7 +81,11 @@ export default async function ConfiguracionPage() {
         }}
       />
       <TicketSettingsForm setting={ticketSetting} />
-      <PaymentSettingsForm methods={paymentMethods} creditPlans={creditPlans} />
+      <PaymentSettingsForm
+        methods={paymentMethods}
+        creditPlans={creditPlans}
+        mercadoPagoAccounts={mercadoPagoAccounts}
+      />
       <OperationalSettingsForm cashSetting={cashSetting} stockSetting={stockSetting} />
     </section>
   );

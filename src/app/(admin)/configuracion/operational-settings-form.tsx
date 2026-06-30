@@ -120,14 +120,14 @@ export function OperationalSettingsForm({
 
 function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) {
   return (
-    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
+    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
       <input
         type="checkbox"
         name={name}
         defaultChecked={value}
         className="h-4 w-4 rounded border-slate-300 text-brand-600"
       />
-      <span className="font-medium text-gray-800 dark:text-gray-100">{label}</span>
+      <span className="font-medium text-gray-800 dark:text-[#F3F7FA]">{label}</span>
     </label>
   );
 }
@@ -142,7 +142,7 @@ function StateMessage({ state }: { state: OperationalSettingsState }) {
       className={
         state.error
           ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+          : "rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
       {state.error ?? state.success}
@@ -159,8 +159,8 @@ function SectionTitle({
 }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{description}</p>
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">{description}</p>
     </div>
   );
 }
@@ -174,7 +174,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
       {children}
     </label>
   );

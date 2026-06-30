@@ -124,7 +124,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Venta</th>
                   <th className="px-4 py-3 font-medium">Fecha</th>
@@ -144,36 +144,36 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                     key={sale.id}
                     className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                   >
-                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                       #{sale.saleNumber}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {formatDateTimeStable(sale.createdAt)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-950 dark:text-gray-50">
+                      <div className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {sale.user.name}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                         {sale.user.email}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {sale.customer?.name ?? "-"}
                     </td>
                     <td className="px-4 py-3">
                       {sale.cashSession ? (
                         <div>
                           <Badge tone="blue">Caja {sale.cashSession.id.slice(-6)}</Badge>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
                             {formatDateTimeStable(sale.cashSession.openedAt)}
                           </p>
                         </div>
                       ) : (
-                        <span className="text-gray-500 dark:text-gray-400">Sin caja</span>
+                        <span className="text-gray-500 dark:text-[#7F8D9A]">Sin caja</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {sale._count.items}
                     </td>
                     <td className="px-4 py-3">
@@ -182,11 +182,11 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                           <div key={payment.id} className="min-w-0">
                             <Badge tone="gray">{paymentLabels[payment.method]}</Badge>
                             {payment.externalReference || payment.externalId ? (
-                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-gray-400">
+                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
                                 {payment.externalReference ?? payment.externalId}
                               </p>
                             ) : providerStatusLabel(payment.providerStatus) ? (
-                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-gray-400">
+                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
                                 {providerStatusLabel(payment.providerStatus)}
                               </p>
                             ) : null}
@@ -194,7 +194,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
+                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-[#F3F7FA]">
                       {formatARS(sale.total)}
                     </td>
                     <td className="px-4 py-3">

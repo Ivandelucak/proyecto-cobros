@@ -160,17 +160,17 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               ))}
             </Select>
           </Field>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
-            <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
+            <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
               Codigo ARCA asociado
             </span>
-            <span className="mt-1 block font-semibold text-gray-950 dark:text-gray-50">
+            <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
               {defaultFiscalTaxHelp(defaultFiscalTaxValue(setting))}
             </span>
           </div>
         </div>
         {setting.fiscalCondition === "MONOTRIBUTO" ? (
-          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
             En Factura C no se discrimina IVA. La previsualizacion conserva el
             total como importe neto interno.
           </p>
@@ -262,7 +262,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             />
           </Field>
         </div>
-        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
           Las credenciales se guardan para pruebas locales de homologacion y no se
           vuelven a mostrar despues de guardar.
         </p>
@@ -324,25 +324,25 @@ function defaultFiscalTaxHelp(value: string) {
 
 function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) {
   return (
-    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
+    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
       <input
         type="checkbox"
         name={name}
         defaultChecked={value}
         className="h-4 w-4 rounded border-slate-300 text-brand-600"
       />
-      <span className="font-medium text-gray-800 dark:text-gray-100">{label}</span>
+      <span className="font-medium text-gray-800 dark:text-[#F3F7FA]">{label}</span>
     </label>
   );
 }
 
 function CredentialStatus({ label, value }: { label: string; value: boolean }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-950">
-      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
+      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
         {label}
       </span>
-      <span className="mt-1 block font-semibold text-gray-950 dark:text-gray-50">
+      <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
         {value ? "Si" : "No"}
       </span>
     </div>
@@ -350,7 +350,7 @@ function CredentialStatus({ label, value }: { label: string; value: boolean }) {
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>;
+  return <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>;
 }
 
 function Field({
@@ -362,7 +362,7 @@ function Field({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
       {children}
     </label>
   );
@@ -378,7 +378,7 @@ function StateMessage({ state }: { state: FiscalSettingsState }) {
       className={
         state.error
           ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+          : "rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
       {state.error ?? state.success}

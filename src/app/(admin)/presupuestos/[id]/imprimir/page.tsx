@@ -35,7 +35,7 @@ export default async function ImprimirPresupuestoPage({
   }
 
   return (
-    <main className="quote-print-page min-h-screen overflow-x-auto bg-slate-100 px-4 py-6 text-slate-950 dark:bg-neutral-950 print:overflow-visible print:bg-white print:p-0">
+    <main className="quote-print-page min-h-screen overflow-x-auto bg-slate-100 px-4 py-6 text-slate-950 dark:bg-[#121922] print:overflow-visible print:bg-white print:p-0">
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 12mm; }
@@ -78,7 +78,7 @@ export default async function ImprimirPresupuestoPage({
           </LinkButton>
           <BrowserPrintButton label="Imprimir" />
         </div>
-        <p className="text-xs text-slate-500 dark:text-gray-400">
+        <p className="text-xs text-slate-500 dark:text-[#7F8D9A]">
           Usar imprimir para guardar como PDF.
         </p>
       </div>

@@ -71,7 +71,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
             Filtrar
           </Button>
         </form>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-[#7F8D9A]">
           <span>Periodo: {data.periodLabel}</span>
           <span className="hidden h-1 w-1 rounded-full bg-current sm:inline-block" />
           <span>Pago: {methodLabel}</span>
@@ -187,6 +187,33 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
           <DailySalesChart items={data.dailySales} />
         </ReportSection>
       </div>
+
+      <ReportSection
+        title="Mercado Pago API"
+        description="Ordenes QR, matches por monto y referencias asociadas al periodo filtrado."
+      >
+        <ReportList
+          dense
+          emptyText="Sin operaciones Mercado Pago API en el periodo."
+          items={data.mercadoPagoAttempts.map((attempt) => ({
+            id: attempt.id,
+            title: attempt.saleNumber
+              ? `Venta #${attempt.saleNumber}`
+              : `Intento ${attempt.id.slice(-6)}`,
+            description: `${attempt.accountName} (${attempt.environment}) - ${paymentAttemptOriginLabel(
+              attempt.origin
+            )} - Ref. ${attempt.externalReference}`,
+            value: formatARS(attempt.amount),
+            badge: paymentAttemptStatusLabel(attempt.status),
+            badgeTone: paymentAttemptTone(attempt.status),
+            action: attempt.saleId ? (
+              <LinkButton href={`/ventas/${attempt.saleId}`} size="sm" variant="outline">
+                Ver venta
+              </LinkButton>
+            ) : null
+          }))}
+        />
+      </ReportSection>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <ReportSection title="Top productos por facturacion">
@@ -446,6 +473,43 @@ function paymentTone(method: PaymentMethod) {
 
   if (method === PaymentMethod.MERCADOPAGO) {
     return "blue";
+  }
+
+  return "gray";
+}
+
+function paymentAttemptStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Pendiente",
+    APPROVED: "Aprobado",
+    REJECTED: "Rechazado",
+    CANCELLED: "Cancelado",
+    EXPIRED: "Vencido",
+    ERROR: "Error"
+  };
+
+  return labels[status] ?? status;
+}
+
+function paymentAttemptOriginLabel(origin: string) {
+  const labels: Record<string, string> = {
+    QR_ORDER: "QR API",
+    AMOUNT_MATCH: "Match por monto",
+    MANUAL_REFERENCE: "Referencia manual"
+  };
+
+  return labels[origin] ?? origin;
+}
+
+function paymentAttemptTone(status: string): ReportListItem["badgeTone"] {
+  if (status === "APPROVED") {
+    return "green";
+  }
+  if (status === "PENDING") {
+    return "amber";
+  }
+  if (status === "ERROR" || status === "REJECTED") {
+    return "red";
   }
 
   return "gray";

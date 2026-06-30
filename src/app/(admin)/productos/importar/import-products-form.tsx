@@ -52,10 +52,10 @@ export function ImportProductsForm() {
         <Card className="p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Importacion segura
               </h2>
-              <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+              <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-[#A9B6C2]">
                 {importRules.map((rule) => (
                   <p key={rule}>{rule}</p>
                 ))}
@@ -68,7 +68,7 @@ export function ImportProductsForm() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Columnas aceptadas
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -84,7 +84,7 @@ export function ImportProductsForm() {
       <Card className="p-5">
         <form action={previewAction} className="grid gap-4 md:grid-cols-[1fr_auto]">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Subi tu archivo Excel
             </span>
             <input
@@ -92,7 +92,7 @@ export function ImportProductsForm() {
               name="file"
               accept=".xlsx"
               required
-              className="block w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-50 dark:file:bg-neutral-800 dark:file:text-gray-100"
+              className="block w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-800 dark:border-[#344457] dark:bg-[#121922] dark:text-[#F3F7FA] dark:file:bg-[#273342] dark:file:text-gray-100"
             />
           </label>
           <div className="flex items-end gap-2">
@@ -112,7 +112,7 @@ export function ImportProductsForm() {
 
       {state.result ? (
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Importacion finalizada
           </h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -136,10 +136,10 @@ export function ImportProductsForm() {
           <Card className="p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+                <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   Revisa los productos antes de importar
                 </h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
                   Solo se importan las filas validas. Las filas con error quedan afuera.
                 </p>
               </div>
@@ -171,7 +171,7 @@ export function ImportProductsForm() {
             </div>
 
             {preview.summary.newCategories.length > 0 ? (
-              <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+              <p className="mt-3 text-sm text-gray-600 dark:text-[#A9B6C2]">
                 Se crearan: {preview.summary.newCategories.join(", ")}
               </p>
             ) : null}
@@ -180,7 +180,7 @@ export function ImportProductsForm() {
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Fila</th>
                     <th className="px-4 py-3 font-medium">Accion</th>
@@ -210,34 +210,34 @@ export function ImportProductsForm() {
 function PreviewRow({ row }: { row: ProductImportPreviewRow }) {
   return (
     <tr className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60">
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{row.rowNumber}</td>
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">{row.rowNumber}</td>
       <td className="px-4 py-3">
         <Badge tone={row.action === "error" ? "red" : row.action === "create" ? "green" : "blue"}>
           {actionLabel(row.action)}
         </Badge>
       </td>
       <td className="px-4 py-3">
-        <div className="font-medium text-gray-950 dark:text-gray-50">
+        <div className="font-medium text-gray-950 dark:text-[#F3F7FA]">
           {row.name || row.productName || "-"}
         </div>
         {row.productName && row.action === "update" ? (
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs text-gray-500 dark:text-[#7F8D9A]">
             Actualiza {row.productName}
           </div>
         ) : null}
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{row.barcode ?? "-"}</td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{row.sku ?? "-"}</td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">{row.barcode ?? "-"}</td>
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">{row.sku ?? "-"}</td>
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
         {row.category || "-"}
         {row.categoryWillBeCreated && row.action !== "error" ? (
           <span className="ml-2 text-xs text-brand-700 dark:text-brand-200">nueva</span>
         ) : null}
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
         {row.salePrice ? formatARS(row.salePrice) : "-"}
       </td>
-      <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{row.stock ?? "-"}</td>
+      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">{row.stock ?? "-"}</td>
       <td className="px-4 py-3 text-red-700 dark:text-red-300">
         {row.errors.length > 0 ? row.errors.join(" ") : "-"}
       </td>
@@ -247,11 +247,11 @@ function PreviewRow({ row }: { row: ProductImportPreviewRow }) {
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-[#273342] dark:bg-[#121922]">
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-gray-50">{value}</p>
+      <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">{value}</p>
     </div>
   );
 }

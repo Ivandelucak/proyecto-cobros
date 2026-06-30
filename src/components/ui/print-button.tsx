@@ -111,10 +111,10 @@ export function PrintButton({
         <span
           className={
             status.tone === "ok"
-              ? "text-xs font-medium text-emerald-700 dark:text-emerald-300"
+              ? "text-xs font-medium text-[var(--success)]"
               : status.tone === "error"
-                ? "text-xs font-medium text-red-700 dark:text-red-300"
-                : "text-xs font-medium text-gray-500 dark:text-gray-400"
+                ? "text-xs font-medium text-[var(--danger)]"
+                : "text-xs font-medium text-[var(--text-muted)]"
           }
         >
           {status.text}

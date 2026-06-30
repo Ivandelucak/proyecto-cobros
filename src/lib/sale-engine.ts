@@ -33,6 +33,7 @@ type PaymentInput = {
   externalId?: string;
   externalReference?: string;
   providerStatus?: string;
+  paymentAttemptId?: string;
 };
 
 export type ConfirmSaleInput = {
@@ -167,10 +168,15 @@ export async function confirmSale(input: ConfirmSaleInput) {
     });
 
     const discountTotal = new Prisma.Decimal(0);
+    const approvedAttemptsById = await validatePaymentAttempts(
+      tx,
+      validatedPayments
+    );
     const { paymentRecords, surchargeTotal } = buildPaymentRecords(
       validatedPayments,
       subtotal,
-      activeCreditPlans
+      activeCreditPlans,
+      approvedAttemptsById
     );
     const fiscalDecision = determineFiscalRequirementForSale({
       payments: paymentRecords.map((payment) => ({ method: payment.method })),
@@ -269,6 +275,15 @@ export async function confirmSale(input: ConfirmSaleInput) {
       });
     }
 
+    for (const payment of paymentRecords) {
+      if (payment.paymentAttemptId) {
+        await tx.paymentAttempt.update({
+          where: { id: payment.paymentAttemptId },
+          data: { saleId: sale.id }
+        });
+      }
+    }
+
     await applyFiscalDecisionToSale(tx, sale.id, fiscalDecision, user.id);
 
     return tx.sale.findUniqueOrThrow({
@@ -285,7 +300,8 @@ export async function confirmSale(input: ConfirmSaleInput) {
 function buildPaymentRecords(
   payments: PaymentInput[],
   subtotal: Prisma.Decimal,
-  activeCreditPlans: ActiveCreditInstallmentPlan[]
+  activeCreditPlans: ActiveCreditInstallmentPlan[],
+  approvedAttemptsById: Map<string, { id: string; providerPaymentId: string | null }>
 ) {
   const creditPayments = payments.filter((payment) => payment.method === PaymentMethod.CREDIT);
   if (creditPayments.length > 1) {
@@ -331,7 +347,8 @@ function buildPaymentRecords(
         surchargeAmount: creditSurchargeAmount,
         externalId: payment.externalId,
         externalReference: payment.externalReference,
-        providerStatus: payment.providerStatus
+        providerStatus: payment.providerStatus,
+        paymentAttemptId: payment.paymentAttemptId ?? null
       };
     }
 
@@ -355,9 +372,14 @@ function buildPaymentRecords(
         surchargeAmount: null,
         externalId: payment.externalId,
         externalReference: payment.externalReference,
-        providerStatus: payment.providerStatus
+        providerStatus: payment.providerStatus,
+        paymentAttemptId: payment.paymentAttemptId ?? null
       };
     }
+
+    const approvedAttempt = payment.paymentAttemptId
+      ? approvedAttemptsById.get(payment.paymentAttemptId)
+      : null;
 
     return {
       method: payment.method,
@@ -367,9 +389,10 @@ function buildPaymentRecords(
       installments: null,
       surchargeRate: null,
       surchargeAmount: null,
-      externalId: payment.externalId,
+      externalId: payment.externalId ?? approvedAttempt?.providerPaymentId,
       externalReference: payment.externalReference,
-      providerStatus: payment.providerStatus
+      providerStatus: payment.providerStatus,
+      paymentAttemptId: payment.paymentAttemptId ?? null
     };
   });
 
@@ -377,6 +400,56 @@ function buildPaymentRecords(
     paymentRecords,
     surchargeTotal: surchargeTotal.toDecimalPlaces(2)
   };
+}
+
+async function validatePaymentAttempts(
+  tx: Prisma.TransactionClient,
+  payments: PaymentInput[]
+) {
+  const attemptIds = [
+    ...new Set(payments.map((payment) => payment.paymentAttemptId).filter(Boolean))
+  ] as string[];
+  const approvedAttemptsById = new Map<
+    string,
+    { id: string; providerPaymentId: string | null }
+  >();
+
+  if (attemptIds.length === 0) {
+    return approvedAttemptsById;
+  }
+
+  const attempts = await tx.paymentAttempt.findMany({
+    where: { id: { in: attemptIds } },
+    include: { payment: { select: { id: true } } }
+  });
+  const attemptsById = new Map(attempts.map((attempt) => [attempt.id, attempt]));
+
+  for (const payment of payments) {
+    if (!payment.paymentAttemptId) {
+      continue;
+    }
+
+    const attempt = attemptsById.get(payment.paymentAttemptId);
+    if (!attempt || attempt.status !== "APPROVED") {
+      throw new Error("El intento de Mercado Pago todavia no esta aprobado.");
+    }
+    if (attempt.payment) {
+      throw new Error("Ese pago de Mercado Pago ya fue usado en otra venta.");
+    }
+    if (!new Prisma.Decimal(payment.amount).toDecimalPlaces(2).equals(attempt.amount)) {
+      throw new Error("El monto aprobado por Mercado Pago no coincide con la venta.");
+    }
+    if (payment.method !== PaymentMethod.MERCADOPAGO) {
+      throw new Error("El intento Mercado Pago solo puede asociarse a Mercado Pago.");
+    }
+
+    approvedAttemptsById.set(attempt.id, {
+      id: attempt.id,
+      providerPaymentId: attempt.providerPaymentId
+    });
+  }
+
+  return approvedAttemptsById;
 }
 
 function groupSaleItems(items: SaleItemInput[]) {

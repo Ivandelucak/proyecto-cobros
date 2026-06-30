@@ -122,7 +122,7 @@ export default async function FacturacionDetallePage({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Resumen de venta
             </h2>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -144,12 +144,12 @@ export default async function FacturacionDetallePage({
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Estado fiscal
             </h2>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+                <p className="text-xs font-medium uppercase text-gray-500 dark:text-[#7F8D9A]">
                   Estado
                 </p>
                 <div className="mt-1">
@@ -177,7 +177,7 @@ export default async function FacturacionDetallePage({
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Datos del receptor
             </h2>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -218,7 +218,7 @@ export default async function FacturacionDetallePage({
 
           {fiscalDocument ? (
             <Card className="p-5">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Comprobante preparado
               </h2>
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -302,14 +302,14 @@ export default async function FacturacionDetallePage({
           ) : null}
 
           <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-neutral-800">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
+              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
                 Items
               </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Descripcion</th>
                     <th className="px-4 py-3 font-medium">Cantidad</th>
@@ -322,22 +322,22 @@ export default async function FacturacionDetallePage({
                   {(fiscalDocument?.items.length ? fiscalDocument.items : sale.items).map(
                     (item) => (
                       <tr key={item.id}>
-                        <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                           {"description" in item ? item.description : item.productNameSnapshot}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                        <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                           {formatQuantity(
                             item.quantity.toString(),
                             "unitTypeSnapshot" in item ? item.unitTypeSnapshot : UnitType.UNIT
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                        <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                           {formatARS(item.unitPrice)}
                         </td>
-                        <td className="px-4 py-3 font-medium text-gray-950 dark:text-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                           {formatARS(item.subtotal)}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                        <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                           {"vatRate" in item && item.vatRate ? `${item.vatRate}%` : "-"}
                         </td>
                       </tr>
@@ -351,7 +351,7 @@ export default async function FacturacionDetallePage({
 
         <aside className="space-y-5">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Acciones
             </h2>
             <div className="mt-4 space-y-3">
@@ -373,7 +373,7 @@ export default async function FacturacionDetallePage({
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Validaciones
             </h2>
             <ValidationList
@@ -391,7 +391,7 @@ export default async function FacturacionDetallePage({
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+            <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
               Configuracion fiscal
             </h2>
             <div className="mt-4 space-y-2 text-sm">
@@ -442,10 +442,10 @@ function ArcaPreviewSection({
     <Card className="p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Previsualizacion ARCA
           </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
             Request interno para emision futura. No se envia a ARCA.
           </p>
         </div>
@@ -514,8 +514,8 @@ function ArcaPreviewSection({
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
+          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-[#7F8D9A]">
             Alicuotas IVA ARCA
           </h3>
           {request.taxSummary.vatGroups.length > 0 ? (
@@ -523,43 +523,43 @@ function ArcaPreviewSection({
               {request.taxSummary.vatGroups.map((group) => (
                 <div
                   key={group.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-black"
+                  className="flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-[#273342] dark:bg-[#0B1015]"
                 >
-                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                  <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {group.description} · codigo {group.id}
                   </span>
-                  <span className="text-right text-gray-600 dark:text-gray-300">
+                  <span className="text-right text-gray-600 dark:text-[#A9B6C2]">
                     Base {formatARS(group.baseImp)} / IVA {formatARS(group.importe)}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+            <p className="mt-3 text-sm text-gray-600 dark:text-[#A9B6C2]">
               Sin IVA discriminado para esta letra o tratamiento.
             </p>
           )}
         </div>
 
-        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
+          <h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-[#7F8D9A]">
             Items fiscales
           </h3>
           <div className="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
             {request.items.map((item) => (
               <div
                 key={`${item.description}-${item.subtotal}`}
-                className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-black"
+                className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-[#273342] dark:bg-[#0B1015]"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                  <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {item.description}
                   </span>
-                  <span className="text-right font-medium text-gray-950 dark:text-gray-50">
+                  <span className="text-right font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(item.subtotal)}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
                   {item.taxTreatmentLabel}
                   {item.vatRate ? ` · IVA ${item.vatRate}%` : ""}
                   {item.taxCode ? ` · codigo ${item.taxCode}` : ""}
@@ -591,11 +591,11 @@ function ArcaPreviewSection({
         </div>
       </div>
 
-      <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-gray-50">
+      <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
           Request tecnico JSON
         </summary>
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-black dark:text-gray-100">
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-[#0B1015] dark:text-[#F3F7FA]">
           {JSON.stringify(request, null, 2)}
         </pre>
       </details>
@@ -615,14 +615,14 @@ function Info({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+      <p className="text-xs font-medium uppercase text-gray-500 dark:text-[#7F8D9A]">
         {label}
       </p>
       <p
         className={
           strong
-            ? "mt-1 font-semibold text-gray-950 dark:text-gray-50"
-            : "mt-1 text-gray-700 dark:text-gray-200"
+            ? "mt-1 font-semibold text-gray-950 dark:text-[#F3F7FA]"
+            : "mt-1 text-gray-700 dark:text-[#A9B6C2]"
         }
       >
         {value}
@@ -649,7 +649,7 @@ function ValidationList({
 
   return (
     <div className="mt-4">
-      <p className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+      <p className="text-xs font-medium uppercase text-gray-500 dark:text-[#7F8D9A]">
         {title}
       </p>
       {items.length > 0 ? (
@@ -661,7 +661,7 @@ function ValidationList({
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{emptyText}</p>
+        <p className="mt-2 text-sm text-gray-600 dark:text-[#A9B6C2]">{emptyText}</p>
       )}
     </div>
   );

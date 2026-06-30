@@ -220,7 +220,7 @@ export function FiscalSaleActions({
           title="Mas acciones"
           aria-expanded={menuOpen}
           onClick={toggleMenu}
-          className={`${styles.fiscalMenuButton} inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow-md active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-100 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10`}
+          className={`${styles.fiscalMenuButton} inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow-md active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-[#344457] dark:bg-[#18212B] dark:text-[#F3F7FA] dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10`}
         >
           <MoreIcon />
         </button>
@@ -228,7 +228,7 @@ export function FiscalSaleActions({
       {menuOpen && menuPosition ? (
         <div
           ref={menuRef}
-          className="fixed z-50 max-h-[260px] w-56 overflow-y-auto rounded-md border border-gray-200 bg-white p-2 text-sm shadow-xl shadow-slate-950/10 dark:border-neutral-800 dark:bg-neutral-950 dark:shadow-black/30"
+          className="fixed z-50 max-h-[260px] w-56 overflow-y-auto rounded-md border border-gray-200 bg-white p-2 text-sm shadow-xl shadow-slate-950/10 dark:border-[#273342] dark:bg-[#121922] dark:shadow-black/30"
           style={{ left: menuPosition.left, top: menuPosition.top }}
         >
           <MenuLink href={`/facturacion/${saleId}`}>Detalle fiscal</MenuLink>
@@ -256,7 +256,7 @@ export function FiscalSaleActions({
               Anular antes de emitir
             </MenuButton>
           ) : null}
-          <div className="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-neutral-800 dark:text-gray-400">
+          <div className="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-[#273342] dark:text-[#7F8D9A]">
             {requiresFiscalInvoice
               ? "Emision real pendiente de integracion ARCA."
               : "No requiere emision."}
@@ -364,7 +364,7 @@ function MenuLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="block rounded-md px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-gray-200 dark:hover:bg-neutral-900 dark:hover:text-white"
+      className="block rounded-md px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-[#A9B6C2] dark:hover:bg-neutral-900 dark:hover:text-white"
     >
       {children}
     </Link>
@@ -390,7 +390,7 @@ function MenuButton({
       className={
         danger
           ? "block w-full rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50 disabled:opacity-60 dark:text-red-200 dark:hover:bg-red-950/40"
-          : "block w-full rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:bg-neutral-900 dark:hover:text-white"
+          : "block w-full rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors hover:bg-slate-100 hover:text-gray-950 disabled:opacity-60 dark:text-[#A9B6C2] dark:hover:bg-neutral-900 dark:hover:text-white"
       }
     >
       {children}
@@ -436,27 +436,27 @@ function CancelBeforeIssueModal({
       aria-modal="true"
       aria-labelledby="cancel-before-issue-title"
     >
-      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-5 shadow-xl dark:border-[#273342] dark:bg-[#121922]">
         <h2
           id="cancel-before-issue-title"
-          className="text-lg font-semibold text-gray-950 dark:text-gray-50"
+          className="text-lg font-semibold text-gray-950 dark:text-[#F3F7FA]"
         >
           Anular antes de emitir
         </h2>
-        <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+        <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-[#A9B6C2]">
           Esta venta todavia no fue emitida fiscalmente. Podes anularla
           internamente y quitarla de la cola de facturacion.
         </p>
         <form action={action} className="mt-4 space-y-4">
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Motivo de anulacion
             </span>
             <textarea
               name="reason"
               required
               rows={3}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-50 dark:focus:ring-brand-900"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-[#344457] dark:bg-[#18212B] dark:text-[#F3F7FA] dark:focus:ring-brand-900"
             />
           </label>
           {state.error ? (
@@ -488,7 +488,7 @@ function ActionStateMessage({ state }: { state: FiscalActionState }) {
       className={
         state.error
           ? "rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200"
+          : "rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-2 py-1 text-xs text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
       {state.error ?? state.success}

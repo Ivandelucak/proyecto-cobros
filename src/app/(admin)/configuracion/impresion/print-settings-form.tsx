@@ -83,10 +83,10 @@ export function PrintSettingsForm({
     <Card className="p-5">
       <form action={formAction} className="space-y-5">
         <div>
-          <h2 className="text-base font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-base font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Impresora de tickets
           </h2>
-          <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+          <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-[#A9B6C2]">
             La seleccion de impresora se usa desde la app de escritorio. En
             navegador se usara el dialogo de impresion.
           </p>
@@ -98,7 +98,7 @@ export function PrintSettingsForm({
           </p>
         ) : null}
         {state.success ? (
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <p className="rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]">
             {state.success}
           </p>
         ) : null}
@@ -115,7 +115,7 @@ export function PrintSettingsForm({
           </div>
         ) : (
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Impresora
             </span>
             <Select
@@ -146,7 +146,7 @@ export function PrintSettingsForm({
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Tamano de papel
             </span>
             <Select name="paperSize" defaultValue={initialSetting.paperSize}>
@@ -159,7 +159,7 @@ export function PrintSettingsForm({
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Estado
             </span>
             <Input
@@ -168,7 +168,7 @@ export function PrintSettingsForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Copias
             </span>
             <Input
@@ -181,7 +181,7 @@ export function PrintSettingsForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
               Margen en mm
             </span>
             <Input
@@ -232,7 +232,7 @@ function Toggle({
   defaultChecked: boolean;
 }) {
   return (
-    <label className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950">
+    <label className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#273342] dark:bg-[#121922]">
       <input
         type="checkbox"
         name={name}
@@ -240,10 +240,10 @@ function Toggle({
         className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600"
       />
       <span>
-        <span className="block text-sm font-medium text-gray-950 dark:text-gray-50">
+        <span className="block text-sm font-medium text-gray-950 dark:text-[#F3F7FA]">
           {label}
         </span>
-        <span className="mt-1 block text-sm leading-5 text-gray-600 dark:text-gray-300">
+        <span className="mt-1 block text-sm leading-5 text-gray-600 dark:text-[#A9B6C2]">
           {description}
         </span>
       </span>

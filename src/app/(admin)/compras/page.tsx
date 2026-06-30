@@ -42,7 +42,7 @@ export default async function ComprasPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Compra</th>
                   <th className="px-4 py-3 font-medium">Proveedor</th>
@@ -57,23 +57,23 @@ export default async function ComprasPage() {
                 {purchases.map((purchase) => (
                   <tr key={purchase.id} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-950 dark:text-gray-50">
+                      <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                         #{purchase.purchaseNumber}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                         {formatDateTimeStable(purchase.createdAt)}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {purchase.supplier?.name ?? "Sin proveedor"}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {purchase.user.name}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">
+                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                       {purchase._count.items}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
+                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-[#F3F7FA]">
                       {formatARS(purchase.total)}
                     </td>
                     <td className="px-4 py-3">

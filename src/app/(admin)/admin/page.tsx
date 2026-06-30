@@ -117,22 +117,22 @@ export default async function AdminPage() {
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Ultimas ventas
           </h2>
           <div className="mt-4 divide-y divide-gray-100 dark:divide-neutral-800">
             {latestSales.map((sale) => (
               <div key={sale.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <div>
-                  <p className="font-medium text-gray-950 dark:text-gray-50">
+                  <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     Venta #{sale.saleNumber}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                     {sale.user.name}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium text-gray-950 dark:text-gray-50">
+                  <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(sale.total)}
                   </p>
                   <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
@@ -145,21 +145,21 @@ export default async function AdminPage() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Productos mas vendidos hoy
           </h2>
           <div className="mt-4 divide-y divide-gray-100 dark:divide-neutral-800">
             {topProducts.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-[#7F8D9A]">
                 Sin ventas hoy.
               </p>
             ) : (
               topProducts.map((product) => (
                 <div key={product.name} className="flex justify-between gap-3 py-2 text-sm">
-                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                  <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {product.name}
                   </span>
-                  <span className="text-gray-700 dark:text-gray-200">
+                  <span className="text-gray-700 dark:text-[#A9B6C2]">
                     {formatARS(product.total)}
                   </span>
                 </div>
@@ -169,26 +169,26 @@ export default async function AdminPage() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
             Compras recientes
           </h2>
           <div className="mt-4 divide-y divide-gray-100 dark:divide-neutral-800">
             {latestPurchases.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-[#7F8D9A]">
                 Sin compras registradas.
               </p>
             ) : (
               latestPurchases.map((purchase) => (
                 <div key={purchase.id} className="flex justify-between gap-3 py-2 text-sm">
                   <div>
-                    <p className="font-medium text-gray-950 dark:text-gray-50">
+                    <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                       Compra #{purchase.purchaseNumber}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                       {purchase.supplier?.name ?? "Sin proveedor"}
                     </p>
                   </div>
-                  <span className="font-medium text-gray-950 dark:text-gray-50">
+                  <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {formatARS(purchase.total)}
                   </span>
                 </div>
@@ -212,9 +212,9 @@ function Metric({
 }) {
   return (
     <Card className="p-5">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-gray-950 dark:text-gray-50">{value}</p>
-      {detail ? <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{detail}</p> : null}
+      <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">{label}</p>
+      <p className="mt-3 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">{value}</p>
+      {detail ? <p className="mt-2 text-sm text-gray-600 dark:text-[#A9B6C2]">{detail}</p> : null}
     </Card>
   );
 }

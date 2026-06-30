@@ -271,7 +271,7 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                   required
                 />
                 {customerResults.length > 0 ? (
-                  <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-950">
+                  <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg dark:border-[#273342] dark:bg-[#121922]">
                     {customerResults.map((customer) => (
                       <button
                         key={customer.id}
@@ -283,10 +283,10 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                           setCustomerResults([]);
                         }}
                       >
-                        <span className="font-semibold text-gray-950 dark:text-gray-50">
+                        <span className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                           {customer.name}
                         </span>
-                        <span className="mt-0.5 block text-xs text-slate-500 dark:text-gray-400">
+                        <span className="mt-0.5 block text-xs text-slate-500 dark:text-[#7F8D9A]">
                           {[customer.document, customer.phone, customer.email]
                             .filter(Boolean)
                             .join(" - ") || "Sin datos adicionales"}
@@ -356,13 +356,13 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                   <button
                     key={product.id}
                     type="button"
-                    className="rounded-lg border border-slate-200 bg-white p-3 text-left text-sm shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+                    className="rounded-lg border border-slate-200 bg-white p-3 text-left text-sm shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60 dark:border-[#273342] dark:bg-[#121922] dark:hover:bg-neutral-900"
                     onClick={() => addProduct(product)}
                   >
-                    <span className="block font-semibold text-gray-950 dark:text-gray-50">
+                    <span className="block font-semibold text-gray-950 dark:text-[#F3F7FA]">
                       {product.name}
                     </span>
-                    <span className="mt-1 block text-xs text-slate-500 dark:text-gray-400">
+                    <span className="mt-1 block text-xs text-slate-500 dark:text-[#7F8D9A]">
                       {product.categoryName} - {product.barcode ?? product.sku ?? "Sin codigo"}
                     </span>
                     <span className="mt-2 block font-bold text-brand-700 dark:text-brand-300">
@@ -377,7 +377,7 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-400">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                   <tr>
                     <th className="px-4 py-3">Producto</th>
                     <th className="px-4 py-3">Cantidad</th>
@@ -397,10 +397,10 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                     items.map((item) => (
                       <tr key={item.id}>
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-950 dark:text-gray-50">
+                          <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                             {item.productName}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-gray-400">
+                          <p className="text-xs text-slate-500 dark:text-[#7F8D9A]">
                             {item.categoryName ?? "Producto"}
                           </p>
                         </td>
@@ -428,13 +428,13 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                             className="h-9 w-28"
                           />
                         </td>
-                        <td className="px-4 py-3 font-semibold text-gray-950 dark:text-gray-50">
+                        <td className="px-4 py-3 font-semibold text-gray-950 dark:text-[#F3F7FA]">
                           {formatARS(safeNumber(item.quantity) * safeNumber(item.unitPrice))}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
                             type="button"
-                            className="inline-flex h-9 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-neutral-700 dark:text-gray-200 dark:hover:bg-red-950/30"
+                            className="inline-flex h-9 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-[#344457] dark:text-[#A9B6C2] dark:hover:bg-red-950/30"
                             aria-label="Quitar item"
                             onClick={() => removeItem(item.id)}
                           >
@@ -500,11 +500,11 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
                 />
               </Field>
             </div>
-            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
               <SummaryLine label="Subtotal" value={formatARS(subtotal)} />
               <SummaryLine label="Descuento" value={formatARS(safeNumber(discountTotal))} />
               <SummaryLine label="Recargo" value={formatARS(safeNumber(surchargeTotal))} />
-              <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-xl font-bold dark:border-neutral-800">
+              <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-xl font-bold dark:border-[#273342]">
                 <span>Total</span>
                 <span>{formatARS(total)}</span>
               </div>
@@ -516,7 +516,7 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
         </aside>
       </div>
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-100/95 px-1 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-100/95 px-1 py-3 backdrop-blur dark:border-[#273342] dark:bg-[#121922]/95">
         <LinkButton href="/presupuestos" variant="ghost">
           Cancelar
         </LinkButton>
@@ -535,8 +535,8 @@ export function QuoteForm({ action, submitLabel, initialValues }: QuoteFormProps
 function SectionTitle({ title, description }: { title: string; description: string }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-50">{title}</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-gray-300">{description}</p>
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
+      <p className="mt-1 text-sm text-slate-600 dark:text-[#A9B6C2]">{description}</p>
     </div>
   );
 }
@@ -544,7 +544,7 @@ function SectionTitle({ title, description }: { title: string; description: stri
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
       {children}
     </label>
   );
@@ -553,8 +553,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function SummaryLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-slate-500 dark:text-gray-400">{label}</span>
-      <span className="font-semibold text-gray-950 dark:text-gray-50">{value}</span>
+      <span className="text-slate-500 dark:text-[#7F8D9A]">{label}</span>
+      <span className="font-semibold text-gray-950 dark:text-[#F3F7FA]">{value}</span>
     </div>
   );
 }

@@ -20,7 +20,7 @@ export function BarList({ items, emptyText, maxValue }: BarListProps) {
   const max = maxValue ?? Math.max(...items.map((item) => item.value), 0);
 
   if (visibleItems.length === 0) {
-    return <p className="py-8 text-center text-sm text-slate-500 dark:text-gray-400">{emptyText}</p>;
+    return <p className="py-8 text-center text-sm text-slate-500 dark:text-[#7F8D9A]">{emptyText}</p>;
   }
 
   return (
@@ -32,27 +32,27 @@ export function BarList({ items, emptyText, maxValue }: BarListProps) {
           <div key={item.label} className="min-w-0">
             <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-gray-950 dark:text-gray-50">
+                <p className="truncate font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   {item.label}
                 </p>
                 {item.detail ? (
-                  <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-gray-400">
+                  <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-[#7F8D9A]">
                     {item.detail}
                   </p>
                 ) : null}
               </div>
               <div className="shrink-0 text-right">
-                <p className="font-semibold text-gray-950 dark:text-gray-50">
+                <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
                   {item.valueLabel}
                 </p>
                 {item.percentLabel ? (
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-gray-400">
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-[#7F8D9A]">
                     {item.percentLabel}
                   </p>
                 ) : null}
               </div>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-neutral-800">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-[#273342]">
               <div
                 className={cn("h-full rounded-full", barTones[item.tone ?? "blue"])}
                 style={{ width: `${width}%` }}
@@ -67,8 +67,8 @@ export function BarList({ items, emptyText, maxValue }: BarListProps) {
 
 const barTones = {
   blue: "bg-brand-600 dark:bg-brand-500",
-  green: "bg-emerald-600 dark:bg-emerald-500",
+  green: "bg-[#1F8F63] dark:bg-[#28A36A]",
   amber: "bg-amber-500 dark:bg-amber-400",
   red: "bg-red-600 dark:bg-red-500",
-  gray: "bg-slate-500 dark:bg-neutral-500"
+  gray: "bg-slate-500 dark:bg-[#7F8D9A]"
 };

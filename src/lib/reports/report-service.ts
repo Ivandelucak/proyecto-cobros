@@ -70,6 +70,7 @@ export type ReportDashboardData = {
   accountPaymentsTotal: Prisma.Decimal;
   purchases: PurchaseReportItem[];
   suppliers: SupplierReportItem[];
+  mercadoPagoAttempts: MercadoPagoReportItem[];
   alerts: ReportAlert[];
 };
 
@@ -153,6 +154,21 @@ export type SupplierReportItem = {
   count: number;
 };
 
+export type MercadoPagoReportItem = {
+  id: string;
+  saleId: string | null;
+  saleNumber: number | null;
+  accountName: string;
+  environment: string;
+  amount: Prisma.Decimal;
+  status: string;
+  origin: string;
+  externalReference: string;
+  providerOrderId: string | null;
+  providerPaymentId: string | null;
+  createdAt: Date;
+};
+
 export type ReportAlert = {
   title: string;
   description: string;
@@ -223,7 +239,8 @@ export async function getReportDashboardData(
     purchases,
     customerMovements,
     accountPayments,
-    paymentMethodSettings
+    paymentMethodSettings,
+    mercadoPagoAttempts
   ] = await Promise.all([
     prisma.sale.findMany({
       where: saleWhere,
@@ -304,7 +321,29 @@ export async function getReportDashboardData(
       },
       select: { amount: true }
     }),
-    getPaymentMethodSettings()
+    getPaymentMethodSettings(),
+    prisma.paymentAttempt.findMany({
+      where: {
+        createdAt: { gte: period.start, lt: period.end },
+        ...(filters.method ? { method: filters.method } : {})
+      },
+      include: {
+        mercadoPagoAccount: {
+          select: {
+            name: true,
+            environment: true
+          }
+        },
+        sale: {
+          select: {
+            id: true,
+            saleNumber: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 12
+    })
   ]);
   const paymentLabels = {
     ...reportPaymentLabels,
@@ -430,6 +469,20 @@ export async function getReportDashboardData(
       supplierName: purchase.supplier?.name ?? "Sin proveedor"
     })),
     suppliers,
+    mercadoPagoAttempts: mercadoPagoAttempts.map((attempt) => ({
+      id: attempt.id,
+      saleId: attempt.sale?.id ?? null,
+      saleNumber: attempt.sale?.saleNumber ?? null,
+      accountName: attempt.mercadoPagoAccount.name,
+      environment: attempt.mercadoPagoAccount.environment,
+      amount: attempt.amount,
+      status: attempt.status,
+      origin: attempt.origin,
+      externalReference: attempt.externalReference,
+      providerOrderId: attempt.providerOrderId,
+      providerPaymentId: attempt.providerPaymentId,
+      createdAt: attempt.createdAt
+    })),
     alerts
   };
 }

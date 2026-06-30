@@ -11,11 +11,21 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          500: "#2563eb",
-          600: "#1d4ed8",
-          700: "#1e40af"
+          50: "#F4F6F8",
+          100: "#DCE8F1",
+          200: "#D5DEE6",
+          300: "#7C96AB",
+          400: "#8CA3B7",
+          500: "#2E5B7A",
+          600: "#244761",
+          700: "#16212B",
+          800: "#1D3140",
+          900: "#0B1015"
+        },
+        signal: {
+          accent: "#8CA3B7",
+          success: "#1F8F63",
+          sky: "#4C7FA3"
         }
       }
     }
