@@ -5,6 +5,7 @@ const { app, BrowserWindow, ipcMain, shell } = require("electron");
 
 const DEV_ORIGIN = "http://localhost:3000";
 const DEV_START_URL = `${DEV_ORIGIN}/login`;
+const APP_NAME = "Fox Point";
 
 const isDevelopment = !app.isPackaged;
 const isSmokeTest = process.env.ELECTRON_SMOKE_TEST === "1";
@@ -14,7 +15,7 @@ let mainWindow = null;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    title: "POS Universal",
+    title: APP_NAME,
     width: 1366,
     height: 768,
     minWidth: 1200,

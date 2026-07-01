@@ -2,6 +2,10 @@ import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  businessTypeLabel,
+  getBusinessProfileOrDefault
+} from "@/lib/business-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +24,19 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  return <AppShell user={user} defaultSidebarOpen>{children}</AppShell>;
+  const businessProfile = await getBusinessProfileOrDefault();
+
+  return (
+    <AppShell
+      user={user}
+      defaultSidebarOpen
+      businessProfile={{
+        name: businessProfile.name,
+        logoUrl: businessProfile.logoUrl,
+        subtitle: businessTypeLabel(businessProfile.businessType)
+      }}
+    >
+      {children}
+    </AppShell>
+  );
 }

@@ -1,7 +1,31 @@
 import { BusinessType } from "@prisma/client";
+import { APP_NAME, APP_TAGLINE } from "@/lib/branding";
 import { prisma } from "@/lib/prisma";
 
 export const BUSINESS_PROFILE_ID = "default";
+
+export const businessTypeLabels: Record<BusinessType, string> = {
+  KIOSK: "Kiosco",
+  GROCERY: "Almacen",
+  SUPERMARKET: "Supermercado",
+  BUTCHER: "Carniceria",
+  GREENGROCER: "Verduleria",
+  BEVERAGE_STORE: "Bebidas",
+  HARDWARE_STORE: "Ferreteria",
+  PET_SHOP: "Pet shop",
+  BOOKSTORE: "Libreria",
+  CLOTHING_STORE: "Indumentaria",
+  BAZAAR: "Bazar",
+  OTHER: "Comercio"
+};
+
+export function businessTypeLabel(value: BusinessType | string | null | undefined) {
+  if (!value || !(value in businessTypeLabels)) {
+    return APP_TAGLINE;
+  }
+
+  return businessTypeLabels[value as BusinessType];
+}
 
 export type BusinessProfileView = {
   id: string;
@@ -26,7 +50,7 @@ export type BusinessProfileView = {
 export function getDefaultBusinessProfile(): BusinessProfileView {
   return {
     id: BUSINESS_PROFILE_ID,
-    name: "POS Universal",
+    name: APP_NAME,
     businessType: BusinessType.KIOSK,
     cuit: null,
     address: null,

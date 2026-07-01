@@ -57,6 +57,11 @@ enum MercadoPagoEnvironment {
   PRODUCTION
 }
 
+enum MercadoPagoConnectionType {
+  MANUAL_TOKEN
+  OAUTH
+}
+
 enum PaymentProvider {
   MERCADOPAGO
 }
@@ -276,10 +281,20 @@ model MercadoPagoAccount {
   id                          String                 @id @default(cuid())
   name                        String
   enabled                     Boolean                @default(true)
+  connectionType              MercadoPagoConnectionType @default(MANUAL_TOKEN)
   environment                 MercadoPagoEnvironment @default(SANDBOX)
   accessToken                 String                 @db.Text
+  oauthRefreshToken           String?                @db.Text
+  oauthTokenExpiresAt         DateTime?
+  oauthScope                  String?                @db.Text
+  oauthConnectedAt            DateTime?
+  oauthLastRefreshAt          DateTime?
+  oauthRequiresReconnect      Boolean                @default(false)
+  mpUserId                    String?
   publicKey                   String?
   collectorId                 String?
+  accountNickname             String?
+  accountEmail                String?
   storeId                     String?
   externalStoreId             String?
   storeName                   String?
@@ -292,6 +307,9 @@ model MercadoPagoAccount {
   lastPosSetupStep            String?
   lastPosSetupStatus          String?
   lastPosSetupError           String?                @db.Text
+  lastConnectionTestAt        DateTime?
+  lastConnectionStatus        String?
+  lastConnectionMessage       String?                @db.Text
   defaultAccount              Boolean                @default(false)
   instructions                String?                @db.Text
   enableAmountMatching        Boolean                @default(false)
@@ -307,6 +325,8 @@ model MercadoPagoAccount {
 
   @@index([enabled, deletedAt])
   @@index([defaultAccount])
+  @@index([connectionType])
+  @@index([oauthRequiresReconnect])
 }
 
 model CreditInstallmentPlan {

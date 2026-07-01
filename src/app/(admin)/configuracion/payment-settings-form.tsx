@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useActionState, useMemo, useState, useTransition, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +17,19 @@ import {
   SettingsSummaryCard,
   SettingsSwitchRow
 } from "@/components/ui/settings";
-import type { MercadoPagoAccountView } from "@/lib/mercadopago/mercado-pago-types";
+import { formatARS } from "@/lib/money";
+import type {
+  MercadoPagoAccountView,
+  MercadoPagoMovementView
+} from "@/lib/mercadopago/mercado-pago-types";
 import type {
   CreditInstallmentPlanView,
   PaymentMethodSettingView
 } from "@/lib/payment-settings";
 import { cn } from "@/lib/ui";
 import {
+  createMercadoPagoOAuthLinkAction,
+  searchMercadoPagoMovementsAction,
   setupMercadoPagoPosAction,
   testMercadoPagoAccessTokenAction,
   testMercadoPagoAccountAction,
@@ -47,6 +54,20 @@ type TestResult = {
   nickname?: string | null;
   email?: string | null;
   testedAt?: string | null;
+};
+type OAuthLinkResult = {
+  ok: boolean;
+  url: string | null;
+  qrCodeDataUrl: string | null;
+  expiresAt: string | null;
+  environment: "SANDBOX" | "PRODUCTION";
+  message: string;
+};
+type MovementsResult = {
+  ok: boolean;
+  movements: MercadoPagoMovementView[];
+  message: string;
+  technicalDetail: string | null;
 };
 type PosSetupResult = {
   ok: boolean;
@@ -349,8 +370,9 @@ function MercadoPagoAccountsPanel({
   return (
     <div className="space-y-3">
       <SettingsAlert tone="info">
-        Para QR dinamico necesitas cargar el Access Token y crear una caja/POS Mercado Pago. El QR se genera por cada venta y se envia con el external_pos_id de esa caja.
+        Para QR dinamico conecta Mercado Pago con OAuth. El comercio autoriza desde Mercado Pago y Fox Point guarda las credenciales en el servidor; no se pide ni se guarda la contrasena.
       </SettingsAlert>
+      <MercadoPagoOAuthConnectCard />
       {mercadoPagoMode === "API_QR" && accounts.length === 0 ? (
         <SettingsAlert tone="warning">
           Agrega una cuenta para generar QR dinamico.
@@ -360,6 +382,269 @@ function MercadoPagoAccountsPanel({
         <MercadoPagoAccountCard key={account.id} account={account} />
       ))}
       <MercadoPagoNewAccountCard hasExistingAccounts={accounts.length > 0} />
+      <MercadoPagoMovementsPanel accounts={accounts} />
+    </div>
+  );
+}
+
+function MercadoPagoOAuthConnectCard() {
+  const [environment, setEnvironment] = useState<"SANDBOX" | "PRODUCTION">("PRODUCTION");
+  const [linkResult, setLinkResult] = useState<OAuthLinkResult | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const startUrl = `/api/mercadopago/oauth/start?environment=${environment}`;
+
+  function createQrLink() {
+    setLinkResult(null);
+    startTransition(async () => {
+      const result = await createMercadoPagoOAuthLinkAction(environment);
+      setLinkResult(result);
+    });
+  }
+
+  return (
+    <section className="app-panel-elevated rounded-lg p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-[var(--text-primary)]">
+            Conectar Mercado Pago
+          </p>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
+            Para QR dinamico solo necesitas autorizar la cuenta. El QR de esta tarjeta es de vinculacion, no de cobro.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select
+            value={environment}
+            onChange={(event) =>
+              setEnvironment(event.target.value === "SANDBOX" ? "SANDBOX" : "PRODUCTION")
+            }
+            className="min-w-36"
+          >
+            <option value="PRODUCTION">Produccion</option>
+            <option value="SANDBOX">Sandbox</option>
+          </Select>
+          <a
+            href={startUrl}
+            className="btn-primary inline-flex min-h-10 items-center justify-center rounded-md border px-4 py-2 text-sm font-semibold shadow-sm"
+          >
+            Conectar Mercado Pago
+          </a>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={createQrLink}
+            disabled={isPending}
+          >
+            {isPending ? "Generando..." : "QR de vinculacion"}
+          </Button>
+        </div>
+      </div>
+
+      {linkResult ? (
+        <div
+          className={cn(
+            "mt-4 rounded-lg border p-4",
+            linkResult.ok ? "badge-info" : "badge-danger"
+          )}
+        >
+          <p className="text-sm font-semibold">{linkResult.message}</p>
+          {linkResult.ok && linkResult.qrCodeDataUrl && linkResult.url ? (
+            <div className="mt-3 grid gap-4 md:grid-cols-[180px_1fr] md:items-center">
+              <div className="rounded-lg bg-white p-3">
+                <Image
+                  src={linkResult.qrCodeDataUrl}
+                  alt="QR de vinculacion Mercado Pago"
+                  width={180}
+                  height={180}
+                  unoptimized
+                  className="h-auto w-full"
+                />
+              </div>
+              <div className="min-w-0 text-xs text-[var(--text-secondary)]">
+                <p>
+                  Escanea este QR con la cuenta que queres conectar. Vence{" "}
+                  {linkResult.expiresAt ? formatTestDate(linkResult.expiresAt) : "pronto"}.
+                </p>
+                <a
+                  href={linkResult.url}
+                  className="mt-3 inline-flex min-h-9 items-center rounded-md border border-[color:var(--panel-border)] px-3 py-1.5 font-semibold text-[var(--text-primary)] hover:bg-[var(--primary-soft)]"
+                >
+                  Abrir enlace de conexion
+                </a>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MercadoPagoMovementsPanel({
+  accounts
+}: {
+  accounts: MercadoPagoAccountView[];
+}) {
+  const usableAccounts = accounts.filter((account) => account.enabled);
+  const [selectedAccountId, setSelectedAccountId] = useState(
+    usableAccounts.find((account) => account.defaultAccount)?.id ?? usableAccounts[0]?.id ?? ""
+  );
+  const [minutes, setMinutes] = useState("120");
+  const [result, setResult] = useState<MovementsResult | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const selectedAccount =
+    usableAccounts.find((account) => account.id === selectedAccountId) ?? null;
+
+  function refreshMovements() {
+    if (!selectedAccountId) {
+      setResult({
+        ok: false,
+        movements: [],
+        message: "Selecciona una cuenta Mercado Pago.",
+        technicalDetail: null
+      });
+      return;
+    }
+
+    setResult(null);
+    startTransition(async () => {
+      const response = await searchMercadoPagoMovementsAction({
+        accountId: selectedAccountId,
+        minutes: Number(minutes),
+        limit: 20
+      });
+      setResult(response);
+    });
+  }
+
+  return (
+    <section className="app-panel-elevated rounded-lg p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-primary)]">
+            Ultimos cobros detectados
+          </p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Consulta pagos aprobados de la cuenta conectada usando la API de Mercado Pago. No muestra tokens ni datos sensibles.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_140px_auto]">
+          <Select
+            value={selectedAccountId}
+            disabled={usableAccounts.length === 0}
+            onChange={(event) => {
+              setSelectedAccountId(event.target.value);
+              setResult(null);
+            }}
+          >
+            {usableAccounts.length === 0 ? (
+              <option value="">Sin cuentas activas</option>
+            ) : (
+              usableAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} {account.defaultAccount ? "(pred.)" : ""}
+                </option>
+              ))
+            )}
+          </Select>
+          <Select
+            value={minutes}
+            onChange={(event) => {
+              setMinutes(event.target.value);
+              setResult(null);
+            }}
+          >
+            <option value="30">30 min</option>
+            <option value="120">2 horas</option>
+            <option value="1440">24 horas</option>
+          </Select>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={isPending || !selectedAccountId}
+            onClick={refreshMovements}
+          >
+            {isPending ? "Actualizando..." : "Actualizar"}
+          </Button>
+        </div>
+      </div>
+
+      {selectedAccount?.oauthRequiresReconnect ? (
+        <SettingsAlert tone="warning" className="mt-3">
+          Esta cuenta necesita reconexion OAuth antes de consultar movimientos.
+        </SettingsAlert>
+      ) : null}
+
+      {result ? (
+        <div className="mt-4 space-y-3">
+          <SettingsAlert tone={result.ok ? "success" : "danger"}>
+            {result.message}
+            {result.technicalDetail ? (
+              <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">
+                  Ver detalle tecnico
+                </summary>
+                <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-2 text-[11px] leading-4 text-[var(--text-secondary)]">
+                  {result.technicalDetail}
+                </pre>
+              </details>
+            ) : null}
+          </SettingsAlert>
+
+          {result.movements.length === 0 ? (
+            <div className="app-panel-secondary rounded-lg px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+              No hay cobros aprobados para mostrar en este rango.
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              {result.movements.map((movement) => (
+                <MercadoPagoMovementPreview key={movement.id} movement={movement} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MercadoPagoMovementPreview({
+  movement
+}: {
+  movement: MercadoPagoMovementView;
+}) {
+  return (
+    <div className="app-panel rounded-lg p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-extrabold text-[var(--text-primary)]">
+              {formatARS(movement.amount)}
+            </p>
+            <StatusPill tone={movement.status === "approved" ? "ok" : "muted"}>
+              {formatMovementStatus(movement.status)}
+            </StatusPill>
+            {movement.alreadyUsed ? <StatusPill tone="muted">Usado</StatusPill> : null}
+          </div>
+          <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+            {formatMovementDate(movement.dateApproved ?? movement.dateCreated)} - ID{" "}
+            {shortMercadoPagoId(movement.id)}
+          </p>
+          <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">
+            {[movement.paymentMethod, movement.paymentType, movement.operationType]
+              .filter(Boolean)
+              .join(" - ") || "Metodo no informado"}
+          </p>
+        </div>
+        <details className="text-xs text-[var(--text-secondary)]">
+          <summary className="cursor-pointer font-semibold text-[var(--text-primary)]">
+            Detalle
+          </summary>
+          <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-2 text-[11px]">
+            {JSON.stringify(movement.rawSummary, null, 2)}
+          </pre>
+        </details>
+      </div>
     </div>
   );
 }
@@ -486,6 +771,12 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
                 {account.enabled ? "Activa" : "Inactiva"}
               </StatusPill>
               {account.defaultAccount ? <StatusPill>Predeterminada</StatusPill> : null}
+              <StatusPill tone={account.connectionType === "OAUTH" ? "ok" : "muted"}>
+                {account.connectionType === "OAUTH" ? "OAuth" : "Token manual"}
+              </StatusPill>
+              {account.oauthRequiresReconnect ? (
+                <StatusPill tone="error">Reconectar</StatusPill>
+              ) : null}
               <StatusPill tone={account.enableAmountMatching ? "warn" : "muted"}>
                 Match {account.enableAmountMatching ? "activo" : "no"}
               </StatusPill>
@@ -493,7 +784,16 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
             <p className="mt-1 text-xs text-[var(--text-muted)]">
               {account.environment} - {account.hasAccessToken ? "Token cargado" : "Sin token"}
               {detectedCollectorId ? ` - Cuenta ${detectedCollectorId}` : ""}
-              {testResult?.testedAt ? ` - Ultima prueba ${formatTestDate(testResult.testedAt)}` : ""}
+              {account.accountNickname ? ` - ${account.accountNickname}` : ""}
+              {account.accountEmail ? ` - ${account.accountEmail}` : ""}
+              {account.oauthTokenExpiresAt
+                ? ` - Token vence ${formatTestDate(account.oauthTokenExpiresAt)}`
+                : ""}
+              {testResult?.testedAt
+                ? ` - Ultima prueba ${formatTestDate(testResult.testedAt)}`
+                : account.lastConnectionTestAt
+                  ? ` - Ultima prueba ${formatTestDate(account.lastConnectionTestAt)}`
+                  : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -831,13 +1131,13 @@ function MercadoPagoNewAccountCard({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-[var(--text-primary)]">
-              + Agregar cuenta Mercado Pago
+              + Agregar cuenta manual por Access Token
             </p>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Configuracion basica para publicar QR dinamico en pocos pasos.
+              Alternativa avanzada para pruebas o cuentas tecnicas. Para usuarios finales usa Conectar Mercado Pago.
             </p>
           </div>
-          <SettingsStatusBadge tone="info">Formulario</SettingsStatusBadge>
+          <SettingsStatusBadge tone="warning">Avanzado</SettingsStatusBadge>
         </div>
       </summary>
 
@@ -1509,10 +1809,45 @@ function formatTestDate(value: string) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
+  return formatStableArgentinaDateTime(date);
+}
+
+function formatMovementDate(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return formatTestDate(value);
+}
+
+function formatMovementStatus(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    approved: "Aprobado",
+    pending: "Pendiente",
+    rejected: "Rechazado",
+    cancelled: "Cancelado",
+    refunded: "Devuelto"
+  };
+
+  return labels[String(status ?? "").toLowerCase()] ?? status ?? "-";
+}
+
+function shortMercadoPagoId(value: string) {
+  return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
+}
+
+function formatStableArgentinaDateTime(date: Date) {
+  const argentinaTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return [
+    `${padDatePart(argentinaTime.getUTCDate())}/${padDatePart(
+      argentinaTime.getUTCMonth() + 1
+    )}`,
+    `${padDatePart(argentinaTime.getUTCHours())}:${padDatePart(
+      argentinaTime.getUTCMinutes()
+    )}`
+  ].join(" ");
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }

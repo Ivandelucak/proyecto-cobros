@@ -4,9 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/app/auth-actions";
 import { AdminNav } from "@/components/admin/admin-nav";
-import { AppLogo } from "@/components/brand/AppLogo";
+import { AppBrandCenter } from "@/components/brand/AppBrandCenter";
+import { BusinessBrand } from "@/components/brand/BusinessBrand";
+import { BusinessHeaderIdentity } from "@/components/brand/BusinessHeaderIdentity";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { APP_NAME } from "@/lib/branding";
 import { cn } from "@/lib/ui";
 
 type AppShellProps = {
@@ -17,14 +20,24 @@ type AppShellProps = {
   };
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
+  businessProfile?: {
+    name: string;
+    logoUrl: string | null;
+    subtitle: string;
+    headerImageUrl?: string | null;
+  };
 };
 
 export function AppShell({
   user,
   children,
-  defaultSidebarOpen = true
+  defaultSidebarOpen = true,
+  businessProfile
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
+  const businessName = businessProfile?.name ?? APP_NAME;
+  const businessImageUrl = businessProfile?.headerImageUrl ?? businessProfile?.logoUrl ?? null;
+  const roleChipLabel = user.role === "CASHIER" ? "Caja operativa" : "Admin operativo";
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden transition-colors duration-200">
@@ -53,7 +66,11 @@ export function AppShell({
               title={user.role === "ADMIN" ? "Panel administrativo" : "Caja"}
               className="block rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
-              <AppLogo />
+              <BusinessBrand
+                logoUrl={businessProfile?.logoUrl}
+                businessName={businessProfile?.name}
+                subtitle={businessProfile?.subtitle}
+              />
             </Link>
             <div className="app-panel-secondary mt-4 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)]">
               <p className="font-black uppercase tracking-[0.14em] text-[var(--text-primary)]">
@@ -68,8 +85,8 @@ export function AppShell({
         ) : null}
 
         <div className="flex min-w-0 flex-col overflow-x-hidden">
-          <header className="pos-operational-strip flex min-h-16 flex-wrap items-center justify-between gap-3 border-b px-3 py-2.5 shadow-[0_2px_18px_rgba(11, 16, 21,0.06)] backdrop-blur transition-colors duration-200 dark:shadow-none md:px-4 xl:px-5 xl:py-3 print:hidden">
-            <div className="flex min-w-0 items-center gap-3">
+          <header className="pos-operational-strip grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 py-2.5 backdrop-blur transition-colors duration-200 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:px-4 xl:px-5 xl:py-3 print:hidden">
+            <div className="flex min-w-0 items-center gap-3 justify-self-start">
               <button
                 type="button"
                 aria-label={sidebarOpen ? "Cerrar menu" : "Abrir menu"}
@@ -93,20 +110,25 @@ export function AppShell({
                 </span>
               </button>
 
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-[var(--text-primary)]">
-                  {user.name}
-                </p>
-                <p className="truncate text-xs text-[var(--text-secondary)]">
-                  {user.email} - {roleLabel(user.role)}
-                </p>
-              </div>
-              <div className="badge-info hidden rounded-full px-3 py-1 text-xs font-bold sm:inline-flex">
-                {user.role === "CASHIER" ? "Caja operativa" : "Admin operativo"}
+              <BusinessHeaderIdentity
+                businessName={businessName}
+                subtitle={businessProfile?.subtitle}
+                imageUrl={businessImageUrl}
+                userName={user.name}
+                imageFit="contain"
+                className="max-w-[58vw] sm:max-w-[360px] xl:max-w-[460px]"
+              />
+              <div
+                className="badge-info hidden rounded-full px-3 py-1 text-xs font-bold lg:inline-flex"
+                title={`${user.email} - ${roleLabel(user.role)}`}
+              >
+                {roleChipLabel}
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 xl:gap-3">
+            <AppBrandCenter className="hidden md:block" />
+
+            <div className="col-start-2 flex shrink-0 items-center gap-2 justify-self-end md:col-start-3 xl:gap-3">
               <ThemeToggle />
               <form action={logoutAction}>
                 <Button type="submit">Cerrar sesion</Button>

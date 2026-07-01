@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import path from "path";
 import type { Prisma } from "@prisma/client";
 import packageJson from "../../../package.json";
+import { APP_NAME } from "@/lib/branding";
 import { prisma } from "@/lib/prisma";
 
 const BACKUP_DIR = path.resolve(process.cwd(), "backups");
@@ -328,7 +329,7 @@ function validateBackupPayload(payload: BackupPayload) {
     payload.version !== 1 ||
     !payload.data
   ) {
-    throw new Error("El archivo no parece ser un backup valido de POS Universal.");
+    throw new Error(`El archivo no parece ser un backup valido de ${APP_NAME}.`);
   }
 
   for (const table of backupTables) {

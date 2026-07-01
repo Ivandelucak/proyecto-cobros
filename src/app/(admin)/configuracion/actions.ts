@@ -1,13 +1,18 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   BusinessType,
+  MercadoPagoConnectionType,
   MercadoPagoEnvironment,
   MercadoPagoOperationMode,
   PaymentMethod,
   Prisma
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import QRCode from "qrcode";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { createAuditLog } from "@/lib/audit-log";
 import { BUSINESS_PROFILE_ID } from "@/lib/business-profile";
@@ -28,12 +33,22 @@ import {
   testMercadoPagoPosSetup,
   type MercadoPagoPosSetupInput
 } from "@/lib/mercadopago/mercado-pago-pos";
+import { createMercadoPagoOAuthAuthorizationUrl } from "@/lib/mercadopago/mercado-pago-oauth";
+import { searchRecentMercadoPagoPayments } from "@/lib/mercadopago/mercado-pago-search";
+import { protectMercadoPagoToken } from "@/lib/mercadopago/mercado-pago-secrets";
 import { prisma } from "@/lib/prisma";
 import { STOCK_SETTING_ID, parseOptionalStockDecimal } from "@/lib/stock-settings";
 import { TICKET_SETTING_ID } from "@/lib/ticket-settings";
 
 const MAX_LOGO_BYTES = 1_500_000;
 const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const LOGO_EXTENSION_BY_MIME: Record<string, "png" | "jpg" | "webp"> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp"
+};
+const LOGO_UPLOAD_ROUTE = "/uploads/logos";
+const LOGO_UPLOAD_DIR = join(process.cwd(), "public", "uploads", "logos");
 const MAX_PAYMENT_QR_BYTES = 2_000_000;
 const ALLOWED_PAYMENT_QR_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -136,7 +151,7 @@ export async function updateBusinessProfileAction(
     return { success: "Configuracion guardada." };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "No se pudo guardar la configuracion."
+      error: businessProfileErrorMessage(error)
     };
   }
 }
@@ -498,16 +513,35 @@ export async function testMercadoPagoAccountAction(accountId: string) {
 
   try {
     const result = await testMercadoPagoAccountConnection(accountId);
-    if (result.collectorId) {
-      await prisma.mercadoPagoAccount.update({
-        where: { id: accountId },
-        data: { collectorId: result.collectorId }
-      });
-    }
+    await prisma.mercadoPagoAccount.update({
+      where: { id: accountId },
+      data: {
+        ...(result.collectorId ? { collectorId: result.collectorId, mpUserId: result.collectorId } : {}),
+        accountNickname: result.nickname ?? null,
+        accountEmail: result.email ?? null,
+        lastConnectionTestAt: result.testedAt ? new Date(result.testedAt) : new Date(),
+        lastConnectionStatus: "OK",
+        lastConnectionMessage: result.message,
+        oauthRequiresReconnect: false
+      }
+    });
     revalidatePath("/configuracion");
     revalidatePath("/configuracion/pagos");
     return result;
   } catch (error) {
+    await prisma.mercadoPagoAccount
+      .update({
+        where: { id: accountId },
+        data: {
+          lastConnectionTestAt: new Date(),
+          lastConnectionStatus: "ERROR",
+          lastConnectionMessage:
+            error instanceof Error
+              ? error.message
+              : "No se pudo probar la conexion Mercado Pago."
+        }
+      })
+      .catch(() => null);
     return {
       ok: false,
       message:
@@ -534,6 +568,90 @@ export async function testMercadoPagoAccessTokenAction(accessToken: string) {
       nickname: null,
       email: null,
       testedAt: new Date().toISOString()
+    };
+  }
+}
+
+export async function createMercadoPagoOAuthLinkAction(
+  environment: MercadoPagoEnvironment
+) {
+  await requireAdminPage();
+
+  try {
+    if (!Object.values(MercadoPagoEnvironment).includes(environment)) {
+      throw new Error("Entorno Mercado Pago invalido.");
+    }
+
+    const link = createMercadoPagoOAuthAuthorizationUrl(environment);
+    const qrCodeDataUrl = await QRCode.toDataURL(link.url, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      scale: 6,
+      color: {
+        dark: "#111827",
+        light: "#FFFFFF"
+      }
+    });
+
+    return {
+      ok: true,
+      url: link.url,
+      qrCodeDataUrl,
+      expiresAt: link.expiresAt,
+      environment: link.environment,
+      message: "Enlace de conexion Mercado Pago generado."
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      url: null,
+      qrCodeDataUrl: null,
+      expiresAt: null,
+      environment,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar el enlace OAuth de Mercado Pago."
+    };
+  }
+}
+
+export async function searchMercadoPagoMovementsAction(input: {
+  accountId: string;
+  minutes?: number;
+  limit?: number;
+}) {
+  await requireAdminPage();
+
+  try {
+    const movements = await searchRecentMercadoPagoPayments({
+      accountId: input.accountId,
+      minutes: input.minutes ?? 120,
+      limit: input.limit ?? 20,
+      status: "approved"
+    });
+
+    return {
+      ok: true,
+      movements,
+      message:
+        movements.length > 0
+          ? `${movements.length} cobro${movements.length === 1 ? "" : "s"} detectado${movements.length === 1 ? "" : "s"}.`
+          : "Sin cobros aprobados en el rango seleccionado.",
+      technicalDetail: null
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      movements: [],
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudieron consultar los cobros Mercado Pago.",
+      technicalDetail:
+        error instanceof Error
+          ? JSON.stringify({ message: error.message }, null, 2)
+          : null
     };
   }
 }
@@ -810,7 +928,8 @@ async function saveMercadoPagoAccounts(
       await tx.mercadoPagoAccount.create({
         data: {
           ...data,
-          accessToken: account.accessToken
+          connectionType: MercadoPagoConnectionType.MANUAL_TOKEN,
+          accessToken: protectMercadoPagoToken(account.accessToken)
         }
       });
       continue;
@@ -820,7 +939,18 @@ async function saveMercadoPagoAccounts(
       where: { id: account.id },
       data: {
         ...data,
-        ...(account.accessToken ? { accessToken: account.accessToken } : {})
+        ...(account.accessToken
+          ? {
+              connectionType: MercadoPagoConnectionType.MANUAL_TOKEN,
+              accessToken: protectMercadoPagoToken(account.accessToken),
+              oauthRefreshToken: null,
+              oauthTokenExpiresAt: null,
+              oauthScope: null,
+              oauthConnectedAt: null,
+              oauthLastRefreshAt: null,
+              oauthRequiresReconnect: false
+            }
+          : {})
       }
     });
   }
@@ -863,37 +993,124 @@ function parseOptionalMercadoPagoExternalId(
 }
 
 async function resolveLogoUrl(formData: FormData) {
+  const existingLogoUrl = readOptionalText(formData, "logoUrl");
+
   if (isChecked(formData, "removeLogo")) {
+    await deleteLocalLogoIfManaged(existingLogoUrl);
     return null;
   }
 
   const file = formData.get("logoFile");
   if (!file || typeof file === "string" || file.size === 0) {
-    return normalizeExistingLogo(readOptionalText(formData, "logoUrl"));
+    return resolveExistingLogoUrl(existingLogoUrl);
   }
 
-  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
-    throw new Error("El logo debe ser PNG, JPG o WebP.");
-  }
-
-  if (file.size > MAX_LOGO_BYTES) {
-    throw new Error("El logo no puede superar 1.5 MB.");
-  }
-
-  const bytes = Buffer.from(await file.arrayBuffer());
-  return `data:${file.type};base64,${bytes.toString("base64")}`;
+  const logoUrl = await saveUploadedLogoFile(file);
+  await deleteLocalLogoIfManaged(existingLogoUrl);
+  return logoUrl;
 }
 
-function normalizeExistingLogo(value: string | null) {
+async function resolveExistingLogoUrl(value: string | null) {
   if (!value) {
     return null;
   }
 
-  if (value.length > MAX_LOGO_BYTES * 2) {
-    throw new Error("El logo guardado supera el tamano permitido.");
+  if (value.startsWith("data:image/")) {
+    return saveDataUrlLogo(value);
   }
 
-  return value;
+  if (isManagedLogoUrl(value)) {
+    return value;
+  }
+
+  return null;
+}
+
+async function saveUploadedLogoFile(file: File) {
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    throw new Error("Formato no permitido. Usa PNG, JPG o WebP.");
+  }
+
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error("El logo supera el maximo permitido de 1.5 MB.");
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return saveLogoBuffer(bytes, file.type);
+}
+
+async function saveDataUrlLogo(value: string) {
+  const match = /^data:(image\/png|image\/jpeg|image\/webp);base64,([A-Za-z0-9+/=]+)$/.exec(
+    value
+  );
+  if (!match) {
+    throw new Error(
+      "No se pudo guardar el logo. Verifica que sea PNG, JPG o WebP y que pese menos de 1.5 MB."
+    );
+  }
+
+  const [, mimeType, base64] = match;
+  const bytes = Buffer.from(base64, "base64");
+  if (bytes.length > MAX_LOGO_BYTES) {
+    throw new Error("El logo supera el maximo permitido de 1.5 MB.");
+  }
+
+  return saveLogoBuffer(bytes, mimeType);
+}
+
+async function saveLogoBuffer(bytes: Buffer, mimeType: string) {
+  const extension = LOGO_EXTENSION_BY_MIME[mimeType];
+  if (!extension) {
+    throw new Error("Formato no permitido. Usa PNG, JPG o WebP.");
+  }
+
+  try {
+    await mkdir(LOGO_UPLOAD_DIR, { recursive: true });
+    const filename = `business-logo-${Date.now()}-${randomUUID().slice(0, 8)}.${extension}`;
+    await writeFile(join(LOGO_UPLOAD_DIR, filename), bytes);
+    return `${LOGO_UPLOAD_ROUTE}/${filename}`;
+  } catch (error) {
+    console.error("Business logo upload failed", error);
+    throw new Error(
+      "No se pudo guardar el logo. Verifica que sea PNG, JPG o WebP y que pese menos de 1.5 MB."
+    );
+  }
+}
+
+function isManagedLogoUrl(value: string) {
+  return /^\/uploads\/logos\/[A-Za-z0-9._-]+$/.test(value);
+}
+
+async function deleteLocalLogoIfManaged(value: string | null) {
+  if (!value || !isManagedLogoUrl(value)) {
+    return;
+  }
+
+  const filename = value.slice(`${LOGO_UPLOAD_ROUTE}/`.length);
+  try {
+    await unlink(join(LOGO_UPLOAD_DIR, filename));
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") {
+      return;
+    }
+    console.error("Business logo delete failed", error);
+  }
+}
+
+function businessProfileErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "No se pudo guardar la configuracion.";
+  }
+
+  if (
+    error.message.includes("logoUrl") ||
+    error.message.includes("column is too long") ||
+    error.message.includes("too long for the column")
+  ) {
+    return "No se pudo guardar el logo. Verifica que sea PNG, JPG o WebP y que pese menos de 1.5 MB.";
+  }
+
+  return error.message;
 }
 
 async function resolvePaymentQrImageDataUrl(formData: FormData, method: PaymentMethod) {

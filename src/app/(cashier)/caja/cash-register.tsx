@@ -1682,6 +1682,7 @@ export function CashRegister({
                 attempt={mercadoPagoAttempt}
                 message={mercadoPagoMessage}
                 technicalDetail={mercadoPagoTechnicalDetail}
+                movements={mercadoPagoMovements}
                 disabled={paymentsDisabled || isPending}
                 remaining={remaining}
                 matchCount={mercadoPagoMatchCandidates.length}
@@ -1703,6 +1704,7 @@ export function CashRegister({
                 onCancel={cancelMercadoPagoQrAttempt}
                 onSearchRecent={searchMercadoPagoMovements}
                 onFindMatches={findMercadoPagoMatches}
+                onAssociate={associateMercadoPagoMovement}
                 onTogglePolling={() =>
                   setMercadoPagoMatchPollingEnabled((enabled) => !enabled)
                 }
@@ -2129,6 +2131,7 @@ function MercadoPagoApiPanel({
   attempt,
   message,
   technicalDetail,
+  movements,
   disabled,
   remaining,
   matchCount,
@@ -2141,6 +2144,7 @@ function MercadoPagoApiPanel({
   onCancel,
   onSearchRecent,
   onFindMatches,
+  onAssociate,
   onTogglePolling
 }: {
   accounts: MercadoPagoAccountView[];
@@ -2149,6 +2153,7 @@ function MercadoPagoApiPanel({
   attempt: MercadoPagoAttemptView | null;
   message: string | null;
   technicalDetail: string | null;
+  movements: MercadoPagoMovementView[];
   disabled: boolean;
   remaining: number;
   matchCount: number;
@@ -2161,6 +2166,7 @@ function MercadoPagoApiPanel({
   onCancel: () => void;
   onSearchRecent: () => void;
   onFindMatches: () => void;
+  onAssociate: (movement: MercadoPagoMovementView) => void;
   onTogglePolling: () => void;
 }) {
   const pendingAttempt = attempt?.status === "PENDING";
@@ -2367,6 +2373,17 @@ function MercadoPagoApiPanel({
               </Button>
             ) : null}
           </div>
+
+          {selectedAccount?.showRecentMovements ? (
+            <MercadoPagoInlineMovements
+              movements={movements}
+              account={selectedAccount}
+              targetAmount={remaining}
+              disabled={disabled}
+              onRefresh={onSearchRecent}
+              onAssociate={onAssociate}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -2409,6 +2426,110 @@ function MercadoPagoInfoBadge({ children }: { children: ReactNode }) {
     <span className="badge-neutral rounded-full px-2 py-0.5 text-[11px] font-semibold">
       {children}
     </span>
+  );
+}
+
+function MercadoPagoInlineMovements({
+  movements,
+  account,
+  targetAmount,
+  disabled,
+  onRefresh,
+  onAssociate
+}: {
+  movements: MercadoPagoMovementView[];
+  account: MercadoPagoAccountView | null;
+  targetAmount: number;
+  disabled: boolean;
+  onRefresh: () => void;
+  onAssociate: (movement: MercadoPagoMovementView) => void;
+}) {
+  const visibleMovements = movements.slice(0, 5);
+
+  return (
+    <details className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-2" open={visibleMovements.length > 0}>
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Ultimos cobros detectados
+            </p>
+            <p className="truncate text-[11px] text-[var(--text-muted)]">
+              {visibleMovements.length > 0
+                ? `${visibleMovements.length} visibles`
+                : "Actualiza para consultar pagos aprobados"}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled || !account}
+            onClick={(event) => {
+              event.preventDefault();
+              onRefresh();
+            }}
+          >
+            Actualizar
+          </Button>
+        </div>
+      </summary>
+
+      <div className="mt-2 space-y-2">
+        {visibleMovements.length === 0 ? (
+          <p className="rounded-md border border-dashed border-[color:var(--panel-border)] px-3 py-2 text-xs text-[var(--text-muted)]">
+            Sin cobros cargados en esta vista.
+          </p>
+        ) : (
+          visibleMovements.map((movement) => {
+            const approved = isMercadoPagoMovementApproved(movement);
+            const matchesAmount = account
+              ? isMercadoPagoMovementAmountMatch({
+                  movement,
+                  targetAmount,
+                  tolerance: account.amountMatchingTolerance
+                })
+              : false;
+
+            return (
+              <div
+                key={movement.id}
+                className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-2.5 py-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="font-bold text-[var(--text-primary)]">
+                        {formatARS(movement.amount)}
+                      </p>
+                      <MercadoPagoMovementBadge tone={approved ? "ok" : "muted"}>
+                        {mercadoPagoMovementStatusLabel(movement.status)}
+                      </MercadoPagoMovementBadge>
+                      {matchesAmount ? (
+                        <MercadoPagoMovementBadge tone="warn">Coincide</MercadoPagoMovementBadge>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
+                      {formatMercadoPagoDate(movement.dateApproved ?? movement.dateCreated)} - ID{" "}
+                      {shortReference(movement.id)}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={matchesAmount && approved ? "primary" : "secondary"}
+                    disabled={disabled || movement.alreadyUsed || !approved}
+                    onClick={() => onAssociate(movement)}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -3260,12 +3381,23 @@ function formatMercadoPagoDate(value: string | null) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
+  return formatStableArgentinaDateTime(date);
+}
+
+function formatStableArgentinaDateTime(date: Date) {
+  const argentinaTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return [
+    `${padDatePart(argentinaTime.getUTCDate())}/${padDatePart(
+      argentinaTime.getUTCMonth() + 1
+    )}`,
+    `${padDatePart(argentinaTime.getUTCHours())}:${padDatePart(
+      argentinaTime.getUTCMinutes()
+    )}`
+  ].join(" ");
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }
 
 function shouldAutofillPaymentAmount(method: PaymentMethodValue) {

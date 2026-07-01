@@ -67,6 +67,8 @@ const businessTypeLabels: Record<BusinessTypeValue, string> = {
 };
 
 const initialState: BusinessProfileState = {};
+const MAX_LOGO_BYTES = 1_500_000;
+const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps) {
   const [state, formAction, pending] = useActionState(
@@ -75,15 +77,34 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
   );
   const [logoPreview, setLogoPreview] = useState(initialValues.logoUrl ?? "");
   const [removeLogo, setRemoveLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const visibleLogo = Boolean(logoPreview) && !removeLogo;
+  const logoStatus = visibleLogo
+    ? logoPreview.startsWith("data:image/")
+      ? "Vista previa sin guardar"
+      : "Imagen cargada"
+    : "Sin imagen cargada";
+  const logoDetail = visibleLogo
+    ? logoPreview.startsWith("data:image/")
+      ? "Se guardara al confirmar los cambios."
+      : logoPreview.split("/").pop() ?? "Logo del comercio"
+    : "Subi un logo para tickets, presupuestos e interfaz.";
 
   function handleLogoChange(file: File | null) {
     if (!file) {
       return;
     }
 
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
       setLogoPreview(initialValues.logoUrl ?? "");
+      setLogoError("Formato no permitido. Usa PNG, JPG o WebP.");
+      return;
+    }
+
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoPreview(initialValues.logoUrl ?? "");
+      setLogoError("El logo supera el maximo permitido de 1.5 MB.");
       return;
     }
 
@@ -91,6 +112,7 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
     reader.onload = () => {
       setLogoPreview(typeof reader.result === "string" ? reader.result : "");
       setRemoveLogo(false);
+      setLogoError(null);
     };
     reader.readAsDataURL(file);
   }
@@ -177,36 +199,53 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
         </SettingsSection>
       </SettingsCard>
 
-      <SettingsCard>
-        <SettingsSection
-          title="Preferencias visuales"
-          description="Ajustes livianos de apariencia y logo usado en impresiones."
-        >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <SettingsField label="Tema preferido">
-            <Select name="preferredTheme" defaultValue={initialValues.preferredTheme ?? ""}>
-              <option value="">Sin preferencia</option>
-              <option value="light">Claro</option>
-              <option value="dark">Oscuro</option>
-            </Select>
-          </SettingsField>
+      <SettingsSection
+        title="Preferencias visuales"
+        description="Ajustes livianos de apariencia y logo usado en impresiones."
+      >
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(240px,360px)_minmax(280px,420px)]">
           <div className="app-panel-secondary rounded-lg p-4">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">
-              Logo del comercio
+            <p className="text-sm font-black text-[var(--text-primary)]">Tema</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+              Apariencia predeterminada del sistema.
             </p>
-            <div className="mt-3 grid min-h-28 place-items-center rounded-md border border-dashed border-[color:var(--panel-border-strong)] bg-[var(--panel-bg)] p-3">
-              {logoPreview && !removeLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={logoPreview}
-                  alt="Logo del comercio"
-                  className="max-h-20 max-w-full object-contain"
-                />
-              ) : (
-                <span className="text-center text-xs text-[var(--text-muted)]">
-                  Sin logo cargado
-                </span>
-              )}
+            <SettingsField label="Tema preferido" className="mt-4">
+              <Select name="preferredTheme" defaultValue={initialValues.preferredTheme ?? ""}>
+                <option value="">Sistema</option>
+                <option value="light">Claro</option>
+                <option value="dark">Oscuro</option>
+              </Select>
+            </SettingsField>
+          </div>
+
+          <div className="app-panel-secondary rounded-lg p-4">
+            <p className="text-sm font-black text-[var(--text-primary)]">
+              Imagen del comercio
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+              Se usa en el encabezado, tickets y piezas visuales del sistema.
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="grid h-[120px] w-full max-w-[240px] place-items-center rounded-md border border-dashed border-[color:var(--panel-border-strong)] bg-[var(--panel-bg)] p-3">
+                {visibleLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoPreview}
+                    alt="Imagen del comercio"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="text-center text-xs font-semibold text-[var(--text-muted)]">
+                    Sin imagen cargada
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-[var(--text-primary)]">{logoStatus}</p>
+                <p className="mt-1 truncate text-xs leading-5 text-[var(--text-muted)]" title={logoDetail}>
+                  {logoDetail}
+                </p>
+              </div>
             </div>
             <input
               ref={fileInputRef}
@@ -223,7 +262,7 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                 variant="secondary"
                 onClick={() => fileInputRef.current?.click()}
               >
-                Subir/Reemplazar logo
+                  Subir/Reemplazar imagen
               </Button>
               <Button
                 type="button"
@@ -232,6 +271,7 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                 onClick={() => {
                   setRemoveLogo(true);
                   setLogoPreview("");
+                  setLogoError(null);
                   if (fileInputRef.current) {
                     fileInputRef.current.value = "";
                   }
@@ -240,13 +280,15 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                 Quitar
               </Button>
             </div>
+            {logoError ? (
+              <p className="mt-2 text-xs leading-5 text-[var(--danger)]">{logoError}</p>
+            ) : null}
             <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
-              Este logo se usa en tickets, presupuestos e impresiones cuando corresponda. PNG, JPG o WebP. Maximo 1.5 MB.
+              PNG, JPG o WebP. Maximo 1.5 MB.
             </p>
           </div>
         </div>
-        </SettingsSection>
-      </SettingsCard>
+      </SettingsSection>
 
       {state.error ? (
         <SettingsAlert tone="danger">{state.error}</SettingsAlert>

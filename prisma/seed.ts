@@ -312,7 +312,7 @@ async function main() {
   await prisma.businessProfile.upsert({
     where: { id: "default" },
     update: {
-      name: "POS Universal Demo",
+      name: "Fox Point Demo",
       businessType: BusinessType.KIOSK,
       cuit: null,
       address: null,
@@ -331,7 +331,7 @@ async function main() {
     },
     create: {
       id: "default",
-      name: "POS Universal Demo",
+      name: "Fox Point Demo",
       businessType: BusinessType.KIOSK,
       currency: "ARS",
       locale: "es-AR",

@@ -1,4 +1,5 @@
 import type {
+  MercadoPagoConnectionType,
   MercadoPagoEnvironment,
   PaymentAttemptOrigin,
   PaymentAttemptStatus
@@ -8,7 +9,18 @@ export type MercadoPagoAccountView = {
   id: string;
   name: string;
   enabled: boolean;
+  connectionType: MercadoPagoConnectionType;
   environment: MercadoPagoEnvironment;
+  mpUserId: string | null;
+  accountNickname: string | null;
+  accountEmail: string | null;
+  oauthTokenExpiresAt: string | null;
+  oauthConnectedAt: string | null;
+  oauthLastRefreshAt: string | null;
+  oauthRequiresReconnect: boolean;
+  lastConnectionTestAt: string | null;
+  lastConnectionStatus: string | null;
+  lastConnectionMessage: string | null;
   publicKey: string | null;
   collectorId: string | null;
   storeId: string | null;

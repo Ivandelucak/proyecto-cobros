@@ -273,10 +273,21 @@ function formatDate(value: string | null) {
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
+  return formatStableArgentinaDateTime(date);
+}
+
+function formatStableArgentinaDateTime(date: Date) {
+  const argentinaTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return [
+    `${padDatePart(argentinaTime.getUTCDate())}/${padDatePart(
+      argentinaTime.getUTCMonth() + 1
+    )}`,
+    `${padDatePart(argentinaTime.getUTCHours())}:${padDatePart(
+      argentinaTime.getUTCMinutes()
+    )}`
+  ].join(" ");
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }

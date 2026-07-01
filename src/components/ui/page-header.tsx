@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { APP_NAME } from "@/lib/branding";
 
 type PageHeaderProps = {
   title: string;
@@ -11,7 +12,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
     <div className="pos-operational-strip flex min-w-0 flex-col gap-3 rounded-lg border px-4 py-3 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--accent)]">
-          POS Universal
+          {APP_NAME}
         </p>
         <h1 className="mt-0.5 text-2xl font-black tracking-tight text-[var(--text-primary)]">
           {title}

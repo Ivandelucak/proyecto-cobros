@@ -348,9 +348,11 @@ html.theme-transitioning *::after {
 
   .pos-operational-strip {
     background:
-      linear-gradient(90deg, rgba(76, 127, 163, 0.16), rgba(140, 163, 183, 0.10), transparent),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, var(--pos-panel) 100%),
+      linear-gradient(90deg, rgba(76, 127, 163, 0.13), rgba(140, 163, 183, 0.07), transparent),
       var(--pos-panel);
     border-color: var(--pos-border);
+    box-shadow: 0 6px 18px rgba(22, 33, 43, 0.08);
   }
 
   .dark .pos-accent-line::before,
@@ -361,8 +363,10 @@ html.theme-transitioning *::after {
   .dark .pos-operational-strip,
   html[data-theme="dark"] .pos-operational-strip {
     background:
-      linear-gradient(90deg, rgba(76, 127, 163, 0.22), rgba(140, 163, 183, 0.055), transparent),
-      var(--pos-panel-raised);
+      linear-gradient(180deg, #182433 0%, #121922 100%),
+      linear-gradient(90deg, rgba(76, 127, 163, 0.16), rgba(140, 163, 183, 0.04), transparent);
+    border-color: #273342;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   }
 }
 
