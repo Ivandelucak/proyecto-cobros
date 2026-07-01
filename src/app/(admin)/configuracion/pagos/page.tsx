@@ -1,5 +1,3 @@
-import { LinkButton } from "@/components/ui/link-button";
-import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { getMercadoPagoAccountViews } from "@/lib/mercadopago/mercado-pago-accounts";
 import {
@@ -20,17 +18,12 @@ export default async function ConfiguracionPagosPage() {
   ]);
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Medios de pago"
-        description="Configuracion manual para Mercado Pago, transferencia, tarjetas, efectivo y cuenta corriente."
-        actions={<LinkButton href="/configuracion">Volver</LinkButton>}
-      />
+    <div className="space-y-5">
       <PaymentSettingsForm
         methods={paymentMethods}
         creditPlans={creditPlans}
         mercadoPagoAccounts={mercadoPagoAccounts}
       />
-    </section>
+    </div>
   );
 }

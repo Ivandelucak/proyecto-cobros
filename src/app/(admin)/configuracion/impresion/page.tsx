@@ -1,6 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { LinkButton } from "@/components/ui/link-button";
-import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import { getPrintSetting, printPaperSizeLabels } from "@/lib/print-settings";
 import { PrintSettingsForm } from "./print-settings-form";
@@ -13,17 +11,7 @@ export default async function ImpresionPage() {
   const setting = await getPrintSetting();
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Impresion"
-        description="Configuracion de papel, copias e impresora para tickets."
-        actions={
-          <LinkButton href="/configuracion" variant="outline">
-            Volver a configuracion
-          </LinkButton>
-        }
-      />
-
+    <div className="space-y-5">
       <PrintSettingsForm
         initialSetting={setting}
         paperSizeLabels={printPaperSizeLabels}
@@ -40,6 +28,6 @@ export default async function ImpresionPage() {
           esta disponible.
         </p>
       </Card>
-    </section>
+    </div>
   );
 }

@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
-import { PageHeader } from "@/components/ui/page-header";
 import { requireAdminPage } from "@/lib/admin-auth";
 import type { BackupFile } from "@/lib/maintenance/backups";
 import { listBackups } from "@/lib/maintenance/backups";
@@ -32,17 +31,7 @@ export default async function MantenimientoPage({
   const to = dateInput(new Date());
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Mantenimiento"
-        description="Backups, exportaciones y controles simples para proteger los datos del comercio."
-        actions={
-          <LinkButton href="/configuracion" variant="outline">
-            Volver a configuracion
-          </LinkButton>
-        }
-      />
-
+    <div className="space-y-5">
       {params.success ? (
         <Alert tone="success" message={params.success} />
       ) : null}
@@ -178,7 +167,7 @@ export default async function MantenimientoPage({
           archivos generados por el sistema.
         </p>
       </Card>
-    </section>
+    </div>
   );
 }
 

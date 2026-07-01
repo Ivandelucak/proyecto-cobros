@@ -3,8 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useMemo, useState, useTransition, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import {
+  SettingsAdvancedDetails,
+  SettingsAlert,
+  SettingsCard,
+  SettingsField,
+  SettingsRadioRow,
+  SettingsSaveBar,
+  SettingsSection,
+  SettingsStatusBadge,
+  SettingsSummaryCard,
+  SettingsSwitchRow
+} from "@/components/ui/settings";
 import type { MercadoPagoAccountView } from "@/lib/mercadopago/mercado-pago-types";
 import type {
   CreditInstallmentPlanView,
@@ -163,30 +174,38 @@ export function PaymentSettingsForm({
 
   const enabledCount = methods.filter((method) => method.enabled).length;
   const activeAccounts = mercadoPagoAccounts.filter((account) => account.enabled).length;
+  const matchEnabledCount = mercadoPagoAccounts.filter(
+    (account) => account.enableAmountMatching
+  ).length;
 
   return (
     <form action={formAction} className="space-y-5">
-      <Card className="p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <SectionTitle
-            title="Medios de pago"
-            description="Configura la operatoria visible en caja y las credenciales server-side para Mercado Pago."
+      <SettingsCard>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SettingsSummaryCard label="Medios activos" value={String(enabledCount)} />
+          <SettingsSummaryCard label="Cuentas Mercado Pago" value={String(activeAccounts)} />
+          <SettingsSummaryCard
+            label="QR API"
+            value={mercadoPagoMode === "API_QR" ? "Habilitado" : "Manual"}
+            tone={mercadoPagoMode === "API_QR" ? "success" : "neutral"}
           />
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <SummaryBox label="Activos" value={String(enabledCount)} />
-            <SummaryBox label="Cuentas MP" value={String(activeAccounts)} />
-          </div>
+          <SettingsSummaryCard
+            label="Match por monto"
+            value={matchEnabledCount > 0 ? String(matchEnabledCount) : "No"}
+            hint={matchEnabledCount > 0 ? "Cuenta con busqueda activa" : "Desactivado"}
+            tone={matchEnabledCount > 0 ? "warning" : "neutral"}
+          />
         </div>
-      </Card>
+      </SettingsCard>
 
-      <Card className="p-5">
-        <SectionTitle
+      <SettingsCard>
+        <SettingsSection
           title="Mercado Pago"
           description="Elegi si caja opera manualmente o con QR dinamico por API. Los tokens guardados no se muestran completos."
-        />
-        <div className="mt-4 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-[#273342] dark:bg-[#121922]">
-            <p className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
+        >
+        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="app-panel-secondary rounded-lg p-4">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">
               Modo de cobro
             </p>
             <div className="mt-3 grid gap-2">
@@ -215,14 +234,15 @@ export function PaymentSettingsForm({
             mercadoPagoMode={mercadoPagoMode}
           />
         </div>
-      </Card>
+        </SettingsSection>
+      </SettingsCard>
 
-      <Card className="p-5">
-        <SectionTitle
-          title="Configuracion por metodo"
-          description="Ajusta etiquetas, recargos, referencias e instrucciones de caja."
-        />
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+      <SettingsCard>
+        <SettingsSection
+          title="Metodos manuales"
+          description="Cada metodo muestra lo esencial. Los datos tecnicos y bancarios quedan en opciones avanzadas."
+        >
+        <div className="grid gap-3 xl:grid-cols-2">
           {methods.map((method) => (
             <PaymentMethodCard
               key={method.method}
@@ -235,32 +255,33 @@ export function PaymentSettingsForm({
             />
           ))}
         </div>
-      </Card>
+        </SettingsSection>
+      </SettingsCard>
 
-      <Card className="p-5">
-        <SectionTitle
+      <SettingsCard>
+        <SettingsSection
           title="Cuotas de credito"
           description="Los planes activos se usan automaticamente al cobrar con credito."
-        />
+        >
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
-            <thead className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:text-[#7F8D9A]">
+            <thead className="border-b border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] text-xs uppercase tracking-wide text-[var(--text-muted)]">
               <tr>
                 <th className="px-3 py-2 font-medium">Activo</th>
                 <th className="px-3 py-2 font-medium">Cuotas</th>
                 <th className="px-3 py-2 font-medium">Recargo %</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
+            <tbody className="divide-y divide-[color:var(--panel-border)]">
               {creditPlans.map((plan) => (
-                <tr key={plan.id}>
+                <tr key={plan.id} className="transition-colors hover:bg-[var(--panel-bg-elevated)]">
                   <td className="px-3 py-3">
                     <input type="hidden" name="planId" value={plan.id} />
-                    <input
-                      type="checkbox"
+                    <SettingsSwitchRow
                       name={`plan-${plan.id}-active`}
                       defaultChecked={plan.active}
-                      className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      label="Activo"
+                      className="max-w-36"
                     />
                   </td>
                   <td className="px-3 py-3">
@@ -283,13 +304,13 @@ export function PaymentSettingsForm({
                   </td>
                 </tr>
               ))}
-              <tr>
+              <tr className="transition-colors hover:bg-[var(--panel-bg-elevated)]">
                 <td className="px-3 py-3">
-                  <input
-                    type="checkbox"
+                  <SettingsSwitchRow
                     name="newActive"
                     defaultChecked
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    label="Nuevo"
+                    className="max-w-36"
                   />
                 </td>
                 <td className="px-3 py-3">
@@ -302,22 +323,18 @@ export function PaymentSettingsForm({
             </tbody>
           </table>
         </div>
-      </Card>
+        </SettingsSection>
+      </SettingsCard>
 
       {clientMessage ? <Feedback tone="warn" message={clientMessage} /> : null}
       {state.error ? <Feedback tone="error" message={state.error} /> : null}
       {state.success ? <Feedback tone="success" message={state.success} /> : null}
 
-      <div className="sticky bottom-3 z-10 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-[#273342] dark:bg-[#121922]/95">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-600 dark:text-[#A9B6C2]">
-            Los cambios impactan en caja al guardar.
-          </p>
-          <Button type="submit" variant="primary" className="min-w-44" disabled={pending}>
-            {pending ? "Guardando..." : "Guardar pagos"}
-          </Button>
-        </div>
-      </div>
+      <SettingsSaveBar message="Los cambios impactan en caja al guardar.">
+        <Button type="submit" variant="primary" className="min-w-44" disabled={pending}>
+          {pending ? "Guardando..." : "Guardar pagos"}
+        </Button>
+      </SettingsSaveBar>
     </form>
   );
 }
@@ -331,13 +348,13 @@ function MercadoPagoAccountsPanel({
 }) {
   return (
     <div className="space-y-3">
-      <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-950 dark:border-brand-900/70 dark:bg-brand-950/30 dark:text-brand-100">
+      <SettingsAlert tone="info">
         Para QR dinamico necesitas cargar el Access Token y crear una caja/POS Mercado Pago. El QR se genera por cada venta y se envia con el external_pos_id de esa caja.
-      </p>
+      </SettingsAlert>
       {mercadoPagoMode === "API_QR" && accounts.length === 0 ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+        <SettingsAlert tone="warning">
           Agrega una cuenta para generar QR dinamico.
-        </p>
+        </SettingsAlert>
       ) : null}
       {accounts.map((account) => (
         <MercadoPagoAccountCard key={account.id} account={account} />
@@ -455,14 +472,14 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
 
   return (
     <details
-      className="rounded-lg border border-slate-200 bg-white p-4 dark:border-[#273342] dark:bg-[#121922]"
+      className="app-panel-elevated rounded-lg p-4"
       open={account.defaultAccount}
     >
       <summary className="cursor-pointer list-none">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
+              <p className="font-semibold text-[var(--text-primary)]">
                 {account.name}
               </p>
               <StatusPill tone={account.enabled ? "ok" : "muted"}>
@@ -473,7 +490,7 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
                 Match {account.enableAmountMatching ? "activo" : "no"}
               </StatusPill>
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               {account.environment} - {account.hasAccessToken ? "Token cargado" : "Sin token"}
               {detectedCollectorId ? ` - Cuenta ${detectedCollectorId}` : ""}
               {testResult?.testedAt ? ` - Ultima prueba ${formatTestDate(testResult.testedAt)}` : ""}
@@ -492,14 +509,14 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
             >
               {isPending ? "Probando..." : "Probar conexion"}
             </Button>
-            <span className="inline-flex min-h-8 items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-[#344457] dark:text-[#A9B6C2]">
+            <span className="badge-neutral inline-flex min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold">
               Editar
             </span>
           </div>
         </div>
       </summary>
 
-      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 dark:border-[#273342]">
+      <div className="mt-4 space-y-4 border-t border-[color:var(--panel-border)] pt-4">
         <input type="hidden" name="mpAccountId" value={account.id} />
         <input
           type="hidden"
@@ -559,13 +576,13 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-[#273342] dark:bg-[#18212B]/60">
+        <section className="app-panel-secondary rounded-lg p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
                 Caja Mercado Pago
               </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
                 Mercado Pago requiere una caja/POS para generar QR. El external_pos_id se envia en cada orden.
               </p>
             </div>
@@ -574,7 +591,7 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
             </StatusPill>
           </div>
 
-          <div className="mt-3 grid gap-2 text-xs text-gray-600 dark:text-[#A9B6C2] sm:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-3 grid gap-2 text-xs text-[var(--text-secondary)] sm:grid-cols-2 xl:grid-cols-5">
             <MetaLine label="Sucursal external_id" value={visibleStoreExternalId} />
             <MetaLine label="Store ID" value={visibleStoreId} />
             <MetaLine label="Caja external_id" value={visiblePosExternalId} />
@@ -586,7 +603,7 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
           </div>
 
           {account.lastPosSetupError && !posResult ? (
-            <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100">
+            <p className="badge-danger mt-3 rounded-md px-3 py-2 text-xs">
               {account.lastPosSetupError}
             </p>
           ) : null}
@@ -701,7 +718,7 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
             </Button>
           </div>
           {isPosPending ? (
-            <p className="mt-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 dark:border-brand-900/70 dark:bg-brand-950/30 dark:text-brand-100">
+            <p className="badge-info mt-3 rounded-md px-3 py-2 text-xs font-semibold">
               Creando sucursal y validando store_id antes de crear la caja...
             </p>
           ) : null}
@@ -770,10 +787,10 @@ function MercadoPagoAccountCard({ account }: { account: MercadoPagoAccountView }
                 Mostrar movimientos recientes en caja
               </CheckLine>
             </div>
-            <p className="md:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="badge-warning md:col-span-2 rounded-md px-3 py-2 text-xs">
               El match por monto es una ayuda manual para detectar pagos recientes por el mismo importe. No reemplaza al QR dinamico. Si activas autoasociacion, revisa que la tolerancia sea 0 o muy baja.
             </p>
-            <p className="md:col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-100">
+            <p className="badge-danger md:col-span-2 rounded-md px-3 py-2 text-xs">
               Autoasociar solo es seguro cuando el comercio recibe muy pocos pagos simultaneos del mismo monto.
             </p>
             <Field label="Instrucciones" className="md:col-span-2">
@@ -809,15 +826,18 @@ function MercadoPagoNewAccountCard({
   }
 
   return (
-    <details className="rounded-lg border border-brand-200 bg-brand-50/40 p-4 dark:border-brand-900/70 dark:bg-brand-950/20" open>
+    <details className="app-panel-elevated rounded-lg p-4">
       <summary className="cursor-pointer list-none">
-        <div>
-          <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
-            Agregar cuenta Mercado Pago
-          </p>
-          <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
-            Configuracion basica para publicar QR dinamico en pocos pasos.
-          </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold text-[var(--text-primary)]">
+              + Agregar cuenta Mercado Pago
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Configuracion basica para publicar QR dinamico en pocos pasos.
+            </p>
+          </div>
+          <SettingsStatusBadge tone="info">Formulario</SettingsStatusBadge>
         </div>
       </summary>
 
@@ -871,7 +891,7 @@ function MercadoPagoNewAccountCard({
               Guardar cuenta
             </Button>
           </div>
-          <p className="md:col-span-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-gray-600 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]">
+          <p className="app-panel-secondary md:col-span-2 rounded-md px-3 py-2 text-xs text-[var(--text-secondary)]">
             Despues de guardar la cuenta, abri su bloque y crea la caja Mercado Pago para obtener el external_pos_id.
           </p>
         </section>
@@ -923,10 +943,10 @@ function MercadoPagoNewAccountCard({
                 Mostrar movimientos recientes en caja
               </CheckLine>
             </div>
-            <p className="md:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="badge-warning md:col-span-2 rounded-md px-3 py-2 text-xs">
               El match por monto es una ayuda manual para detectar pagos recientes por el mismo importe. No reemplaza al QR dinamico. Autoasociar matches exactos queda desactivado por defecto.
             </p>
-            <p className="md:col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-100">
+            <p className="badge-danger md:col-span-2 rounded-md px-3 py-2 text-xs">
               Autoasociar solo es seguro cuando el comercio recibe muy pocos pagos simultaneos del mismo monto.
             </p>
             <Field label="Instrucciones" className="md:col-span-2">
@@ -962,11 +982,12 @@ function PaymentMethodCard({
   const showQr = method.method === "MERCADOPAGO" && mercadoPagoMode === "MANUAL";
 
   return (
-    <div
+    <details
       className={cn(
-        "rounded-lg border border-slate-200 bg-slate-50/60 p-4 dark:border-[#273342] dark:bg-[#121922]",
+        "app-panel-secondary rounded-lg p-4",
         !method.enabled && "opacity-80"
       )}
+      open={method.enabled}
     >
       <input
         type="hidden"
@@ -980,19 +1001,26 @@ function PaymentMethodCard({
           value="MANUAL"
         />
       ) : null}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-            {methodTitles[method.method]}
-          </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
-            {methodDescriptions[method.method]}
-          </p>
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                {methodTitles[method.method]}
+              </p>
+              <SettingsStatusBadge tone={method.enabled ? "success" : "neutral"}>
+                {method.enabled ? "Activo" : "Inactivo"}
+              </SettingsStatusBadge>
+            </div>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {methodDescriptions[method.method]}
+            </p>
+          </div>
+          <CheckLine name={`method-${method.method}-enabled`} defaultChecked={method.enabled}>
+            Activo
+          </CheckLine>
         </div>
-        <CheckLine name={`method-${method.method}-enabled`} defaultChecked={method.enabled}>
-          Activo
-        </CheckLine>
-      </div>
+      </summary>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <Field label="Nombre visible">
@@ -1002,49 +1030,6 @@ function PaymentMethodCard({
             required
           />
         </Field>
-
-        {showReference ? (
-          <Field label="Referencia">
-            <CheckLine
-              name={`method-${method.method}-askReference`}
-              defaultChecked={method.askReference}
-            >
-              Pedir numero de operacion
-            </CheckLine>
-          </Field>
-        ) : null}
-
-        {showBankFields ? (
-          <Field label="Banco">
-            <Input name={`method-${method.method}-bankName`} defaultValue={method.bankName ?? ""} />
-          </Field>
-        ) : null}
-
-        {showAccountFields ? (
-          <>
-            <Field label="Alias">
-              <Input name={`method-${method.method}-alias`} defaultValue={method.alias ?? ""} />
-            </Field>
-            <Field label="CBU">
-              <Input name={`method-${method.method}-cbu`} defaultValue={method.cbu ?? ""} />
-            </Field>
-            <Field label="CVU">
-              <Input name={`method-${method.method}-cvu`} defaultValue={method.cvu ?? ""} />
-            </Field>
-            <Field label="Titular">
-              <Input
-                name={`method-${method.method}-accountHolder`}
-                defaultValue={method.accountHolder ?? ""}
-              />
-            </Field>
-            <Field label="CUIT titular">
-              <Input
-                name={`method-${method.method}-accountCuit`}
-                defaultValue={method.accountCuit ?? ""}
-              />
-            </Field>
-          </>
-        ) : null}
 
         {showReference ? (
           <Field label="Estado por defecto">
@@ -1081,70 +1066,117 @@ function PaymentMethodCard({
             </Field>
           </>
         ) : null}
+      </div>
 
-        <Field label="Instrucciones" className="md:col-span-2">
-          <Textarea
-            name={`method-${method.method}-instructions`}
-            defaultValue={method.instructions ?? ""}
-            rows={3}
-            placeholder="Texto breve visible para el cajero."
-          />
-        </Field>
+      <AdvancedOptions title="Opciones avanzadas">
+        <div className="grid gap-3 md:grid-cols-2">
+          {showReference ? (
+            <Field label="Referencia">
+              <CheckLine
+                name={`method-${method.method}-askReference`}
+                defaultChecked={method.askReference}
+              >
+                Pedir numero de operacion
+              </CheckLine>
+            </Field>
+          ) : null}
 
-        {showQr ? (
-          <div className="md:col-span-2">
-            <input
-              type="hidden"
-              name={`method-${method.method}-qrImageDataUrl`}
-              value={removedQr ? "" : method.qrImageDataUrl ?? ""}
-            />
-            {removedQr ? (
-              <input type="hidden" name={`method-${method.method}-removeQr`} value="on" />
-            ) : null}
-            <p className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
-              QR estatico manual
-            </p>
-            <div className="mt-2 flex flex-col gap-3 rounded-md border border-slate-300 bg-white p-3 dark:border-[#344457] dark:bg-[#121922] sm:flex-row sm:items-center">
-              <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50 dark:border-[#273342] dark:bg-[#18212B]">
-                {qrPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={qrPreview} alt="QR Mercado Pago" className="h-full w-full object-contain" />
-                ) : (
-                  <span className="px-2 text-center text-xs text-gray-500 dark:text-[#7F8D9A]">
-                    Sin QR
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1 space-y-2">
+          {showBankFields ? (
+            <Field label="Banco">
+              <Input name={`method-${method.method}-bankName`} defaultValue={method.bankName ?? ""} />
+            </Field>
+          ) : null}
+
+          {showAccountFields ? (
+            <>
+              <Field label="Alias">
+                <Input name={`method-${method.method}-alias`} defaultValue={method.alias ?? ""} />
+              </Field>
+              <Field label="CBU">
+                <Input name={`method-${method.method}-cbu`} defaultValue={method.cbu ?? ""} />
+              </Field>
+              <Field label="CVU">
+                <Input name={`method-${method.method}-cvu`} defaultValue={method.cvu ?? ""} />
+              </Field>
+              <Field label="Titular">
                 <Input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  name={`method-${method.method}-qrFile`}
-                  onChange={(event) =>
-                    onQrChange(method.method, event.currentTarget.files?.[0] ?? null)
-                  }
+                  name={`method-${method.method}-accountHolder`}
+                  defaultValue={method.accountHolder ?? ""}
                 />
-                <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
-                  PNG, JPG o WebP. Maximo 2 MB.
-                </p>
-                {qrPreview ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => onRemoveQr(method.method)}
-                  >
-                    Quitar QR
-                  </Button>
-                ) : null}
+              </Field>
+              <Field label="CUIT titular">
+                <Input
+                  name={`method-${method.method}-accountCuit`}
+                  defaultValue={method.accountCuit ?? ""}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          <Field label="Instrucciones" className="md:col-span-2">
+            <Textarea
+              name={`method-${method.method}-instructions`}
+              defaultValue={method.instructions ?? ""}
+              rows={3}
+              placeholder="Texto breve visible para el cajero."
+            />
+          </Field>
+
+          {showQr ? (
+            <div className="md:col-span-2">
+              <input
+                type="hidden"
+                name={`method-${method.method}-qrImageDataUrl`}
+                value={removedQr ? "" : method.qrImageDataUrl ?? ""}
+              />
+              {removedQr ? (
+                <input type="hidden" name={`method-${method.method}-removeQr`} value="on" />
+              ) : null}
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                QR estatico manual
+              </p>
+              <div className="app-panel-secondary mt-2 flex flex-col gap-3 rounded-md p-3 sm:flex-row sm:items-center">
+                <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg)]">
+                  {qrPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={qrPreview} alt="QR Mercado Pago" className="h-full w-full object-contain" />
+                  ) : (
+                    <span className="px-2 text-center text-xs text-[var(--text-muted)]">
+                      Sin QR
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    name={`method-${method.method}-qrFile`}
+                    onChange={(event) =>
+                      onQrChange(method.method, event.currentTarget.files?.[0] ?? null)
+                    }
+                  />
+                  <p className="text-xs text-[var(--text-muted)]">
+                    PNG, JPG o WebP. Maximo 2 MB.
+                  </p>
+                  {qrPreview ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onRemoveQr(method.method)}
+                    >
+                      Quitar QR
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        ) : method.method === "MERCADOPAGO" ? (
-          <input type="hidden" name={`method-${method.method}-qrImageDataUrl`} value="" />
-        ) : null}
-      </div>
-    </div>
+          ) : method.method === "MERCADOPAGO" ? (
+            <input type="hidden" name={`method-${method.method}-qrImageDataUrl`} value="" />
+          ) : null}
+        </div>
+      </AdvancedOptions>
+    </details>
   );
 }
 
@@ -1162,17 +1194,17 @@ function ModeOption({
   return (
     <label
       className={cn(
-        "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition",
+        "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-[background-color,border-color,color]",
         checked
-          ? "border-brand-500 bg-brand-50 text-brand-950 dark:border-brand-700 dark:bg-brand-950/30 dark:text-brand-100"
-          : "border-slate-200 bg-white text-gray-700 hover:border-slate-300 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]"
+          ? "border-[color:var(--primary)] bg-[var(--primary-soft)] text-[var(--text-primary)]"
+          : "border-[color:var(--panel-border)] bg-[var(--panel-bg)] text-[var(--text-secondary)] hover:border-[color:var(--panel-border-strong)] hover:bg-[var(--panel-bg-elevated)] hover:text-[var(--text-primary)]"
       )}
     >
       <input
         type="radio"
         checked={checked}
         onChange={onChange}
-        className="mt-1 h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500"
+        className="mt-1 h-4 w-4 border-[color:var(--panel-border-strong)] text-brand-600 focus:ring-brand-500"
       />
       <span>
         <span className="block font-semibold">{title}</span>
@@ -1194,22 +1226,12 @@ function CheckLine({
   children: ReactNode;
 }) {
   return (
-    <label
-      className={cn(
-        "flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm",
-        tone === "danger"
-          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
-          : "border-slate-300 bg-white text-gray-700 dark:border-[#344457] dark:bg-[#18212B] dark:text-[#A9B6C2]"
-      )}
-    >
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={defaultChecked}
-        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-      />
-      {children}
-    </label>
+    <SettingsSwitchRow
+      name={name}
+      defaultChecked={defaultChecked}
+      label={children}
+      tone={tone === "danger" ? "danger" : "neutral"}
+    />
   );
 }
 
@@ -1225,16 +1247,12 @@ function RadioLine({
   children: ReactNode;
 }) {
   return (
-    <label className="flex min-h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm text-gray-700 dark:border-[#344457] dark:bg-[#18212B] dark:text-[#A9B6C2]">
-      <input
-        type="radio"
-        name={name}
-        value={value}
-        defaultChecked={defaultChecked}
-        className="h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500"
-      />
-      {children}
-    </label>
+    <SettingsRadioRow
+      name={name}
+      value={value}
+      defaultChecked={defaultChecked}
+      label={children}
+    />
   );
 }
 
@@ -1246,48 +1264,29 @@ function AdvancedOptions({
   children: ReactNode;
 }) {
   return (
-    <details className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-[#273342] dark:bg-[#18212B]/60">
-      <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-        {title}
-      </summary>
-      <div className="mt-3">{children}</div>
-    </details>
+    <SettingsAdvancedDetails title={title}>{children}</SettingsAdvancedDetails>
   );
 }
 
 function TestResultBox({ result }: { result: TestResult }) {
   return (
-    <div
-      className={cn(
-        "mt-3 rounded-md border px-3 py-2 text-sm",
-        result.ok
-          ? "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
-          : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
-      )}
-    >
+    <SettingsAlert tone={result.ok ? "success" : "danger"} className="mt-3">
       <p className="font-semibold">{result.ok ? "Conexion OK" : "No se pudo conectar"}</p>
       <p className="mt-1">{result.message}</p>
       {result.nickname || result.email || result.testedAt ? (
         <p className="mt-1 text-xs opacity-80">
           {[result.nickname, result.email, result.testedAt ? formatTestDate(result.testedAt) : null]
             .filter(Boolean)
-            .join(" - ")}
+          .join(" - ")}
         </p>
       ) : null}
-    </div>
+    </SettingsAlert>
   );
 }
 
 function PosSetupResultBox({ result }: { result: PosSetupResult }) {
   return (
-    <div
-      className={cn(
-        "mt-3 rounded-md border px-3 py-2 text-sm",
-        result.ok
-          ? "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
-          : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
-      )}
-    >
+    <SettingsAlert tone={result.ok ? "success" : "danger"} className="mt-3">
       <p className="font-semibold">
         {result.ok ? "Caja Mercado Pago lista" : "No se pudo configurar la caja"}
       </p>
@@ -1303,7 +1302,7 @@ function PosSetupResultBox({ result }: { result: PosSetupResult }) {
           {result.steps.map((step, index) => (
             <li
               key={`${step.step}-${index}`}
-              className="flex items-start gap-2 rounded-md border border-current/15 bg-white/45 px-2 py-1.5 dark:bg-[#121922]/35"
+              className="app-panel-secondary flex items-start gap-2 rounded-md px-2 py-1.5"
             >
               <span className="mt-0.5 shrink-0">
                 <StatusPill tone={getStepTone(step.status)}>
@@ -1330,22 +1329,22 @@ function PosSetupResultBox({ result }: { result: PosSetupResult }) {
           <summary className="cursor-pointer text-xs font-semibold">
             Ver detalle tecnico
           </summary>
-          <pre className="mt-2 max-h-56 overflow-auto rounded-md border border-slate-200 bg-white p-2 text-[11px] leading-4 text-slate-700 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]">
+          <pre className="mt-2 max-h-56 overflow-auto rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-2 text-[11px] leading-4 text-[var(--text-secondary)]">
             {result.technicalDetail}
           </pre>
         </details>
       ) : null}
-    </div>
+    </SettingsAlert>
   );
 }
 
 function MetaLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-[#273342] dark:bg-[#121922]">
-      <p className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-[#7F8D9A]">
+    <div className="app-panel rounded-md px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
         {label}
       </p>
-      <p className="mt-1 truncate font-semibold text-gray-800 dark:text-[#F3F7FA]">
+      <p className="mt-1 truncate font-semibold text-[var(--text-primary)]">
         {value}
       </p>
     </div>
@@ -1359,24 +1358,18 @@ function StatusPill({
   tone?: "info" | "ok" | "warn" | "muted" | "error";
   children: ReactNode;
 }) {
+  const mappedTone = {
+    info: "info",
+    ok: "success",
+    warn: "warning",
+    muted: "neutral",
+    error: "danger"
+  } as const;
+
   return (
-    <span
-      className={cn(
-        "rounded-full border px-2 py-0.5 text-xs font-semibold",
-        tone === "info" &&
-          "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-900/70 dark:bg-brand-950/30 dark:text-brand-200",
-        tone === "ok" &&
-          "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]",
-        tone === "warn" &&
-          "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100",
-        tone === "error" &&
-          "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100",
-        tone === "muted" &&
-          "border-slate-200 bg-slate-50 text-slate-600 dark:border-[#273342] dark:bg-[#18212B] dark:text-[#A9B6C2]"
-      )}
-    >
+    <SettingsStatusBadge tone={mappedTone[tone]}>
       {children}
-    </span>
+    </SettingsStatusBadge>
   );
 }
 
@@ -1483,42 +1476,11 @@ function Field({
   className?: string;
   children: ReactNode;
 }) {
-  return (
-    <label className={cn("space-y-2", className)}>
-      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
+  return <SettingsField label={label} className={className}>{children}</SettingsField>;
 }
 
 function HelpText({ children }: { children: ReactNode }) {
-  return <p className="text-xs leading-5 text-gray-500 dark:text-[#7F8D9A]">{children}</p>;
-}
-
-function SectionTitle({
-  title,
-  description
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">{description}</p>
-    </div>
-  );
-}
-
-function SummaryBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-[#273342] dark:bg-[#121922]">
-      <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">{label}</p>
-      <p className="text-lg font-bold text-gray-950 dark:text-[#F3F7FA]">{value}</p>
-    </div>
-  );
+  return <p className="text-xs leading-5 text-[var(--text-muted)]">{children}</p>;
 }
 
 function Feedback({
@@ -1528,20 +1490,16 @@ function Feedback({
   tone: "warn" | "error" | "success";
   message: string;
 }) {
+  const mappedTone = {
+    warn: "warning",
+    error: "danger",
+    success: "success"
+  } as const;
+
   return (
-    <p
-      className={cn(
-        "rounded-md border px-3 py-2 text-sm",
-        tone === "warn" &&
-          "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-100",
-        tone === "error" &&
-          "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200",
-        tone === "success" &&
-          "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
-      )}
-    >
+    <SettingsAlert tone={mappedTone[tone]}>
       {message}
-    </p>
+    </SettingsAlert>
   );
 }
 

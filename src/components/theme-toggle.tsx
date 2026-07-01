@@ -4,6 +4,16 @@ import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "pos-universal-theme";
 const THEME_CHANGE_EVENT = "pos-universal-theme-change";
+const THEME_TRANSITION_CLASS = "theme-transitioning";
+const THEME_TRANSITION_CLEANUP_MS = 460;
+type ThemeValue = "light" | "dark";
+type ViewTransitionHandle = {
+  finished?: Promise<unknown>;
+};
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => ViewTransitionHandle;
+};
+let themeTransitionCleanupTimer: number | undefined;
 
 export function ThemeToggle() {
   const isDark = useSyncExternalStore(
@@ -13,13 +23,33 @@ export function ThemeToggle() {
   );
 
   function toggleTheme() {
-    const shouldUseDark = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", shouldUseDark);
-    document.documentElement.style.colorScheme = shouldUseDark ? "dark" : "light";
-    document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
-    document.documentElement.dataset.themeReady = "true";
-    localStorage.setItem(STORAGE_KEY, shouldUseDark ? "dark" : "light");
-    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+    const nextTheme: ThemeValue = document.documentElement.classList.contains("dark")
+      ? "light"
+      : "dark";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const transitionDocument = document as ViewTransitionDocument;
+    const apply = () => applyTheme(nextTheme);
+
+    document.documentElement.classList.remove("no-theme-transition");
+    if (reducedMotion) {
+      apply();
+      return;
+    }
+
+    beginThemeTransition();
+
+    if (typeof transitionDocument.startViewTransition === "function") {
+      const transition = transitionDocument.startViewTransition(apply);
+      if (transition.finished) {
+        void transition.finished.finally(endThemeTransition);
+      } else {
+        endThemeTransition();
+      }
+      return;
+    }
+
+    apply();
+    endThemeTransition();
   }
 
   const label = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
@@ -33,7 +63,12 @@ export function ThemeToggle() {
       className="btn-secondary group inline-flex h-10 w-10 items-center justify-center rounded-md shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:shadow-md hover:shadow-slate-300/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:hover:shadow-none dark:focus-visible:ring-offset-[#0B1015]"
     >
       <span className="sr-only">{label}</span>
-      {isDark ? <SunIcon /> : <MoonIcon />}
+      <span className="block dark:hidden">
+        <MoonIcon />
+      </span>
+      <span className="hidden dark:block">
+        <SunIcon />
+      </span>
     </button>
   );
 }
@@ -49,11 +84,45 @@ function subscribeToTheme(callback: () => void) {
 }
 
 function getThemeSnapshot() {
-  return document.documentElement.classList.contains("dark");
+  return getDocumentTheme() === "dark";
 }
 
 function getServerThemeSnapshot() {
   return false;
+}
+
+function applyTheme(theme: ThemeValue) {
+  const root = document.documentElement;
+  const isDark = theme === "dark";
+  root.classList.toggle("dark", isDark);
+  root.classList.toggle("light", !isDark);
+  root.style.colorScheme = theme;
+  root.dataset.theme = theme;
+  root.dataset.themeReady = "true";
+
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // localStorage can be blocked in hardened browser contexts.
+  }
+
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
+function beginThemeTransition() {
+  window.clearTimeout(themeTransitionCleanupTimer);
+  document.documentElement.classList.add(THEME_TRANSITION_CLASS);
+}
+
+function endThemeTransition() {
+  window.clearTimeout(themeTransitionCleanupTimer);
+  themeTransitionCleanupTimer = window.setTimeout(() => {
+    document.documentElement.classList.remove(THEME_TRANSITION_CLASS);
+  }, THEME_TRANSITION_CLEANUP_MS);
+}
+
+function getDocumentTheme(): ThemeValue {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 function MoonIcon() {

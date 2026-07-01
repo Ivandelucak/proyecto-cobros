@@ -2,8 +2,15 @@
 
 import { useActionState, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
+import {
+  SettingsAlert,
+  SettingsCard,
+  SettingsField,
+  SettingsGrid,
+  SettingsSaveBar,
+  SettingsSection
+} from "@/components/ui/settings";
 import {
   updateBusinessProfileAction,
   type BusinessProfileState
@@ -92,16 +99,16 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="logoUrl" value={initialValues.logoUrl ?? ""} />
       {removeLogo ? <input type="hidden" name="removeLogo" value="on" /> : null}
-      <Card className="p-5">
-        <SectionTitle
+      <SettingsCard>
+        <SettingsSection
           title="Datos del comercio"
           description="Identidad principal del local dentro del sistema."
-        />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field label="Nombre del comercio">
+        >
+        <SettingsGrid>
+          <SettingsField label="Nombre del comercio">
             <Input name="name" defaultValue={initialValues.name} required />
-          </Field>
-          <Field label="Rubro">
+          </SettingsField>
+          <SettingsField label="Rubro">
             <Select name="businessType" defaultValue={initialValues.businessType}>
               {Object.entries(businessTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -109,83 +116,85 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label="CUIT">
+          </SettingsField>
+          <SettingsField label="CUIT">
             <Input name="cuit" defaultValue={initialValues.cuit ?? ""} />
-          </Field>
-          <Field label="Moneda">
+          </SettingsField>
+          <SettingsField label="Moneda">
             <Input name="currency" defaultValue={initialValues.currency} />
-          </Field>
-          <Field label="Locale">
+          </SettingsField>
+          <SettingsField label="Locale">
             <Input name="locale" defaultValue={initialValues.locale} />
-          </Field>
-          <Field label="Zona horaria">
+          </SettingsField>
+          <SettingsField label="Zona horaria">
             <Input name="timezone" defaultValue={initialValues.timezone} />
-          </Field>
-        </div>
-      </Card>
+          </SettingsField>
+        </SettingsGrid>
+        </SettingsSection>
+      </SettingsCard>
 
-      <Card className="p-5">
-        <SectionTitle
+      <SettingsCard>
+        <SettingsSection
           title="Datos para ticket"
           description="Nombre, direccion y telefono se usan en los tickets impresos."
-        />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field label="Telefono">
+        >
+        <SettingsGrid>
+          <SettingsField label="Telefono">
             <Input name="phone" defaultValue={initialValues.phone ?? ""} />
-          </Field>
-          <Field label="Email">
+          </SettingsField>
+          <SettingsField label="Email">
             <Input name="email" type="email" defaultValue={initialValues.email ?? ""} />
-          </Field>
-          <Field label="Direccion">
+          </SettingsField>
+          <SettingsField label="Direccion">
             <Input name="address" defaultValue={initialValues.address ?? ""} />
-          </Field>
-          <Field label="Condicion fiscal">
+          </SettingsField>
+          <SettingsField label="Condicion fiscal">
             <Input
               name="fiscalCondition"
               defaultValue={initialValues.fiscalCondition ?? ""}
             />
-          </Field>
-          <Field label="Ingresos brutos">
+          </SettingsField>
+          <SettingsField label="Ingresos brutos">
             <Input name="grossIncome" defaultValue={initialValues.grossIncome ?? ""} />
-          </Field>
-          <Field label="Inicio de actividades">
+          </SettingsField>
+          <SettingsField label="Inicio de actividades">
             <Input
               name="activityStartDate"
               type="date"
               defaultValue={dateInput(initialValues.activityStartDate)}
             />
-          </Field>
-          <Field label="Sitio web">
+          </SettingsField>
+          <SettingsField label="Sitio web">
             <Input name="website" defaultValue={initialValues.website ?? ""} />
-          </Field>
-          <Field label="Texto pie general">
+          </SettingsField>
+          <SettingsField label="Texto pie general">
             <Input
               name="generalFooterText"
               defaultValue={initialValues.generalFooterText ?? ""}
             />
-          </Field>
-        </div>
-      </Card>
+          </SettingsField>
+        </SettingsGrid>
+        </SettingsSection>
+      </SettingsCard>
 
-      <Card className="p-5">
-        <SectionTitle
+      <SettingsCard>
+        <SettingsSection
           title="Preferencias visuales"
           description="Ajustes livianos de apariencia y logo usado en impresiones."
-        />
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <Field label="Tema preferido">
+        >
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <SettingsField label="Tema preferido">
             <Select name="preferredTheme" defaultValue={initialValues.preferredTheme ?? ""}>
               <option value="">Sin preferencia</option>
               <option value="light">Claro</option>
               <option value="dark">Oscuro</option>
             </Select>
-          </Field>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
-            <p className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
+          </SettingsField>
+          <div className="app-panel-secondary rounded-lg p-4">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">
               Logo del comercio
             </p>
-            <div className="mt-3 grid min-h-28 place-items-center rounded-md border border-dashed border-slate-300 bg-white p-3 dark:border-[#344457] dark:bg-[#18212B]">
+            <div className="mt-3 grid min-h-28 place-items-center rounded-md border border-dashed border-[color:var(--panel-border-strong)] bg-[var(--panel-bg)] p-3">
               {logoPreview && !removeLogo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -194,7 +203,7 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                   className="max-h-20 max-w-full object-contain"
                 />
               ) : (
-                <span className="text-center text-xs text-slate-500 dark:text-[#7F8D9A]">
+                <span className="text-center text-xs text-[var(--text-muted)]">
                   Sin logo cargado
                 </span>
               )}
@@ -211,9 +220,10 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
               <Button
                 type="button"
                 size="sm"
+                variant="secondary"
                 onClick={() => fileInputRef.current?.click()}
               >
-                Reemplazar logo
+                Subir/Reemplazar logo
               </Button>
               <Button
                 type="button"
@@ -230,29 +240,26 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
                 Quitar
               </Button>
             </div>
-            <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-[#7F8D9A]">
-              PNG, JPG o WebP. Maximo 1.5 MB.
+            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
+              Este logo se usa en tickets, presupuestos e impresiones cuando corresponda. PNG, JPG o WebP. Maximo 1.5 MB.
             </p>
           </div>
         </div>
-      </Card>
+        </SettingsSection>
+      </SettingsCard>
 
       {state.error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
-          {state.error}
-        </p>
+        <SettingsAlert tone="danger">{state.error}</SettingsAlert>
       ) : null}
       {state.success ? (
-        <p className="rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]">
-          {state.success}
-        </p>
+        <SettingsAlert tone="success">{state.success}</SettingsAlert>
       ) : null}
 
-      <div className="flex justify-end">
+      <SettingsSaveBar message="Guarda identidad, datos fiscales y logo del comercio.">
         <Button type="submit" variant="primary" className="min-w-44" disabled={pending}>
-          {pending ? "Guardando..." : "Guardar datos"}
+          {pending ? "Guardando..." : "Guardar datos del comercio"}
         </Button>
-      </div>
+      </SettingsSaveBar>
     </form>
   );
 }
@@ -271,34 +278,4 @@ function dateInput(date: Date | null) {
 
 function padDatePart(value: number) {
   return String(value).padStart(2, "0");
-}
-
-function SectionTitle({
-  title,
-  description
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">{description}</p>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
-      {children}
-    </label>
-  );
 }
