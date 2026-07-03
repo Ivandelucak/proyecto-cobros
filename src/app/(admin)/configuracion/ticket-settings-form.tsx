@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,28 +30,80 @@ export function TicketSettingsForm({ setting }: TicketSettingsFormProps) {
     initialState
   );
 
+  const [ticketTitle, setTicketTitle] = useState(setting.ticketTitle);
+  const [nonFiscalLegend, setNonFiscalLegend] = useState(setting.nonFiscalLegend);
+  const [headerText, setHeaderText] = useState(setting.headerText ?? "");
+  const [thankYouText, setThankYouText] = useState(setting.thankYouText);
+  const [footerText, setFooterText] = useState(setting.footerText ?? "");
+
   return (
     <form action={formAction} className="space-y-5">
+      <input type="hidden" name="ticketTitle" value={ticketTitle} />
+      <input type="hidden" name="nonFiscalLegend" value={nonFiscalLegend} />
+      <input type="hidden" name="headerText" value={headerText} />
+      <input type="hidden" name="thankYouText" value={thankYouText} />
+      <input type="hidden" name="footerText" value={footerText} />
       <SettingsCard>
         <SettingsSection
           title="Textos principales"
           description="Copys visibles en el comprobante interno y en la impresion."
         >
         <SettingsGrid>
-          <SettingsField label="Titulo">
-            <Input name="ticketTitle" defaultValue={setting.ticketTitle} />
+          <SettingsField
+            label="Título"
+            description="Se imprime en el encabezado principal del ticket."
+          >
+            <Input
+              name="ticketTitle_input"
+              value={ticketTitle}
+              onChange={(e) => setTicketTitle(e.target.value)}
+            />
+            <SoftValidation value={ticketTitle} />
           </SettingsField>
-          <SettingsField label="Leyenda no fiscal">
-            <Input name="nonFiscalLegend" defaultValue={setting.nonFiscalLegend} />
+          <SettingsField
+            label="Leyenda no fiscal"
+            description="Advertencia legal no fiscal. Se imprime debajo del nombre."
+          >
+            <Input
+              name="nonFiscalLegend_input"
+              value={nonFiscalLegend}
+              onChange={(e) => setNonFiscalLegend(e.target.value)}
+            />
+            <SoftValidation value={nonFiscalLegend} />
           </SettingsField>
-          <SettingsField label="Texto superior">
-            <Input name="headerText" defaultValue={setting.headerText ?? ""} />
+          <SettingsField
+            label="Texto superior"
+            description="Se imprime debajo del nombre del comercio."
+          >
+            <Input
+              name="headerText_input"
+              value={headerText}
+              onChange={(e) => setHeaderText(e.target.value)}
+            />
+            <SoftValidation value={headerText} />
           </SettingsField>
-          <SettingsField label="Texto final">
-            <Input name="thankYouText" defaultValue={setting.thankYouText} />
+          <SettingsField
+            label="Texto final"
+            description="Mensaje de despedida al final del ticket."
+          >
+            <Input
+              name="thankYouText_input"
+              value={thankYouText}
+              onChange={(e) => setThankYouText(e.target.value)}
+            />
+            <SoftValidation value={thankYouText} />
           </SettingsField>
-          <SettingsField label="Pie adicional" className="md:col-span-2">
-            <Input name="footerText" defaultValue={setting.footerText ?? ""} />
+          <SettingsField
+            label="Pie adicional"
+            className="md:col-span-2"
+            description="Texto secundario o redes sociales al pie del ticket."
+          >
+            <Input
+              name="footerText_input"
+              value={footerText}
+              onChange={(e) => setFooterText(e.target.value)}
+            />
+            <SoftValidation value={footerText} />
           </SettingsField>
         </SettingsGrid>
         </SettingsSection>
@@ -122,3 +174,26 @@ function StateMessage({ state }: { state: TicketSettingsState }) {
     </SettingsAlert>
   );
 }
+
+function isFieldIncomplete(value: string | null | undefined) {
+  if (!value || value.trim() === "") return true;
+  const val = value.toLowerCase();
+  return (
+    val.includes("???") ||
+    val.includes("test") ||
+    val.includes("lorem ipsum") ||
+    val.includes("texto de prueba") ||
+    val.includes("condicion fiscal") ||
+    val.includes("ingresos brutos")
+  );
+}
+
+function SoftValidation({ value }: { value: string | null | undefined }) {
+  if (!isFieldIncomplete(value)) return null;
+  return (
+    <span className="block text-xs font-semibold text-amber-600 dark:text-amber-500 mt-1">
+      ⚠️ Este campo parece incompleto.
+    </span>
+  );
+}
+

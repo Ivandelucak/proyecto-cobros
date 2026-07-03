@@ -68,6 +68,26 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     isA4 ? "text-xl" : isTicket58 ? "text-[13px]" : "text-[15px]"
   );
 
+  const rawTitle = ticketSetting.ticketTitle;
+  const rawLegend = ticketSetting.showNonFiscalLegend ? ticketSetting.nonFiscalLegend : null;
+
+  const validTitle = isValidText(rawTitle) ? rawTitle : null;
+  const validLegend = isValidText(rawLegend) ? rawLegend : null;
+
+  let displayTitle: string | null = null;
+  let displayLegend: string | null = null;
+
+  if (validTitle) {
+    displayTitle = validTitle;
+    if (validLegend && !areTextsSimilar(validTitle, validLegend)) {
+      displayLegend = validLegend;
+    }
+  } else if (validLegend) {
+    displayTitle = validLegend;
+  } else {
+    displayTitle = "COMPROBANTE INTERNO - NO FISCAL";
+  }
+
   return (
     <main className="ticket-print-page min-h-screen bg-[var(--app-bg)] px-4 py-6 text-[var(--text-primary)]">
       <style>{`
@@ -126,7 +146,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
 
       <article className={sheetClassName}>
         <header className="ticket-section text-center">
-          {business.logoUrl ? (
+          {business.logoUrl && isValidText(business.logoUrl) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={business.logoUrl}
@@ -137,24 +157,35 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
               )}
             />
           ) : null}
-          {ticketSetting.showBusinessName ? (
+          {ticketSetting.showBusinessName && isValidText(business.name) ? (
             <h1 className={titleClassName}>{business.name}</h1>
           ) : null}
-          {ticketSetting.headerText ? <p>{ticketSetting.headerText}</p> : null}
-          {ticketSetting.showAddress && business.address ? <p>{business.address}</p> : null}
-          {ticketSetting.showPhone && business.phone ? <p>Tel: {business.phone}</p> : null}
-          {ticketSetting.showEmail && business.email ? <p>{business.email}</p> : null}
-          {ticketSetting.showCuit && business.cuit ? <p>CUIT: {business.cuit}</p> : null}
-          {business.fiscalCondition ? <p>{business.fiscalCondition}</p> : null}
-          {ticketSetting.showNonFiscalLegend ? (
+          {ticketSetting.headerText && isValidText(ticketSetting.headerText) ? <p>{ticketSetting.headerText}</p> : null}
+          {ticketSetting.showAddress && isValidText(business.address) ? <p>{business.address}</p> : null}
+          {ticketSetting.showPhone && isValidText(business.phone) ? <p>Tel: {business.phone}</p> : null}
+          {ticketSetting.showEmail && isValidText(business.email) ? <p>{business.email}</p> : null}
+          {ticketSetting.showCuit && isValidText(business.cuit) ? <p>CUIT: {business.cuit}</p> : null}
+          {isValidText(business.fiscalCondition) ? <p>Cond. Fiscal: {business.fiscalCondition}</p> : null}
+          {isValidText(business.grossIncome) ? <p>IIBB: {business.grossIncome}</p> : null}
+          {business.activityStartDate && isValidText(dateInputString(business.activityStartDate)) ? (
+            <p>Inicio Act.: {new Intl.DateTimeFormat(business.locale || "es-AR", { timeZone: business.timezone || undefined, day: "2-digit", month: "2-digit", year: "numeric" }).format(business.activityStartDate)}</p>
+          ) : null}
+          {isValidText(business.website) ? <p>Web: {business.website}</p> : null}
+
+          {displayLegend ? (
             <p className="mt-2 border-y border-dashed border-gray-500 py-1 font-semibold uppercase">
-              {ticketSetting.nonFiscalLegend}
+              {displayLegend}
             </p>
           ) : null}
-          <p className="mt-2 font-semibold uppercase">{ticketSetting.ticketTitle}</p>
-          <p className="mt-1 text-[11px] uppercase">
-            {ticketFiscalStatusLabel(sale.fiscalStatus)}
-          </p>
+          {displayTitle ? (
+            <p className="mt-2 font-semibold uppercase">{displayTitle}</p>
+          ) : null}
+
+          {sale.fiscalStatus !== FiscalStatus.NOT_REQUESTED ? (
+            <p className="mt-1 text-[11px] uppercase">
+              {ticketFiscalStatusLabel(sale.fiscalStatus)}
+            </p>
+          ) : null}
           {sale.status === SaleStatus.CANCELLED ? (
             <p className="mt-2 border border-black py-1 text-sm font-bold uppercase">
               Venta anulada
@@ -233,7 +264,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
               </p>
               {sale.payments.map((payment) => (
                 <div key={payment.id}>
-                  <Line label={paymentLabels[payment.method]} value={money(payment.amount)} />
+                  <Line label={getPaymentMethodLabel(payment.method, paymentLabels[payment.method], payment.providerStatus)} value={money(payment.amount)} />
                   {payment.method === PaymentMethod.CASH && payment.receivedAmount ? (
                     <>
                       <Line label="Recibido" value={money(payment.receivedAmount)} />
@@ -265,26 +296,26 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
                         label="MP estado"
                         value={paymentAttemptStatusLabel(payment.paymentAttempt.status)}
                       />
-                      {payment.paymentAttempt.providerOrderId ? (
+                      {payment.paymentAttempt.providerOrderId && cleanReference(payment.paymentAttempt.providerOrderId) ? (
                         <Line
                           label="MP orden"
-                          value={payment.paymentAttempt.providerOrderId}
+                          value={cleanReference(payment.paymentAttempt.providerOrderId) || ""}
                         />
                       ) : null}
-                      {payment.paymentAttempt.providerPaymentId ? (
+                      {payment.paymentAttempt.providerPaymentId && cleanReference(payment.paymentAttempt.providerPaymentId) ? (
                         <Line
                           label="MP pago"
-                          value={payment.paymentAttempt.providerPaymentId}
+                          value={cleanReference(payment.paymentAttempt.providerPaymentId) || ""}
                         />
                       ) : null}
                     </>
                   ) : null}
-                  {payment.externalId ? (
-                    <Line label="Operacion" value={payment.externalId} />
+                  {payment.externalId && cleanReference(payment.externalId) ? (
+                    <Line label="Operacion" value={cleanReference(payment.externalId) || ""} />
                   ) : null}
                   {payment.externalReference &&
-                  payment.externalReference !== payment.externalId ? (
-                    <Line label="Referencia" value={payment.externalReference} />
+                  payment.externalReference !== payment.externalId && cleanReference(payment.externalReference) ? (
+                    <Line label="Referencia" value={cleanReference(payment.externalReference) || ""} />
                   ) : null}
                   {providerStatusLabel(payment.providerStatus) ? (
                     <Line
@@ -314,9 +345,9 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
         ) : null}
 
         <footer className="ticket-footer text-center">
-          <p>{ticketSetting.thankYouText}</p>
-          {ticketSetting.footerText ? <p>{ticketSetting.footerText}</p> : null}
-          {business.generalFooterText ? <p>{business.generalFooterText}</p> : null}
+          {ticketSetting.thankYouText && isValidText(ticketSetting.thankYouText) ? <p>{ticketSetting.thankYouText}</p> : null}
+          {ticketSetting.footerText && isValidText(ticketSetting.footerText) ? <p>{ticketSetting.footerText}</p> : null}
+          {business.generalFooterText && isValidText(business.generalFooterText) ? <p>{business.generalFooterText}</p> : null}
         </footer>
       </article>
     </main>
@@ -427,3 +458,48 @@ function unitLabel(unitType: UnitType) {
 
   return labels[unitType];
 }
+
+function isValidText(val: string | null | undefined): val is string {
+  if (!val) return false;
+  const n = val.trim().toLowerCase();
+  if (n === "" || n.includes("???")) return false;
+  const invalidKeywords = ["test", "lorem ipsum", "texto de prueba", "prueba", "condicion fiscal", "ingresos brutos"];
+  return !invalidKeywords.some(keyword => n.includes(keyword));
+}
+
+function dateInputString(date: Date | null) {
+  if (!date || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toISOString();
+}
+
+function areTextsSimilar(t1: string | null | undefined, t2: string | null | undefined): boolean {
+  if (!t1 || !t2) return false;
+  const clean = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return clean(t1) === clean(t2);
+}
+
+function cleanReference(ref: string | null | undefined): string | null {
+  if (!ref) return null;
+  const trimmed = ref.trim();
+  if (!isValidText(trimmed)) return null;
+  if (trimmed.length > 12) {
+    return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+  }
+  return trimmed;
+}
+
+function getPaymentMethodLabel(method: PaymentMethod, fallbackLabel: string, providerStatus?: string | null) {
+  if (method === PaymentMethod.CASH) return "Efectivo";
+  if (method === PaymentMethod.MERCADOPAGO) return "Mercado Pago";
+  if (method === PaymentMethod.TRANSFER) {
+    const isVerified = providerStatus === "VERIFIED" || providerStatus === "verified" || providerStatus?.toLowerCase().includes("verific");
+    return isVerified ? "Transferencia · verificada" : "Transferencia";
+  }
+  if (method === PaymentMethod.CREDIT) return "Crédito";
+  if (method === PaymentMethod.DEBIT) return "Débito";
+  if (method === PaymentMethod.CURRENT_ACCOUNT) return "Cuenta corriente";
+  return fallbackLabel || method;
+}
+

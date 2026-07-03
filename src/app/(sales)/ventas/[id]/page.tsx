@@ -2,7 +2,8 @@ import { FiscalStatus, PaymentMethod, Role, SaleStatus, UnitType } from "@prisma
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
-import { PageHeader } from "@/components/ui/page-header";
+import { PrintButton } from "@/components/ui/print-button";
+import { getPrintSetting } from "@/lib/print-settings";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { formatDateTimeStable } from "@/lib/date-format";
 import {
@@ -20,6 +21,7 @@ import {
   isSafeInternalReturnTo
 } from "@/lib/return-to";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
+import { cn } from "@/lib/ui";
 import { CancelSaleForm } from "./cancel-sale-form";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +41,11 @@ export default async function VentaDetallePage({
 }: VentaDetallePageProps) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const [{ sale, user }, paymentMethods, cashSetting] = await Promise.all([
+  const [{ sale, user }, paymentMethods, cashSetting, printSetting] = await Promise.all([
     getAccessibleSaleOrRedirect(id),
     getPaymentMethodSettings(),
-    getCashRegisterSetting()
+    getCashRegisterSetting(),
+    getPrintSetting()
   ]);
   const fallbackBackHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
   const rawReturnTo = param(query.returnTo);
@@ -57,176 +60,103 @@ export default async function VentaDetallePage({
   ) as Record<PaymentMethod, string>;
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] p-6 text-[var(--text-primary)]">
-      <section className="mx-auto max-w-6xl space-y-5">
-        <PageHeader
-          title={`Venta #${sale.saleNumber}`}
-          description={`Confirmada el ${formatDateTimeStable(sale.createdAt)} por ${sale.user.name}.`}
-          actions={
-            <>
-              <LinkButton href={backHref}>Volver</LinkButton>
-              <LinkButton href={buildTicketHref(sale.id, ticketReturnTo)} variant="primary">
-                Ver ticket
+    <main className="min-h-screen bg-[var(--app-bg)] p-4 text-[var(--text-primary)] md:p-6">
+      <section className="mx-auto max-w-6xl space-y-4">
+        {/* Custom compact header */}
+        <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-[#273342] dark:bg-[#121922] md:flex-row md:items-center md:justify-between md:py-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--accent)]">
+                Fox Point
+              </span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span className="text-xs text-gray-500 dark:text-[#7F8D9A]">
+                Confirmada por {sale.user.name}
+              </span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span className="text-xs text-gray-500 dark:text-[#7F8D9A]">
+                {formatDateTimeStable(sale.createdAt)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-gray-950 dark:text-[#F3F7FA]">
+                Venta #{sale.saleNumber}
+              </h1>
+              <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
+                {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <LinkButton href={backHref} size="sm">
+              Volver
+            </LinkButton>
+            <LinkButton href={buildTicketHref(sale.id, ticketReturnTo)} size="sm">
+              Ver ticket
+            </LinkButton>
+            <PrintButton
+              saleId={sale.id}
+              setting={printSetting}
+              printHref={buildTicketHref(sale.id, ticketReturnTo)}
+              size="sm"
+            />
+            {user.role === Role.ADMIN && (sale.requiresFiscalInvoice || sale.fiscalDocument) ? (
+              <LinkButton href={`/facturacion/${sale.id}`} size="sm">
+                Detalle fiscal
               </LinkButton>
-              {user.role === Role.ADMIN &&
-              (sale.requiresFiscalInvoice || sale.fiscalDocument) ? (
-                <LinkButton href={`/facturacion/${sale.id}`}>
-                  Ver detalle fiscal
-                </LinkButton>
-              ) : null}
-            </>
-          }
-        />
+            ) : null}
+          </div>
+        </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Card className="overflow-hidden">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-[#273342]">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                Productos
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Producto</th>
-                    <th className="px-4 py-3 font-medium">Cantidad</th>
-                    <th className="px-4 py-3 font-medium">Precio</th>
-                    <th className="px-4 py-3 font-medium">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
-                  {sale.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
-                        {item.productNameSnapshot}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
-                        {formatQuantity(item.quantity.toString(), item.unitTypeSnapshot)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
-                        {formatARS(item.unitPrice)}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
-                        {formatARS(item.subtotal)}
-                      </td>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            {/* Card de Productos */}
+            <Card className="overflow-hidden shadow-sm">
+              <div className="border-b border-gray-100 px-4 py-2.5 dark:border-[#273342]">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A]">
+                  Detalle de Productos
+                </h2>
+              </div>
+              <div className="max-h-[380px] overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 uppercase tracking-wider text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Producto</th>
+                      <th className="px-4 py-2 text-right font-semibold">Cantidad</th>
+                      <th className="px-4 py-2 text-right font-semibold">Precio</th>
+                      <th className="px-4 py-2 text-right font-semibold">Subtotal</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <div className="space-y-5">
-            <Card className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">
-                    Estado
-                  </p>
-                  <div className="mt-2">
-                    <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
-                      {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-500 dark:text-[#7F8D9A]">
-                    Total
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                    {formatARS(sale.total)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-[#273342]">
-                <TotalRow label="Subtotal" value={formatARS(sale.subtotal)} />
-                <TotalRow label="Descuento" value={formatARS(sale.discountTotal)} />
-                <TotalRow label="Recargo" value={formatARS(sale.surchargeTotal)} />
-                <TotalRow label="Total" value={formatARS(sale.total)} strong />
-              </div>
-
-              <div className="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-[#273342]">
-                <TotalRow
-                  label="Cliente"
-                  value={sale.customer ? sale.customer.name : "Consumidor final"}
-                />
-                <TotalRow
-                  label="Caja"
-                  value={
-                    sale.cashSession
-                      ? `Abierta ${formatDateTimeStable(sale.cashSession.openedAt)}`
-                      : "Sin caja asociada"
-                  }
-                />
-              </div>
-            </Card>
-
-            <Card className="p-5">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                Estado fiscal
-              </h2>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-gray-600 dark:text-[#A9B6C2]">Estado</span>
-                  <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
-                    {fiscalStatusLabels[sale.fiscalStatus]}
-                  </Badge>
-                </div>
-                <TotalRow
-                  label="Requiere factura"
-                  value={sale.requiresFiscalInvoice ? "Si" : "No"}
-                />
-                {sale.fiscalRequestedAt ? (
-                  <TotalRow
-                    label="Solicitada"
-                    value={formatDateTimeStable(sale.fiscalRequestedAt)}
-                  />
-                ) : null}
-                {sale.fiscalDocument ? (
-                  <>
-                    <TotalRow
-                      label="Documento"
-                      value={`${sale.fiscalDocument.letter} - ${
-                        fiscalDocumentStatusLabels[sale.fiscalDocument.status]
-                      }`}
-                    />
-                    <TotalRow
-                      label="CAE"
-                      value={sale.fiscalDocument.cae ?? "Pendiente de integracion ARCA"}
-                    />
-                  </>
-                ) : null}
-                {user.role === Role.ADMIN &&
-                (sale.requiresFiscalInvoice || sale.fiscalDocument) ? (
-                  <div className="pt-2">
-                    <LinkButton href={`/facturacion/${sale.id}`} size="sm">
-                      Ver detalle fiscal
-                    </LinkButton>
-                  </div>
-                ) : null}
-                {sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ? (
-                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
-                    La venta ya fue emitida fiscalmente. Requiere nota de credito.
-                  </p>
-                ) : null}
-                {sale.fiscalFailureReason ? (
-                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
-                    {sale.fiscalFailureReason}
-                  </p>
-                ) : null}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-[#273342]/60">
+                    {sale.items.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-[#121922]/30">
+                        <td className="px-4 py-2 font-medium text-gray-950 dark:text-[#F3F7FA]">
+                          {item.productNameSnapshot}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-700 dark:text-[#A9B6C2]">
+                          {formatQuantity(item.quantity.toString(), item.unitTypeSnapshot)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-700 dark:text-[#A9B6C2]">
+                          {formatARS(item.unitPrice)}
+                        </td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-950 dark:text-[#F3F7FA]">
+                          {formatARS(item.subtotal)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </Card>
 
             {sale.status === SaleStatus.CANCELLED ? (
-              <Card className="border-red-200 bg-red-50 p-5 dark:border-red-900/70 dark:bg-red-950/20">
+              <Card className="border-red-200 bg-red-50/30 p-4 dark:border-red-900/40 dark:bg-red-950/10 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-sm font-semibold text-red-800 dark:text-red-200">
-                      Venta anulada
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-red-800 dark:text-red-300">
+                      Venta Anulada
                     </h2>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-200">
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
                       {sale.cancelledAt
                         ? formatDateTimeStable(sale.cancelledAt)
                         : "Sin fecha registrada"}
@@ -234,54 +164,206 @@ export default async function VentaDetallePage({
                   </div>
                   <Badge tone="red">Anulada</Badge>
                 </div>
-                <p className="mt-3 text-sm text-red-800 dark:text-red-100">
-                  {sale.cancellationReason ?? "Sin motivo registrado"}
+                <p className="mt-3 text-xs text-red-800 dark:text-red-200">
+                  Motivo: {sale.cancellationReason ?? "Sin motivo registrado"}
                 </p>
               </Card>
             ) : null}
+          </div>
 
-            <Card className="p-5">
-              <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                Pagos
-              </h2>
-              <div className="mt-4 space-y-3">
-                {sale.payments.map((payment) => (
-                  <div
-                    key={payment.id}
-                    className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-[#273342] dark:bg-[#121922]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
-                          {paymentLabels[payment.method]}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
-                          {paymentDescription(payment)}
-                        </p>
-                      </div>
-                      <p className="font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                        {formatARS(payment.amount)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+          <div className="space-y-4">
+            {/* Card Resumen principal */}
+            <Card className="p-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-2.5 dark:border-[#273342]">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A]">
+                  Resumen de Venta
+                </h2>
+                <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
+                  {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
+                </Badge>
               </div>
+
+              <div className="mt-3 space-y-2 text-xs">
+                <TotalRow label="Cliente" value={sale.customer ? sale.customer.name : "Consumidor final"} />
+                <TotalRow
+                  label="Caja"
+                  value={
+                    sale.cashSession
+                      ? `Nro: ${sale.cashSession.id.slice(-6)}`
+                      : "Sin caja"
+                  }
+                />
+              </div>
+
+              <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-xs dark:border-[#273342]">
+                <TotalRow label="Subtotal" value={formatARS(sale.subtotal)} />
+                {Number(sale.discountTotal) > 0 ? (
+                  <TotalRow label="Descuento" value={`-${formatARS(sale.discountTotal)}`} className="text-[var(--success)]" />
+                ) : null}
+                {Number(sale.surchargeTotal) > 0 ? (
+                  <TotalRow label="Recargo" value={formatARS(sale.surchargeTotal)} />
+                ) : null}
+                <div className="flex justify-between pt-1.5 text-sm font-bold text-gray-950 dark:text-[#F3F7FA]">
+                  <span>Total</span>
+                  <span>{formatARS(sale.total)}</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Card Estado Fiscal */}
+            <Card className="p-4 shadow-sm">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A] border-b border-gray-100 pb-2.5 dark:border-[#273342]">
+                Facturación
+              </h2>
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-[#7F8D9A]">Comprobante</span>
+                  <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
+                    {sale.fiscalDocument
+                      ? `Factura ${sale.fiscalDocument.letter}`
+                      : "Ticket interno"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-[#7F8D9A]">Estado</span>
+                  <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
+                    {sale.fiscalStatus === FiscalStatus.NOT_REQUESTED
+                      ? "No requerida"
+                      : fiscalStatusLabels[sale.fiscalStatus]}
+                  </Badge>
+                </div>
+
+                {sale.fiscalDocument || sale.fiscalRequestedAt || sale.fiscalFailureReason ? (
+                  <details className="mt-2 group">
+                    <summary className="cursor-pointer select-none text-[11px] font-semibold text-[var(--accent)] hover:underline">
+                      Ver detalle técnico
+                    </summary>
+                    <div className="mt-2 space-y-2 border-l-2 border-gray-100 pl-2.5 pt-1 text-[11px] text-gray-500 dark:border-[#273342] dark:text-[#7F8D9A]">
+                      {sale.fiscalRequestedAt && (
+                        <TotalRow
+                          label="Solicitada"
+                          value={formatDateTimeStable(sale.fiscalRequestedAt)}
+                        />
+                      )}
+                      {sale.fiscalDocument && (
+                        <>
+                          <TotalRow
+                            label="Doc. Estado"
+                            value={fiscalDocumentStatusLabels[sale.fiscalDocument.status]}
+                          />
+                          <TotalRow
+                            label="CAE"
+                            value={sale.fiscalDocument.cae ?? "Pendiente"}
+                          />
+                        </>
+                      )}
+                      {sale.fiscalFailureReason && (
+                        <p className="mt-1 rounded bg-red-50/50 p-1.5 text-red-600 dark:bg-red-950/20 dark:text-red-300">
+                          {sale.fiscalFailureReason}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                ) : null}
+
+                {sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ? (
+                  <p className="mt-2 rounded bg-amber-50/50 p-2 text-[11px] leading-normal text-amber-700 dark:bg-amber-950/20 dark:text-amber-200">
+                    La venta ya fue emitida fiscalmente. Requiere nota de crédito.
+                  </p>
+                ) : null}
+              </div>
+            </Card>
+
+            {/* Card Pagos */}
+            <Card className="p-4 shadow-sm">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A] border-b border-gray-100 pb-2.5 dark:border-[#273342]">
+                Pagos Registrados
+              </h2>
+              <div className="mt-3 space-y-2">
+                {sale.payments.map((payment) => {
+                  const hasComplexDetails =
+                    payment.paymentAttempt ||
+                    payment.externalId ||
+                    (payment.externalReference && payment.externalReference !== payment.externalId);
+
+                  return (
+                    <div
+                      key={payment.id}
+                      className="rounded-md border border-gray-100 bg-gray-50/60 p-2.5 text-xs dark:border-[#273342]/70 dark:bg-[#121922]/40"
+                    >
+                      <div className="flex items-center justify-between font-semibold text-gray-950 dark:text-[#F3F7FA]">
+                        <span>{paymentLabels[payment.method]}</span>
+                        <span>{formatARS(payment.amount)}</span>
+                      </div>
+
+                      {/* Short details shown directly */}
+                      <div className="mt-1 text-[11px] text-gray-500 dark:text-[#7F8D9A]">
+                        {payment.method === PaymentMethod.CASH && payment.receivedAmount ? (
+                          <span>
+                            Recibido: {formatARS(payment.receivedAmount.toString())} • Vuelto:{" "}
+                            {formatARS(payment.changeAmount ? payment.changeAmount.toString() : "0")}
+                          </span>
+                        ) : payment.method === PaymentMethod.CREDIT && payment.installments ? (
+                          <span>
+                            {payment.installments} cuota{payment.installments > 1 ? "s" : ""}
+                            {Number(payment.surchargeAmount) > 0 &&
+                              ` • Recargo: ${formatARS(payment.surchargeAmount ? payment.surchargeAmount.toString() : "0")}`}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {hasComplexDetails ? (
+                        <details className="mt-1.5">
+                          <summary className="cursor-pointer select-none text-[10px] font-semibold text-[var(--accent)] hover:underline">
+                            Ver comprobante y metadata
+                          </summary>
+                          <div className="mt-1.5 space-y-1 border-l border-gray-200 pl-2 text-[10px] text-gray-500 dark:border-[#273342] dark:text-[#7F8D9A]">
+                            {payment.paymentAttempt && (
+                              <>
+                                <div>MP Cuenta: {payment.paymentAttempt.mercadoPagoAccount.name}</div>
+                                <div>Origen: {paymentAttemptOriginLabel(payment.paymentAttempt.origin)}</div>
+                                <div>Estado: {paymentAttemptStatusLabel(payment.paymentAttempt.status)}</div>
+                                {payment.paymentAttempt.providerOrderId && (
+                                  <div>Orden MP: {payment.paymentAttempt.providerOrderId}</div>
+                                )}
+                                {payment.paymentAttempt.providerPaymentId && (
+                                  <div>Pago MP: {payment.paymentAttempt.providerPaymentId}</div>
+                                )}
+                              </>
+                            )}
+                            {payment.externalId && <div>Operación: {payment.externalId}</div>}
+                            {payment.externalReference &&
+                              payment.externalReference !== payment.externalId && (
+                                <div>Referencia: {payment.externalReference}</div>
+                              )}
+                            {payment.providerStatus && (
+                              <div>Estado: {providerStatusLabel(payment.providerStatus)}</div>
+                            )}
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
               {sale.accountMovements.length > 0 ? (
-                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100">
-                  Cuenta corriente generada: {formatARS(sale.accountMovements[0].amount)}
+                <div className="mt-3.5 rounded border border-amber-100 bg-amber-50/45 px-2.5 py-2 text-[11px] leading-normal text-amber-800 dark:border-amber-950/40 dark:bg-amber-950/10 dark:text-amber-100">
+                  <span className="font-semibold">Cta. Corriente:</span>{" "}
+                  {formatARS(sale.accountMovements[0].amount)}
                 </div>
               ) : null}
             </Card>
 
             {canCancelSale ? (
-              <Card className="border-red-200 p-5 dark:border-red-900/60">
-                <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
+              <Card className="border-red-200 p-4 dark:border-red-900/40 shadow-sm">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A]">
                   Anular venta
                 </h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
-                  Se devolvera el stock y la venta quedara fuera de reportes y caja.
+                <p className="mt-1 text-xs text-gray-500 dark:text-[#A9B6C2]">
+                  Se devolverá el stock y la venta quedará fuera de reportes y caja.
                 </p>
-                <div className="mt-4">
+                <div className="mt-3">
                   <CancelSaleForm saleId={sale.id} />
                 </div>
               </Card>
@@ -300,94 +382,27 @@ function param(value: string | string[] | undefined) {
 function TotalRow({
   label,
   value,
-  strong = false
+  strong = false,
+  className
 }: {
   label: string;
   value: string;
   strong?: boolean;
+  className?: string;
 }) {
   return (
     <div
-      className={
+      className={cn(
         strong
           ? "flex justify-between text-base font-semibold text-gray-950 dark:text-[#F3F7FA]"
-          : "flex justify-between text-gray-600 dark:text-[#A9B6C2]"
-      }
+          : "flex justify-between text-gray-500 dark:text-[#A9B6C2]",
+        className
+      )}
     >
       <span>{label}</span>
       <span>{value}</span>
     </div>
   );
-}
-
-function paymentDescription(payment: {
-  method: PaymentMethod;
-  receivedAmount: unknown;
-  changeAmount: unknown;
-  installments: number | null;
-  surchargeRate: unknown;
-  surchargeAmount: unknown;
-  externalId: string | null;
-  externalReference: string | null;
-  providerStatus: string | null;
-  paymentAttempt: {
-    externalReference: string;
-    providerOrderId: string | null;
-    providerPaymentId: string | null;
-    status: string;
-    origin: string;
-    rawStatus: string | null;
-    rawStatusDetail: string | null;
-    mercadoPagoAccount: {
-      name: string;
-      environment: string;
-    };
-  } | null;
-}) {
-  const details: string[] = [];
-
-  if (payment.method === PaymentMethod.CASH && payment.receivedAmount) {
-    details.push(
-      `Recibido ${formatARS(payment.receivedAmount as string)} - Vuelto ${formatARS(
-        (payment.changeAmount as string) ?? 0
-      )}`
-    );
-  }
-
-  if (payment.method === PaymentMethod.CREDIT && payment.installments) {
-    details.push(`${payment.installments} cuota${
-      payment.installments > 1 ? "s" : ""
-    } - Recargo ${formatARS((payment.surchargeAmount as string) ?? 0)}`);
-  }
-
-  if (payment.paymentAttempt) {
-    details.push(
-      `Mercado Pago ${payment.paymentAttempt.mercadoPagoAccount.name} (${payment.paymentAttempt.mercadoPagoAccount.environment})`
-    );
-    details.push(paymentAttemptOriginLabel(payment.paymentAttempt.origin));
-    details.push(`Estado ${paymentAttemptStatusLabel(payment.paymentAttempt.status)}`);
-    if (payment.paymentAttempt.providerOrderId) {
-      details.push(`Orden ${payment.paymentAttempt.providerOrderId}`);
-    }
-    if (payment.paymentAttempt.providerPaymentId) {
-      details.push(`Pago ${payment.paymentAttempt.providerPaymentId}`);
-    }
-  }
-
-  if (payment.externalId) {
-    details.push(`Operacion ${payment.externalId}`);
-  }
-
-  if (payment.externalReference && payment.externalReference !== payment.externalId) {
-    details.push(`Referencia ${payment.externalReference}`);
-  }
-
-  const status = providerStatusLabel(payment.providerStatus);
-  if (status) {
-    details.push(`Estado ${status}`);
-  }
-
-  return details.length > 0 ? details.join(" - ") : "Pago aplicado";
 }
 
 function paymentAttemptStatusLabel(status: string) {

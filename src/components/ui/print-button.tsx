@@ -11,13 +11,15 @@ type PrintButtonProps = {
   setting?: PrintSettingView;
   printHref?: string;
   autoFocus?: boolean;
+  size?: "sm" | "md" | "lg" | "icon";
 };
 
 export function PrintButton({
   saleId,
   setting,
   printHref,
-  autoFocus
+  autoFocus,
+  size = "md"
 }: PrintButtonProps) {
   const [status, setStatus] = useState<{
     tone: "ok" | "error" | "muted";
@@ -104,6 +106,7 @@ export function PrintButton({
         onClick={handlePrint}
         disabled={isPrinting}
         autoFocus={autoFocus}
+        size={size}
       >
         {isPrinting ? "Imprimiendo..." : "Imprimir ticket"}
       </Button>

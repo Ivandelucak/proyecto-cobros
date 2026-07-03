@@ -123,19 +123,19 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
+            <table className="w-full min-w-[980px] text-left text-xs">
+              <thead className="border-b border-gray-200 bg-gray-50 uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Venta</th>
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Cajero</th>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium">Caja</th>
-                  <th className="px-4 py-3 font-medium">Items</th>
-                  <th className="px-4 py-3 font-medium">Pagos</th>
-                  <th className="px-4 py-3 font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                  <th className="px-3 py-2 font-medium">Venta</th>
+                  <th className="px-3 py-2 font-medium">Fecha</th>
+                  <th className="px-3 py-2 font-medium">Cajero</th>
+                  <th className="px-3 py-2 font-medium">Cliente</th>
+                  <th className="px-3 py-2 font-medium">Caja</th>
+                  <th className="px-3 py-2 font-medium">Items</th>
+                  <th className="px-3 py-2 font-medium">Pagos</th>
+                  <th className="px-3 py-2 font-medium">Total</th>
+                  <th className="px-3 py-2 font-medium">Estado</th>
+                  <th className="px-3 py-2 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -144,70 +144,82 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                     key={sale.id}
                     className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                   >
-                    <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
+                    <td className="px-3 py-2 font-medium text-gray-950 dark:text-[#F3F7FA]">
                       #{sale.saleNumber}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
+                    <td className="px-3 py-2 text-gray-700 dark:text-[#A9B6C2]">
                       {formatDateTimeStable(sale.createdAt)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {sale.user.name}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-[#7F8D9A]">
+                      <div className="text-[10px] text-gray-500 dark:text-[#7F8D9A]">
                         {sale.user.email}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
+                    <td className="px-3 py-2 text-gray-700 dark:text-[#A9B6C2]">
                       {sale.customer?.name ?? "-"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {sale.cashSession ? (
-                        <div>
-                          <Badge tone="blue">Caja {sale.cashSession.id.slice(-6)}</Badge>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-[#7F8D9A]">
-                            {formatDateTimeStable(sale.cashSession.openedAt)}
-                          </p>
-                        </div>
+                        <Badge tone="blue">Caja {sale.cashSession.id.slice(-6)}</Badge>
                       ) : (
                         <span className="text-gray-500 dark:text-[#7F8D9A]">Sin caja</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
+                    <td className="px-3 py-2 text-gray-700 dark:text-[#A9B6C2]">
                       {sale._count.items}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {sale.payments.map((payment) => (
-                          <div key={payment.id} className="min-w-0">
-                            <Badge tone="gray">{paymentLabels[payment.method]}</Badge>
-                            {payment.externalReference || payment.externalId ? (
-                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
-                                {payment.externalReference ?? payment.externalId}
-                              </p>
-                            ) : providerStatusLabel(payment.providerStatus) ? (
-                              <p className="mt-1 max-w-40 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
-                                {providerStatusLabel(payment.providerStatus)}
-                              </p>
-                            ) : null}
-                          </div>
-                        ))}
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {sale.payments.map((payment) => {
+                          const cleanLabel = getCleanPaymentMethodLabel(
+                            payment.method,
+                            paymentLabels[payment.method],
+                            payment.providerStatus
+                          );
+                          const ref = payment.externalReference ?? payment.externalId;
+                          const shortRef = getCleanReference(ref);
+                          return (
+                            <div key={payment.id} className="min-w-0">
+                              <Badge tone="gray">{cleanLabel}</Badge>
+                              {shortRef ? (
+                                <p className="mt-0.5 max-w-40 truncate text-[10px] text-gray-500 dark:text-[#7F8D9A]">
+                                  {shortRef}
+                                </p>
+                              ) : providerStatusLabel(payment.providerStatus) ? (
+                                <p className="mt-0.5 max-w-40 truncate text-[10px] text-gray-500 dark:text-[#7F8D9A]">
+                                  {providerStatusLabel(payment.providerStatus)}
+                                </p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-950 dark:text-[#F3F7FA]">
+                    <td className="px-3 py-2 font-semibold text-gray-950 dark:text-[#F3F7FA]">
                       {formatARS(sale.total)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
                         {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <LinkButton href={buildSaleDetailHref(sale.id, returnTo)} size="sm">
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1.5">
+                        <LinkButton
+                          href={buildSaleDetailHref(sale.id, returnTo)}
+                          size="sm"
+                          variant="outline"
+                        >
                           Detalle
                         </LinkButton>
-                        <LinkButton href={buildTicketHref(sale.id, returnTo)} size="sm">
+                        <LinkButton
+                          href={buildTicketHref(sale.id, returnTo)}
+                          size="sm"
+                          variant="secondary"
+                        >
                           Ticket
                         </LinkButton>
                       </div>
@@ -314,4 +326,26 @@ function nextDay(value: string) {
   const date = startOfDay(value);
   date.setDate(date.getDate() + 1);
   return date;
+}
+
+function getCleanPaymentMethodLabel(method: PaymentMethod, fallbackLabel: string, providerStatus?: string | null) {
+  if (method === PaymentMethod.CASH) return "Efectivo";
+  if (method === PaymentMethod.MERCADOPAGO) return "Mercado Pago";
+  if (method === PaymentMethod.TRANSFER) {
+    const isVerified = providerStatus === "VERIFIED" || providerStatus === "verified" || providerStatus?.toLowerCase().includes("verific");
+    return isVerified ? "Transferencia · verificada" : "Transferencia";
+  }
+  if (method === PaymentMethod.CREDIT) return "Crédito";
+  if (method === PaymentMethod.DEBIT) return "Débito";
+  if (method === PaymentMethod.CURRENT_ACCOUNT) return "Cuenta corriente";
+  return fallbackLabel || method;
+}
+
+function getCleanReference(ref: string | null | undefined): string | null {
+  if (!ref) return null;
+  const trimmed = ref.trim();
+  if (trimmed.length > 12) {
+    return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+  }
+  return trimmed;
 }

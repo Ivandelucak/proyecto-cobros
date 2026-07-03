@@ -91,6 +91,15 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
       : logoPreview.split("/").pop() ?? "Logo del comercio"
     : "Subi un logo para tickets, presupuestos e interfaz.";
 
+  const [phone, setPhone] = useState(initialValues.phone ?? "");
+  const [email, setEmail] = useState(initialValues.email ?? "");
+  const [address, setAddress] = useState(initialValues.address ?? "");
+  const [fiscalCondition, setFiscalCondition] = useState(initialValues.fiscalCondition ?? "");
+  const [grossIncome, setGrossIncome] = useState(initialValues.grossIncome ?? "");
+  const [activityStartDate, setActivityStartDate] = useState(dateInput(initialValues.activityStartDate));
+  const [website, setWebsite] = useState(initialValues.website ?? "");
+  const [generalFooterText, setGeneralFooterText] = useState(initialValues.generalFooterText ?? "");
+
   function handleLogoChange(file: File | null) {
     if (!file) {
       return;
@@ -127,10 +136,10 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
           description="Identidad principal del local dentro del sistema."
         >
         <SettingsGrid>
-          <SettingsField label="Nombre del comercio">
+          <SettingsField label="Nombre del comercio" description="Nombre oficial de tu negocio.">
             <Input name="name" defaultValue={initialValues.name} required />
           </SettingsField>
-          <SettingsField label="Rubro">
+          <SettingsField label="Rubro" description="Giro comercial de tu local.">
             <Select name="businessType" defaultValue={initialValues.businessType}>
               {Object.entries(businessTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -139,16 +148,16 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
               ))}
             </Select>
           </SettingsField>
-          <SettingsField label="CUIT">
+          <SettingsField label="CUIT" description="Identificación tributaria. Dejar vacío para no mostrar.">
             <Input name="cuit" defaultValue={initialValues.cuit ?? ""} />
           </SettingsField>
-          <SettingsField label="Moneda">
+          <SettingsField label="Moneda" description="Símbolo monetario del local.">
             <Input name="currency" defaultValue={initialValues.currency} />
           </SettingsField>
-          <SettingsField label="Locale">
+          <SettingsField label="Locale" description="Configuración regional (ej: es-AR).">
             <Input name="locale" defaultValue={initialValues.locale} />
           </SettingsField>
-          <SettingsField label="Zona horaria">
+          <SettingsField label="Zona horaria" description="Huso horario del local.">
             <Input name="timezone" defaultValue={initialValues.timezone} />
           </SettingsField>
         </SettingsGrid>
@@ -158,42 +167,98 @@ export function BusinessProfileForm({ initialValues }: BusinessProfileFormProps)
       <SettingsCard>
         <SettingsSection
           title="Datos para ticket"
-          description="Nombre, direccion y telefono se usan en los tickets impresos."
+          description="Información que se imprimirá en el encabezado y pie del ticket."
         >
         <SettingsGrid>
-          <SettingsField label="Telefono">
-            <Input name="phone" defaultValue={initialValues.phone ?? ""} />
+          <SettingsField
+            label="Teléfono"
+            description="Se imprime en el encabezado. Dejar vacío para no mostrar."
+          >
+            <Input
+              name="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <SoftValidation value={phone} />
           </SettingsField>
-          <SettingsField label="Email">
-            <Input name="email" type="email" defaultValue={initialValues.email ?? ""} />
+          <SettingsField
+            label="Email"
+            description="Contacto de correo. Dejar vacío para no mostrar."
+          >
+            <Input
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <SoftValidation value={email} />
           </SettingsField>
-          <SettingsField label="Direccion">
-            <Input name="address" defaultValue={initialValues.address ?? ""} />
+          <SettingsField
+            label="Dirección"
+            description="Ubicación física del local. Dejar vacío para no mostrar."
+          >
+            <Input
+              name="address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <SoftValidation value={address} />
           </SettingsField>
-          <SettingsField label="Condicion fiscal">
+          <SettingsField
+            label="Condición fiscal"
+            description="Ej: IVA Responsable Inscripto. Dejar vacío para no mostrar."
+          >
             <Input
               name="fiscalCondition"
-              defaultValue={initialValues.fiscalCondition ?? ""}
+              value={fiscalCondition}
+              onChange={(e) => setFiscalCondition(e.target.value)}
             />
+            <SoftValidation value={fiscalCondition} />
           </SettingsField>
-          <SettingsField label="Ingresos brutos">
-            <Input name="grossIncome" defaultValue={initialValues.grossIncome ?? ""} />
+          <SettingsField
+            label="Ingresos brutos"
+            description="Número de inscripción en IIBB. Dejar vacío para no mostrar."
+          >
+            <Input
+              name="grossIncome"
+              value={grossIncome}
+              onChange={(e) => setGrossIncome(e.target.value)}
+            />
+            <SoftValidation value={grossIncome} />
           </SettingsField>
-          <SettingsField label="Inicio de actividades">
+          <SettingsField
+            label="Inicio de actividades"
+            description="Fecha de alta comercial. Dejar vacío para no mostrar."
+          >
             <Input
               name="activityStartDate"
               type="date"
-              defaultValue={dateInput(initialValues.activityStartDate)}
+              value={activityStartDate}
+              onChange={(e) => setActivityStartDate(e.target.value)}
             />
+            <SoftValidation value={activityStartDate} />
           </SettingsField>
-          <SettingsField label="Sitio web">
-            <Input name="website" defaultValue={initialValues.website ?? ""} />
+          <SettingsField
+            label="Sitio web"
+            description="Dirección de tu web comercial. Dejar vacío para no mostrar."
+          >
+            <Input
+              name="website"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
+            <SoftValidation value={website} />
           </SettingsField>
-          <SettingsField label="Texto pie general">
+          <SettingsField
+            label="Texto pie general"
+            description="Se muestra al final de todos los tickets."
+          >
             <Input
               name="generalFooterText"
-              defaultValue={initialValues.generalFooterText ?? ""}
+              value={generalFooterText}
+              onChange={(e) => setGeneralFooterText(e.target.value)}
             />
+            <SoftValidation value={generalFooterText} />
           </SettingsField>
         </SettingsGrid>
         </SettingsSection>
@@ -321,3 +386,26 @@ function dateInput(date: Date | null) {
 function padDatePart(value: number) {
   return String(value).padStart(2, "0");
 }
+
+function isFieldIncomplete(value: string | null | undefined) {
+  if (!value || value.trim() === "") return true;
+  const val = value.toLowerCase();
+  return (
+    val.includes("???") ||
+    val.includes("test") ||
+    val.includes("lorem ipsum") ||
+    val.includes("texto de prueba") ||
+    val.includes("condicion fiscal") ||
+    val.includes("ingresos brutos")
+  );
+}
+
+function SoftValidation({ value }: { value: string | null | undefined }) {
+  if (!isFieldIncomplete(value)) return null;
+  return (
+    <span className="block text-xs font-semibold text-amber-600 dark:text-amber-500 mt-1">
+      ⚠️ Este campo parece incompleto.
+    </span>
+  );
+}
+
