@@ -1,16 +1,27 @@
 import { MercadoPagoEnvironment } from "@prisma/client";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createMercadoPagoOAuthAuthorizationUrl } from "@/lib/mercadopago/mercado-pago-oauth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const environment = parseEnvironment(url.searchParams.get("environment"));
 
   try {
     const link = createMercadoPagoOAuthAuthorizationUrl(environment);
-    return NextResponse.redirect(link.url);
+    const state = new URL(link.url).searchParams.get("state");
+    const response = NextResponse.redirect(link.url);
+    if (state) {
+      response.cookies.set("mp_oauth_state", state, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 60,
+        path: "/api/mercadopago/oauth"
+      });
+    }
+    return response;
   } catch (error) {
     const redirectUrl = new URL("/configuracion/pagos", request.url);
     redirectUrl.searchParams.set("mp_oauth", "error");

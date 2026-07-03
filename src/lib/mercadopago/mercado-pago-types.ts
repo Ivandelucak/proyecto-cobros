@@ -49,6 +49,7 @@ export type MercadoPagoAccountView = {
 export type MercadoPagoMovementView = {
   id: string;
   amount: string;
+  currency: string | null;
   status: string;
   statusDetail: string | null;
   dateApproved: string | null;
@@ -56,17 +57,23 @@ export type MercadoPagoMovementView = {
   externalReference: string | null;
   description: string | null;
   payerLabel: string | null;
+  payerLabelSafe: string | null;
+  accountName: string | null;
   paymentMethod: string | null;
+  paymentMethodId: string | null;
   paymentType: string | null;
+  paymentTypeId: string | null;
   operationType: string | null;
   rawSummary: Record<string, unknown>;
   alreadyUsed: boolean;
+  usedSaleNumber: number | null;
 };
 
 export type MercadoPagoAttemptView = {
   id: string;
   accountId: string;
   accountName: string;
+  method: string;
   amount: string;
   externalReference: string;
   providerOrderId: string | null;
@@ -106,6 +113,7 @@ export type MercadoPagoPaymentSearchResult = {
   id?: string | number;
   transaction_amount?: number;
   total_paid_amount?: number;
+  currency_id?: string;
   status?: string;
   status_detail?: string;
   date_created?: string;

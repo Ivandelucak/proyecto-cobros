@@ -23,6 +23,7 @@ import {
 } from "@/lib/mercadopago/mercado-pago-orders";
 import {
   associateMercadoPagoPaymentByAmount,
+  associateMercadoPagoRecentPayment,
   findAmountMatchingCandidates,
   searchRecentMercadoPagoPayments
 } from "@/lib/mercadopago/mercado-pago-search";
@@ -258,6 +259,50 @@ export async function associateMercadoPagoPaymentAction(input: {
         error instanceof Error
           ? error.message
           : "No se pudo asociar el pago Mercado Pago.",
+      technicalDetail: formatMercadoPagoTechnicalDetail(error)
+    };
+  }
+}
+
+export async function associateMercadoPagoRecentPaymentAction(input: {
+  accountId: string;
+  paymentId: string;
+  paymentMethod?: "MERCADOPAGO" | "TRANSFER";
+}) {
+  const user = await requireCashierUser();
+
+  try {
+    const attempt = await associateMercadoPagoRecentPayment({
+      accountId: input.accountId,
+      paymentId: input.paymentId,
+      paymentMethod:
+        input.paymentMethod === "TRANSFER"
+          ? PaymentMethod.TRANSFER
+          : PaymentMethod.MERCADOPAGO,
+      userId: user.id
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "MERCADOPAGO_RECENT_PAYMENT_ASSOCIATED",
+      entity: "PaymentAttempt",
+      entityId: attempt.id,
+      description: "Asocio cobro reciente Mercado Pago.",
+      metadata: {
+        accountId: input.accountId,
+        paymentId: input.paymentId,
+        origin: "MANUAL_RECENT_PAYMENT"
+      }
+    });
+
+    return { ok: true as const, attempt: await toAttemptView(attempt) };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo asociar el cobro Mercado Pago.",
       technicalDetail: formatMercadoPagoTechnicalDetail(error)
     };
   }

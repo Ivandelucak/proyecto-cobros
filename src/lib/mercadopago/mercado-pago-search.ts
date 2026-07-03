@@ -1,4 +1,10 @@
-import { PaymentAttemptOrigin, PaymentAttemptStatus, Prisma } from "@prisma/client";
+import {
+  PaymentAttemptOrigin,
+  PaymentAttemptStatus,
+  PaymentMethod,
+  PaymentProvider,
+  Prisma
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { mercadoPagoRequest } from "./mercado-pago-client";
 import { getMercadoPagoAccountWithToken } from "./mercado-pago-accounts";
@@ -29,17 +35,19 @@ export async function searchRecentMercadoPagoPayments(input: {
   const limit = clampInt(input.limit ?? 20, 1, 50);
   const endDate = new Date();
   const beginDate = new Date(endDate.getTime() - minutes * 60 * 1000);
+  const status = input.status ?? "approved";
+  const dateField = status === "approved" ? "date_approved" : "date_created";
   const data = await mercadoPagoRequest<{
     results?: MercadoPagoPaymentSearchResult[];
   }>({
     accessToken: account.accessToken,
     path: "/v1/payments/search",
     query: {
-      status: input.status ?? "approved",
-      range: "date_created",
+      status,
+      range: dateField,
       begin_date: beginDate.toISOString(),
       end_date: endDate.toISOString(),
-      sort: "date_created",
+      sort: dateField,
       criteria: "desc",
       limit,
       offset: 0
@@ -47,16 +55,20 @@ export async function searchRecentMercadoPagoPayments(input: {
   });
 
   const rawPayments = data.results ?? [];
-  const usedPaymentIds =
+  const usedPayments =
     input.excludeAlreadyLinked === false
-      ? new Set<string>()
-      : await getUsedProviderPaymentIds(
+      ? new Map<string, number | null>()
+      : await getUsedProviderPayments(
           account.id,
           rawPayments.map((payment) => String(payment.id ?? "")).filter(Boolean)
         );
 
   const movements = rawPayments.map((payment) =>
-    mapPaymentToMovement(payment, usedPaymentIds.has(String(payment.id ?? "")))
+    mapPaymentToMovement(payment, {
+      accountName: account.name,
+      usedSaleNumber: usedPayments.get(String(payment.id ?? "")) ?? null,
+      alreadyUsed: usedPayments.has(String(payment.id ?? ""))
+    })
   );
 
   if (input.amount === undefined) {
@@ -90,7 +102,7 @@ export async function findAmountMatchingCandidates(input: {
   const tolerance = account.amountMatchingTolerance.toDecimalPlaces(2);
   const movements = await searchRecentMercadoPagoPayments({
     accountId: account.id,
-    minutes: account.amountMatchingWindowMinutes,
+    minutes: normalizeMatchWindowMinutes(account.amountMatchingWindowMinutes),
     limit: 50,
     amount,
     tolerance
@@ -189,9 +201,86 @@ export async function associateMercadoPagoPaymentByAmount(input: {
   });
 }
 
-async function getUsedProviderPaymentIds(accountId: string, ids: string[]) {
+export async function associateMercadoPagoRecentPayment(input: {
+  accountId: string;
+  paymentId: string;
+  paymentMethod?: PaymentMethod;
+  userId: string;
+}) {
+  const account = await getMercadoPagoAccountWithToken(input.accountId);
+  if (!account) {
+    throw new Error("La cuenta de Mercado Pago no esta disponible.");
+  }
+
+  const payment = await mercadoPagoRequest<MercadoPagoPaymentSearchResult>({
+    accessToken: account.accessToken,
+    path: `/v1/payments/${encodeURIComponent(input.paymentId)}`
+  });
+  const paymentId = String(payment.id ?? input.paymentId);
+  const usedPayment = await getUsedProviderPayment(paymentId);
+  const movement = mapPaymentToMovement(payment, {
+    accountName: account.name,
+    alreadyUsed: Boolean(usedPayment),
+    usedSaleNumber: usedPayment?.saleNumber ?? null
+  });
+
+  if (movement.alreadyUsed) {
+    throw new Error(
+      movement.usedSaleNumber
+        ? `Este cobro ya fue usado en la venta #${movement.usedSaleNumber}.`
+        : "Este cobro ya fue usado en otra venta."
+    );
+  }
+  if (!isMercadoPagoApprovedStatus(movement.status)) {
+    throw new Error("Solo se pueden asociar cobros aprobados.");
+  }
+
+  const existingAttempt = await prisma.paymentAttempt.findFirst({
+    where: {
+      mercadoPagoAccountId: account.id,
+      providerPaymentId: movement.id
+    },
+    include: { mercadoPagoAccount: true, payment: { select: { id: true } } }
+  });
+
+  if (existingAttempt?.payment) {
+    throw new Error("Este cobro ya fue usado en otra venta.");
+  }
+
+  const data = {
+    mercadoPagoAccountId: account.id,
+    method: input.paymentMethod ?? PaymentMethod.MERCADOPAGO,
+    providerPaymentId: movement.id,
+    amount: new Prisma.Decimal(movement.amount).toDecimalPlaces(2),
+    status: PaymentAttemptStatus.APPROVED,
+    origin: PaymentAttemptOrigin.MANUAL_REFERENCE,
+    rawStatus: movement.status,
+    rawStatusDetail: formatManualRecentStatusDetail(movement),
+    approvedAt: movement.dateApproved ? new Date(movement.dateApproved) : new Date(),
+    associatedByUserId: input.userId,
+    lastCheckedAt: new Date()
+  };
+
+  if (existingAttempt) {
+    return prisma.paymentAttempt.update({
+      where: { id: existingAttempt.id },
+      data,
+      include: { mercadoPagoAccount: true }
+    });
+  }
+
+  return prisma.paymentAttempt.create({
+    data: {
+      ...data,
+      externalReference: createMatchedExternalReference(movement.id)
+    },
+    include: { mercadoPagoAccount: true }
+  });
+}
+
+async function getUsedProviderPayments(accountId: string, ids: string[]) {
   if (ids.length === 0) {
-    return new Set<string>();
+    return new Map<string, number | null>();
   }
 
   const attempts = await prisma.paymentAttempt.findMany({
@@ -200,36 +289,78 @@ async function getUsedProviderPaymentIds(accountId: string, ids: string[]) {
       providerPaymentId: { in: ids },
       payment: { isNot: null }
     },
-    select: { providerPaymentId: true }
+    select: {
+      providerPaymentId: true,
+      payment: {
+        select: {
+          sale: {
+            select: { saleNumber: true }
+          }
+        }
+      }
+    }
   });
 
-  return new Set(attempts.map((attempt) => attempt.providerPaymentId).filter(Boolean));
+  return new Map(
+    attempts
+      .filter((attempt) => attempt.providerPaymentId)
+      .map((attempt) => [
+        attempt.providerPaymentId as string,
+        attempt.payment?.sale.saleNumber ?? null
+      ])
+  );
+}
+
+async function getUsedProviderPayment(providerPaymentId: string) {
+  const attempt = await prisma.paymentAttempt.findFirst({
+    where: {
+      provider: PaymentProvider.MERCADOPAGO,
+      providerPaymentId,
+      payment: { isNot: null }
+    },
+    select: {
+      payment: {
+        select: {
+          sale: {
+            select: { saleNumber: true }
+          }
+        }
+      }
+    }
+  });
+
+  return attempt
+    ? { saleNumber: attempt.payment?.sale.saleNumber ?? null }
+    : null;
 }
 
 function mapPaymentToMovement(
   payment: MercadoPagoPaymentSearchResult,
-  alreadyUsed: boolean
+  options: {
+    accountName: string;
+    alreadyUsed: boolean;
+    usedSaleNumber: number | null;
+  }
 ): MercadoPagoMovementView {
-  const payerLabel = [
-    payment.payer?.first_name,
-    payment.payer?.last_name,
-    payment.payer?.email
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const payerLabelSafe = buildSafePayerLabel(payment);
 
   return {
     id: String(payment.id ?? ""),
     amount: String(payment.transaction_amount ?? payment.total_paid_amount ?? 0),
+    currency: payment.currency_id ?? null,
     status: payment.status ?? "-",
     statusDetail: payment.status_detail ?? null,
     dateApproved: payment.date_approved ?? null,
     dateCreated: payment.date_created ?? null,
     externalReference: payment.external_reference ?? null,
     description: payment.description ?? null,
-    payerLabel: payerLabel || null,
+    payerLabel: payerLabelSafe,
+    payerLabelSafe,
+    accountName: options.accountName,
     paymentMethod: payment.payment_method_id ?? null,
+    paymentMethodId: payment.payment_method_id ?? null,
     paymentType: payment.payment_type_id ?? null,
+    paymentTypeId: payment.payment_type_id ?? null,
     operationType: payment.operation_type ?? null,
     rawSummary: {
       id: payment.id ?? null,
@@ -240,16 +371,62 @@ function mapPaymentToMovement(
       operation_type: payment.operation_type ?? null,
       external_reference: payment.external_reference ?? null,
       date_created: payment.date_created ?? null,
-      date_approved: payment.date_approved ?? null
+      date_approved: payment.date_approved ?? null,
+      account_name: options.accountName,
+      used_sale_number: options.usedSaleNumber
     },
-    alreadyUsed
+    alreadyUsed: options.alreadyUsed,
+    usedSaleNumber: options.usedSaleNumber
   };
+}
+
+function buildSafePayerLabel(payment: MercadoPagoPaymentSearchResult) {
+  const parts = [
+    payment.payer?.first_name,
+    payment.payer?.last_name,
+    maskEmail(payment.payer?.email)
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return parts || null;
+}
+
+function maskEmail(value: string | undefined) {
+  const email = String(value ?? "").trim();
+  if (!email || !email.includes("@")) {
+    return "";
+  }
+
+  const [local, domain] = email.split("@");
+  const safeLocal =
+    local.length <= 2 ? `${local[0] ?? ""}***` : `${local.slice(0, 2)}***`;
+  return `${safeLocal}@${domain}`;
 }
 
 function createMatchedExternalReference(paymentId: string) {
   return `MPPAY_${paymentId.replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 64);
 }
 
+function formatManualRecentStatusDetail(movement: MercadoPagoMovementView) {
+  return [
+    movement.statusDetail,
+    movement.operationType ? `operation:${movement.operationType}` : null,
+    movement.paymentMethodId ? `method:${movement.paymentMethodId}` : null,
+    movement.paymentTypeId ? `type:${movement.paymentTypeId}` : null,
+    movement.externalReference ? `ref:${movement.externalReference}` : null,
+    movement.payerLabelSafe ? `payer:${movement.payerLabelSafe}` : null
+  ]
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 190) || null;
+}
+
 function clampInt(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+function normalizeMatchWindowMinutes(value: number | null | undefined) {
+  const normalized = Math.trunc(value ?? 10);
+  return [5, 10, 15, 30].includes(normalized) ? normalized : 10;
 }

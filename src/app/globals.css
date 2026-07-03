@@ -368,6 +368,237 @@ html.theme-transitioning *::after {
     border-color: #273342;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   }
+
+  .cash-total {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cash-sidebar {
+    overflow: hidden;
+  }
+
+  .cash-console {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 7rem);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media (min-width: 1280px) {
+    .cash-sidebar {
+      height: calc(100vh - 7rem);
+      max-height: calc(100vh - 7rem);
+    }
+
+    .cash-console {
+      height: 100%;
+    }
+  }
+
+  .cash-console-header,
+  .cash-actions {
+    flex: none;
+  }
+
+  .cash-console-body {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .cash-actions {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 72%, transparent), var(--panel-bg) 35%),
+      var(--panel-bg);
+    border-top: 1px solid var(--panel-border);
+    bottom: -0.75rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding: 0.75rem;
+    position: static;
+    z-index: 5;
+  }
+
+  .cash-payment-method-panel {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .cash-loaded-payments {
+    max-height: 9.5rem;
+    overflow-y: auto;
+    padding-right: 0.125rem;
+    scrollbar-gutter: stable;
+  }
+
+  @media (max-width: 1366px), (max-height: 820px) {
+    .cash-total {
+      font-size: 2.35rem;
+    }
+
+    .cash-summary-value {
+      padding: 0.5rem 0.625rem;
+    }
+
+    .cash-product-card {
+      min-height: 4.5rem;
+    }
+  }
+
+  @media (max-height: 820px) {
+    .cash-page {
+      gap: 0.5rem;
+      min-height: calc(100vh - 7rem);
+    }
+
+    .cash-register-screen {
+      gap: 0.5rem;
+      min-height: calc(100vh - 7.5rem);
+    }
+
+    .cash-main-column,
+    .cash-sidebar {
+      row-gap: 0.5rem;
+      max-height: calc(100vh - 7.5rem);
+    }
+
+    @media (min-width: 1280px) {
+      .cash-sidebar {
+        height: calc(100vh - 7.5rem);
+        max-height: calc(100vh - 7.5rem);
+      }
+    }
+
+    .cash-search-card {
+      padding-bottom: 0.5rem;
+      padding-top: 0.5rem;
+    }
+
+    .cash-search-input {
+      height: 2.375rem;
+    }
+
+    .cash-shortcuts {
+      margin-top: 0.375rem;
+    }
+
+    .cash-product-section {
+      margin-top: 0.375rem;
+    }
+
+    .cash-product-card {
+      min-height: 4.25rem;
+      padding-bottom: 0.375rem;
+      padding-top: 0.375rem;
+    }
+
+    .cash-cart-table th {
+      padding-bottom: 0.5rem;
+      padding-top: 0.5rem;
+    }
+
+    .cash-cart-table td {
+      padding-bottom: 0.5rem;
+      padding-top: 0.5rem;
+    }
+
+    .cash-cart-empty {
+      padding-bottom: 1.5rem;
+      padding-top: 1.5rem;
+    }
+
+    .cash-console {
+      height: 100%;
+      max-height: calc(100vh - 7.5rem);
+      padding: 0.5rem;
+    }
+
+    .cash-console-body {
+      padding-right: 0.0625rem;
+    }
+
+    .cash-console-body > :first-child {
+      margin-top: 0.5rem;
+    }
+
+    .cash-summary-grid {
+      gap: 0.375rem;
+      margin-top: 0.5rem;
+    }
+
+    .cash-status-strip {
+      padding-bottom: 0.375rem;
+      padding-top: 0.375rem;
+    }
+
+    .cash-payment-hint {
+      line-height: 1.25rem;
+      padding-bottom: 0.375rem;
+      padding-top: 0.375rem;
+    }
+
+    .cash-status-strip,
+    .cash-payment-stack,
+    .cash-actions {
+      margin-top: 0.625rem;
+    }
+
+    .cash-actions {
+      bottom: -0.625rem;
+      margin-left: -0.5rem;
+      margin-right: -0.5rem;
+      padding: 0.5rem;
+    }
+
+    .cash-actions button {
+      height: 2.375rem;
+      min-height: 2.375rem;
+    }
+
+    .cash-payment-stack > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0.5rem;
+    }
+
+    .cash-payment-method-panel,
+    .cash-payment-preview {
+      padding: 0.5rem;
+    }
+
+    .cash-payment-method-panel {
+      row-gap: 0.375rem;
+    }
+
+    .cash-credit-panel {
+      padding: 0.5rem;
+    }
+
+    .cash-amount-panel {
+      row-gap: 0.375rem;
+    }
+
+    .cash-amount-input {
+      height: 2.25rem;
+    }
+
+    .cash-loaded-payments {
+      max-height: 6.5rem;
+    }
+
+    .cash-payment-hint {
+      margin-top: 0.5rem;
+    }
+
+    .cash-session-panel {
+      padding-bottom: 0.5rem;
+      padding-top: 0.5rem;
+    }
+
+    .cash-cart-card {
+      max-height: 15.5rem;
+      overflow: auto;
+    }
+  }
 }
 
 * {

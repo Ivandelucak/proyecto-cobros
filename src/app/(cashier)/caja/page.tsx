@@ -37,7 +37,7 @@ export default async function CajaPage() {
   ]);
 
   return (
-    <section className="flex min-h-[calc(100vh-8.5rem)] flex-col gap-4">
+    <section className="cash-page flex min-h-[calc(100vh-8.5rem)] flex-col gap-3">
       {cashSession || !cashSetting.requireOpenSession ? (
         <CashRegister
           initialSuggestedProducts={suggestedProducts}
@@ -50,7 +50,7 @@ export default async function CajaPage() {
           allowNegativeStock={cashSetting.allowNegativeStock}
         />
       ) : null}
-      <div className="mt-auto">
+      <div className="cash-session-wrap mt-auto">
         <CashSessionPanel
           cashSession={cashSession}
           requireOpenSession={cashSetting.requireOpenSession}

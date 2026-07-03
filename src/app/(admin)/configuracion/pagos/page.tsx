@@ -1,5 +1,6 @@
 import { requireAdminPage } from "@/lib/admin-auth";
 import { getMercadoPagoAccountViews } from "@/lib/mercadopago/mercado-pago-accounts";
+import { getMercadoPagoOAuthConfigStatus } from "@/lib/mercadopago/mercado-pago-oauth";
 import {
   getCreditInstallmentPlans,
   getPaymentMethodSettings
@@ -16,6 +17,7 @@ export default async function ConfiguracionPagosPage() {
     getCreditInstallmentPlans(),
     getMercadoPagoAccountViews()
   ]);
+  const mercadoPagoOAuthStatus = getMercadoPagoOAuthConfigStatus();
 
   return (
     <div className="space-y-5">
@@ -23,6 +25,7 @@ export default async function ConfiguracionPagosPage() {
         methods={paymentMethods}
         creditPlans={creditPlans}
         mercadoPagoAccounts={mercadoPagoAccounts}
+        mercadoPagoOAuthStatus={mercadoPagoOAuthStatus}
       />
     </div>
   );

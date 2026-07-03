@@ -178,6 +178,7 @@ export async function toAttemptView(attempt: {
   id: string;
   mercadoPagoAccountId: string;
   mercadoPagoAccount: { name: string };
+  method: string;
   amount: Prisma.Decimal;
   externalReference: string;
   providerOrderId: string | null;
@@ -202,6 +203,7 @@ export async function toAttemptView(attempt: {
     id: attempt.id,
     accountId: attempt.mercadoPagoAccountId,
     accountName: attempt.mercadoPagoAccount.name,
+    method: attempt.method,
     amount: attempt.amount.toString(),
     externalReference: attempt.externalReference,
     providerOrderId: attempt.providerOrderId,

@@ -11,10 +11,13 @@ import {
   revealMercadoPagoToken
 } from "./mercado-pago-secrets";
 
-const MERCADO_PAGO_AUTH_URL = "https://auth.mercadopago.com/authorization";
+const DEFAULT_MERCADO_PAGO_AUTH_URL = "https://auth.mercadopago.com.ar/authorization";
 const MERCADO_PAGO_TOKEN_URL = "https://api.mercadopago.com/oauth/token";
 const OAUTH_STATE_TTL_MS = 30 * 60 * 1000;
 const TOKEN_REFRESH_WINDOW_MS = 10 * 60 * 1000;
+const EXPECTED_CALLBACK_PATH = "/api/mercadopago/oauth/callback";
+const OAUTH_PLATFORM_ID = "mp";
+const OAUTH_RESPONSE_TYPE = "code";
 
 type MercadoPagoOAuthState = {
   nonce: string;
@@ -45,6 +48,31 @@ export type MercadoPagoOAuthLink = {
   expiresAt: string;
 };
 
+export type MercadoPagoOAuthConfigStatus = {
+  configured: boolean;
+  missing: Array<"MP_CLIENT_ID" | "MP_CLIENT_SECRET" | "MP_REDIRECT_URI">;
+  clientIdConfigured: boolean;
+  clientIdPreview: string | null;
+  redirectUri: string | null;
+  authBaseUrl: string;
+  callbackPath: string;
+  platformId: "mp";
+  responseType: "code";
+  pkceEnabledLocal: boolean;
+  openMode: "new_tab";
+  stateValidation: "signed_state_with_optional_cookie";
+  authorizationUrlPreview: string | null;
+  redirectUriWarnings: string[];
+  redirectUriExample: string;
+  appPublicUrlConfigured: boolean;
+  appPublicUrl: string | null;
+  redirectBaseUsed: string | null;
+  redirectBaseSource: "APP_PUBLIC_URL" | "forwarded_headers" | "request_origin";
+  callbackSuccessRedirectPreview: string | null;
+  callbackErrorRedirectPreview: string | null;
+  message: string;
+};
+
 export class MercadoPagoOAuthError extends Error {
   detail: string | null;
 
@@ -64,13 +92,13 @@ export function createMercadoPagoOAuthAuthorizationUrl(
     environment,
     issuedAt: Date.now()
   });
-  const url = new URL(MERCADO_PAGO_AUTH_URL);
+  const url = new URL(config.authBaseUrl);
 
   url.searchParams.set("client_id", config.clientId);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("platform_id", "mp");
-  url.searchParams.set("state", state);
+  url.searchParams.set("response_type", OAUTH_RESPONSE_TYPE);
+  url.searchParams.set("platform_id", OAUTH_PLATFORM_ID);
   url.searchParams.set("redirect_uri", config.redirectUri);
+  url.searchParams.set("state", state);
 
   return {
     url: url.toString(),
@@ -82,11 +110,10 @@ export function createMercadoPagoOAuthAuthorizationUrl(
 export async function connectMercadoPagoOAuthAccount(input: {
   code: string;
   state: string;
-}) {
+}): Promise<{ account: MercadoPagoAccount; wasExisting: boolean }> {
   const parsedState = validateMercadoPagoOAuthState(input.state);
   const token = await exchangeMercadoPagoOAuthCode({
-    code: input.code,
-    environment: parsedState.environment
+    code: input.code
   });
 
   if (!token.access_token) {
@@ -149,21 +176,23 @@ export async function connectMercadoPagoOAuthAccount(input: {
   };
 
   if (existing) {
-    return prisma.mercadoPagoAccount.update({
+    const account = await prisma.mercadoPagoAccount.update({
       where: { id: existing.id },
       data: {
         ...data,
         defaultAccount: existing.defaultAccount || !hasDefault
       }
     });
+    return { account, wasExisting: true };
   }
 
-  return prisma.mercadoPagoAccount.create({
+  const account = await prisma.mercadoPagoAccount.create({
     data: {
       ...data,
       defaultAccount: !hasDefault
     }
   });
+  return { account, wasExisting: false };
 }
 
 export async function refreshMercadoPagoOAuthAccountIfNeeded(
@@ -235,24 +264,78 @@ export async function refreshMercadoPagoOAuthAccountIfNeeded(
   }
 }
 
+export function getMercadoPagoOAuthConfigStatus(): MercadoPagoOAuthConfigStatus {
+  const missing: MercadoPagoOAuthConfigStatus["missing"] = [];
+  const clientId = process.env.MP_CLIENT_ID?.trim() || "";
+  const redirectUri = process.env.MP_REDIRECT_URI?.trim() || "";
+  const authBaseUrl = getMercadoPagoAuthBaseUrl();
+
+  if (!clientId) {
+    missing.push("MP_CLIENT_ID");
+  }
+  if (!process.env.MP_CLIENT_SECRET?.trim()) {
+    missing.push("MP_CLIENT_SECRET");
+  }
+  if (!redirectUri) {
+    missing.push("MP_REDIRECT_URI");
+  }
+
+  const configured = missing.length === 0;
+  const appPublicUrl = process.env.APP_PUBLIC_URL?.trim() || "";
+  const redirectBaseUsed = appPublicUrl || null;
+  const authorizationUrlPreview = clientId && redirectUri
+    ? createMercadoPagoOAuthAuthorizationUrlPreview({
+        authBaseUrl,
+        clientIdPreview: previewSecret(clientId),
+        redirectUri
+      })
+    : null;
+
+  return {
+    configured,
+    missing,
+    clientIdConfigured: Boolean(clientId),
+    clientIdPreview: clientId ? previewSecret(clientId) : null,
+    redirectUri: redirectUri || null,
+    authBaseUrl,
+    callbackPath: EXPECTED_CALLBACK_PATH,
+    platformId: OAUTH_PLATFORM_ID,
+    responseType: OAUTH_RESPONSE_TYPE,
+    pkceEnabledLocal: false,
+    openMode: "new_tab",
+    stateValidation: "signed_state_with_optional_cookie",
+    authorizationUrlPreview,
+    redirectUriWarnings: validateMercadoPagoRedirectUri(redirectUri),
+    redirectUriExample: `https://tu-url-ngrok.ngrok-free.app${EXPECTED_CALLBACK_PATH}`,
+    appPublicUrlConfigured: Boolean(appPublicUrl),
+    appPublicUrl: appPublicUrl || null,
+    redirectBaseUsed,
+    redirectBaseSource: appPublicUrl ? "APP_PUBLIC_URL" : "forwarded_headers",
+    callbackSuccessRedirectPreview: redirectBaseUsed
+      ? createCallbackRedirectPreview(redirectBaseUsed, "success")
+      : null,
+    callbackErrorRedirectPreview: redirectBaseUsed
+      ? createCallbackRedirectPreview(redirectBaseUsed, "error")
+      : null,
+    message: configured
+      ? "OAuth configurado."
+      : "Falta configurar OAuth de Mercado Pago en el servidor. Completa MP_CLIENT_ID, MP_CLIENT_SECRET y MP_REDIRECT_URI."
+  };
+}
+
 function getMercadoPagoOAuthConfig() {
   const clientId = process.env.MP_CLIENT_ID?.trim();
   const clientSecret = process.env.MP_CLIENT_SECRET?.trim();
   const redirectUri = process.env.MP_REDIRECT_URI?.trim();
 
   if (!clientId || !clientSecret || !redirectUri) {
-    throw new MercadoPagoOAuthError(
-      "Faltan MP_CLIENT_ID, MP_CLIENT_SECRET o MP_REDIRECT_URI para conectar Mercado Pago."
-    );
+    throw new MercadoPagoOAuthError(getMercadoPagoOAuthConfigStatus().message);
   }
 
-  return { clientId, clientSecret, redirectUri };
+  return { clientId, clientSecret, redirectUri, authBaseUrl: getMercadoPagoAuthBaseUrl() };
 }
 
-async function exchangeMercadoPagoOAuthCode(input: {
-  code: string;
-  environment: MercadoPagoEnvironment;
-}) {
+async function exchangeMercadoPagoOAuthCode(input: { code: string }) {
   const config = getMercadoPagoOAuthConfig();
 
   return requestMercadoPagoOAuthToken({
@@ -260,21 +343,25 @@ async function exchangeMercadoPagoOAuthCode(input: {
     client_secret: config.clientSecret,
     code: input.code,
     grant_type: "authorization_code",
-    redirect_uri: config.redirectUri,
-    test_token: input.environment === MercadoPagoEnvironment.SANDBOX
+    redirect_uri: config.redirectUri
   });
 }
 
 async function requestMercadoPagoOAuthToken(
   body: Record<string, string | boolean>
 ): Promise<MercadoPagoOAuthTokenResponse> {
+  const formBody = new URLSearchParams();
+  for (const [key, value] of Object.entries(body)) {
+    formBody.set(key, String(value));
+  }
+
   const response = await fetch(MERCADO_PAGO_TOKEN_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
       Accept: "application/json"
     },
-    body: JSON.stringify(body),
+    body: formBody.toString(),
     cache: "no-store"
   });
   const text = await response.text();
@@ -333,6 +420,70 @@ function validateMercadoPagoOAuthState(value: string): MercadoPagoOAuthState {
     environment,
     issuedAt: parsed.issuedAt
   };
+}
+
+function getMercadoPagoAuthBaseUrl() {
+  return process.env.MP_OAUTH_AUTH_BASE_URL?.trim() || DEFAULT_MERCADO_PAGO_AUTH_URL;
+}
+
+function createMercadoPagoOAuthAuthorizationUrlPreview(input: {
+  authBaseUrl: string;
+  clientIdPreview: string;
+  redirectUri: string;
+}) {
+  const url = new URL(input.authBaseUrl);
+  url.searchParams.set("client_id", input.clientIdPreview);
+  url.searchParams.set("response_type", OAUTH_RESPONSE_TYPE);
+  url.searchParams.set("platform_id", OAUTH_PLATFORM_ID);
+  url.searchParams.set("redirect_uri", input.redirectUri);
+  url.searchParams.set("state", "<STATE>");
+
+  return url.toString();
+}
+
+function createCallbackRedirectPreview(baseUrl: string, status: "success" | "error") {
+  const url = new URL("/configuracion/pagos", baseUrl);
+  url.searchParams.set("mp_oauth", status);
+  url.searchParams.set("message", status === "success" ? "<SUCCESS_MESSAGE>" : "<ERROR_MESSAGE>");
+  return url.toString();
+}
+
+function validateMercadoPagoRedirectUri(value: string) {
+  if (!value) {
+    return [];
+  }
+
+  const warnings: string[] = [];
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") {
+      warnings.push("MP_REDIRECT_URI no empieza con https://. Mercado Pago puede rechazar la autorizacion.");
+    }
+    if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+      warnings.push("MP_REDIRECT_URI contiene localhost. Para OAuth real usa una URL publica HTTPS como ngrok.");
+    }
+    if (url.search) {
+      warnings.push("MP_REDIRECT_URI tiene query params.");
+    }
+    if (!url.pathname.endsWith(EXPECTED_CALLBACK_PATH)) {
+      warnings.push(
+        `MP_REDIRECT_URI debe terminar en ${EXPECTED_CALLBACK_PATH}.`
+      );
+    }
+  } catch {
+    warnings.push("MP_REDIRECT_URI no es una URL valida.");
+  }
+
+  return warnings;
+}
+
+function previewSecret(value: string) {
+  if (value.length <= 8) {
+    return `${value.slice(0, 2)}...${value.slice(-2)}`;
+  }
+
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
 function getOAuthStateSecret() {

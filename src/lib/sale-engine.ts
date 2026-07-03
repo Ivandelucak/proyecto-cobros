@@ -2,6 +2,7 @@ import {
   CashSessionStatus,
   CustomerAccountMovementType,
   PaymentMethod,
+  PaymentProvider,
   Prisma,
   Role,
   SaleStatus,
@@ -301,7 +302,10 @@ function buildPaymentRecords(
   payments: PaymentInput[],
   subtotal: Prisma.Decimal,
   activeCreditPlans: ActiveCreditInstallmentPlan[],
-  approvedAttemptsById: Map<string, { id: string; providerPaymentId: string | null }>
+  approvedAttemptsById: Map<
+    string,
+    { id: string; providerPaymentId: string | null; method: PaymentMethod }
+  >
 ) {
   const creditPayments = payments.filter((payment) => payment.method === PaymentMethod.CREDIT);
   if (creditPayments.length > 1) {
@@ -411,7 +415,7 @@ async function validatePaymentAttempts(
   ] as string[];
   const approvedAttemptsById = new Map<
     string,
-    { id: string; providerPaymentId: string | null }
+    { id: string; providerPaymentId: string | null; method: PaymentMethod }
   >();
 
   if (attemptIds.length === 0) {
@@ -423,6 +427,30 @@ async function validatePaymentAttempts(
     include: { payment: { select: { id: true } } }
   });
   const attemptsById = new Map(attempts.map((attempt) => [attempt.id, attempt]));
+  const providerPaymentIds = [
+    ...new Set(
+      attempts
+        .map((attempt) => attempt.providerPaymentId)
+        .filter((value): value is string => Boolean(value))
+    )
+  ];
+  const alreadyUsedProviderPayments =
+    providerPaymentIds.length > 0
+      ? await tx.paymentAttempt.findMany({
+          where: {
+            provider: PaymentProvider.MERCADOPAGO,
+            providerPaymentId: { in: providerPaymentIds },
+            id: { notIn: attemptIds },
+            payment: { isNot: null }
+          },
+          select: { providerPaymentId: true }
+        })
+      : [];
+  const usedProviderPaymentIds = new Set(
+    alreadyUsedProviderPayments
+      .map((attempt) => attempt.providerPaymentId)
+      .filter((value): value is string => Boolean(value))
+  );
 
   for (const payment of payments) {
     if (!payment.paymentAttemptId) {
@@ -436,16 +464,20 @@ async function validatePaymentAttempts(
     if (attempt.payment) {
       throw new Error("Ese pago de Mercado Pago ya fue usado en otra venta.");
     }
+    if (attempt.providerPaymentId && usedProviderPaymentIds.has(attempt.providerPaymentId)) {
+      throw new Error("Ese pago de Mercado Pago ya fue usado en otra venta.");
+    }
     if (!new Prisma.Decimal(payment.amount).toDecimalPlaces(2).equals(attempt.amount)) {
       throw new Error("El monto aprobado por Mercado Pago no coincide con la venta.");
     }
-    if (payment.method !== PaymentMethod.MERCADOPAGO) {
-      throw new Error("El intento Mercado Pago solo puede asociarse a Mercado Pago.");
+    if (attempt.method !== payment.method) {
+      throw new Error("El metodo de pago no coincide con la verificacion aplicada.");
     }
 
     approvedAttemptsById.set(attempt.id, {
       id: attempt.id,
-      providerPaymentId: attempt.providerPaymentId
+      providerPaymentId: attempt.providerPaymentId,
+      method: attempt.method
     });
   }
 

@@ -14,7 +14,8 @@ export const providerStatusLabels: Record<string, string> = {
   ACREDITADO: "Acreditado",
   AUTHORIZED: "Autorizado",
   PENDING: "Pendiente",
-  FAILED: "Fallido"
+  FAILED: "Fallido",
+  VERIFIED_MERCADOPAGO: "Verificado por Mercado Pago"
 };
 
 export function providerStatusLabel(value: string | null | undefined) {

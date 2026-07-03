@@ -239,13 +239,16 @@ export function SettingsAdvancedDetails({
 }) {
   return (
     <details
-      className={cn("app-panel-secondary rounded-lg p-3", className)}
+      className={cn("group app-panel-secondary rounded-lg p-3", className)}
       open={defaultOpen}
     >
       <summary className="cursor-pointer list-none text-sm font-bold text-[var(--text-primary)]">
         <span className="inline-flex items-center gap-2">
           {title}
-          <span className="text-xs font-semibold text-[var(--text-muted)]">Abrir</span>
+          <span className="text-xs font-semibold text-[var(--text-muted)]">
+            <span className="group-open:hidden">Abrir</span>
+            <span className="hidden group-open:inline">Cerrar</span>
+          </span>
         </span>
       </summary>
       {description ? (

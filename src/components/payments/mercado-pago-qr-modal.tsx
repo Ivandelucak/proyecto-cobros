@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { AppAccordion } from "@/components/ui/overlay";
 import type {
   MercadoPagoAccountView,
   MercadoPagoAttemptView
@@ -73,14 +74,14 @@ export function MercadoPagoQrModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-3 py-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="Cobro con Mercado Pago"
+      aria-label="Cobro con QR Mercado Pago"
     >
       <div className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-2xl animate-[qr-modal-in_160ms_ease-out] flex-col overflow-hidden rounded-xl shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-[color:var(--panel-border)] px-5 py-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold text-[var(--text-primary)]">
-                Cobro con Mercado Pago
+                Cobro con QR Mercado Pago
               </h2>
               <StatusBadge status={status} />
               {account?.environment === "SANDBOX" ? (
@@ -131,7 +132,7 @@ export function MercadoPagoQrModal({
                 <img
                   src={attempt.qrCodeDataUrl}
                   alt="QR Mercado Pago"
-                  className="h-[min(62vw,340px)] w-[min(62vw,340px)] max-h-[340px] max-w-[340px] object-contain"
+                  className="h-[min(54vh,68vw,360px)] w-[min(54vh,68vw,360px)] max-h-[360px] max-w-[360px] object-contain"
                 />
               </div>
             ) : (
@@ -171,11 +172,8 @@ export function MercadoPagoQrModal({
             />
           </div>
 
-          <details className="app-panel-elevated mt-3 rounded-lg p-3 text-xs">
-            <summary className="cursor-pointer font-semibold text-[var(--text-primary)]">
-              Detalle tecnico
-            </summary>
-            <dl className="mt-3 grid gap-2 text-[var(--text-secondary)]">
+          <AppAccordion title="Detalle tecnico" className="app-panel-elevated mt-3">
+            <dl className="grid gap-2 text-[var(--text-secondary)]">
               <DetailLine label="externalReference" value={attempt.externalReference} />
               <DetailLine label="providerOrderId" value={attempt.providerOrderId ?? "-"} />
               <DetailLine label="providerPaymentId" value={attempt.providerPaymentId ?? "-"} />
@@ -184,7 +182,7 @@ export function MercadoPagoQrModal({
               <DetailLine label="approvedAt" value={formatDate(attempt.approvedAt) || "-"} />
               {technicalDetail ? <DetailLine label="error" value={technicalDetail} /> : null}
             </dl>
-          </details>
+          </AppAccordion>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-[color:var(--panel-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-end">

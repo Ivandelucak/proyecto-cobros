@@ -1,0 +1,87 @@
+{
+   "checksum": "b29c476b4a9532c91768a9ef65cc403a",
+   "roots": {
+      "bookmark_bar": {
+         "children": [ {
+            "date_added": "13300582440618368",
+            "date_last_used": "0",
+            "guid": "c184adea-38d2-4e18-bf5f-76a95ebbe225",
+            "id": "7",
+            "name": "Fútbol Libre TV - Ver todos los partidos de fútbol en VIVO",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://futbollibre.net/inicio/",
+            "visit_count": 0
+         }, {
+            "date_added": "13302574688661149",
+            "date_last_used": "0",
+            "guid": "01009359-c878-4e69-968c-d323ee5582d3",
+            "id": "8",
+            "name": "Mega Deportes TV - Futbol en VIVO Gratis HD",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://megadeportes.online/",
+            "visit_count": 0
+         }, {
+            "date_added": "13351568536962002",
+            "date_last_used": "0",
+            "guid": "b6e58150-0ab2-4bfe-9958-d5576fe052bc",
+            "id": "9",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "Ver Marvel - Daredevil (2015) Online - Cuevana 3",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://www.cuevana3.red/serie/marvel-daredevil",
+            "visit_count": 0
+         } ],
+         "date_added": "13427494401997588",
+         "date_last_used": "0",
+         "date_modified": "13351568536962002",
+         "guid": "0bc5d13f-2cba-5d74-951f-3f233fe6c908",
+         "id": "1",
+         "name": "Barra de favoritos",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "other": {
+         "children": [  ],
+         "date_added": "13427494401997588",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "82b081ec-3dd3-529c-8475-ab6c344590dd",
+         "id": "2",
+         "name": "Otros favoritos",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "synced": {
+         "children": [  ],
+         "date_added": "13427494401997588",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "4cf2e351-0e85-532b-bb37-df045d8f8d0f",
+         "id": "3",
+         "name": "Favoritos móviles",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "workspaces_v2": {
+         "children": [  ],
+         "date_added": "13427494401997588",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "75aa6670-344f-549d-b742-660f029506ab",
+         "id": "5",
+         "name": "Áreas de trabajo",
+         "source": "unknown",
+         "type": "folder"
+      }
+   },
+   "sync_metadata": "CkEKHgiIgQISCOLKTSSfAQAAKg4QABgBIAAoBjAAOABAABIAKhhlSmJtbVZiR1U2MFpYaENrRE1WV2tnPT1IA6AGDBKtAQgJEqgBChx0MmFZZ3ZyTnh6dEFtT29BVVNLdWlOUk5Xd2s9EiRiNmU1ODE1MC0wYWIyLTRiZmUtOTk1OC1kNTU3NmZlMDUyYmMYACAAKAAw49/M4PExOOTwprbXMUDk8Ka21zFKHGE2U2VKS1VvanpEMXJ1RWJLbkpKRll4TlFGQT1aHyIdpy9INTV4Qnp3Z2RhaXRuUW1TL284RE1aMFlmUT1l2iR2p8I+AmAFEqwBCAgSpwEKHEljT2ZKcHZWR2pRY3NQVzNkOUNtVlN5THBjdz0SJDAxMDA5MzU5LWM4NzgtNGU2OS05NjhjLWQzMjNlZTU1ODJkMxgAIAAoADDi38zg8TE47oyb9KAwQO6Mm/SgMEocaEpBMkNIeUFJVUk3U0QwYmpFUlJKY0VVL3lJPVoeIhxORTBGTm1ndFE3dmhLMWU1L1dzKzcrbEhpSjQ9Ze4donTCPgJgBRKOAQgDEokBChxuamdEdTg4ZUNydlhwODZwRDdmSEdjcUZwODg9EiQxNjg3ODU0YS0wNWRlLTViYWEtYjZjZi1mOWI2ZjY0ZTc3MjQYACAAKAAw35G6wsQuOILs0d/xL0CC7NHf8S9KHHl6TkIwMWNuNTRBN2NSVTB1VCsvUGdtVHRVbz1aAGUAAAAAwj4CYAASjgEIAhKJAQocWWNTVG9udkVTUHdxQ3M0TDJjclZodjY4TDk4PRIkMGRhN2MyZWEtNDA5OC01NTMyLTk2Y2EtODM2Njk2M2FkZjgyGAAgACgAMNuRusLELjjD69Hf8S9Aw+vR3/EvShxvUFZraHdCUmJWNjVLQ1dSMitJT05IV29PdTg9WgBlAAAAAMI+AmAAEqwBCAcSpwEKHEJ0UG9wQVh2cUpiOVlsdkkxelpxVFlwa0lzbz0SJGMxODRhZGVhLTM4ZDItNGUxOC1iZjVmLTc2YTk1ZWJiZTIyNRgAIAAoADDh38zg8TE4+/ydvpkwQPv8nb6ZMEocNk9rYzlINWpnc0lzQjVubmFiZ3J5cUJiZlFNPVoeIhwrazNnWkJLZkFDNlhidUprWGwzSU5RTFlWVVU9Zc6RBCTCPgJgBRKOAQgBEokBChx5eEovNmZ2a2VjcjdrcDVFUXpCNHRXTHBkYkU9EiQ2YjUyYTM3My00MTMwLTU2ZmYtOTk4Ny1kOTk4OWU0YTM4NGEYACAAKAAw2pG6wsQuOLTr0d/xL0C069Hf8S9KHGFSQ1dMZ2hGOWI1SW5xS0lEdnVKL2p2UWtGYz1aAGUAAAAAwj4CYAASjgEIBRKJAQocd1JCclpMKzZQQTlhdktnak5QN0pYRExjZnZzPRIkM2VmOGY0NTItYzU5MS01ZjQ0LTg3MjItMTc5ZTAxN2JhZGMwGAAgACgAMOWJnbqkMzicjJ26pDNAnIyduqQzShxubXg2NXNRRHZ4SThUZ0VlditBK250dG9TbjQ9WgBlAAAAAMI+AmAAMAA4AA==",
+   "version": 1
+}

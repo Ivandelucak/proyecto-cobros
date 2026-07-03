@@ -89,8 +89,8 @@ export function CashSessionPanel({
 
   if (!cashSession) {
     return (
-      <Card className="border-l-4 border-l-[color:var(--danger)] p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="cash-session-panel border-l-4 border-l-[color:var(--danger)] p-3 shadow-lg shadow-slate-300/30 dark:shadow-none">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="red">Caja cerrada</Badge>
@@ -114,7 +114,7 @@ export function CashSessionPanel({
         {mode === "open" ? (
           <form
             action={openAction}
-            className="app-panel-secondary mt-3 grid gap-3 rounded-lg p-3 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
+            className="app-panel-secondary mt-2 grid gap-2 rounded-lg p-2.5 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto]"
           >
             <Input
               name="openingAmount"
@@ -136,12 +136,12 @@ export function CashSessionPanel({
   const recentMovements = cashSession.movements.slice(0, 3);
 
   return (
-    <Card className="border-l-4 border-l-[color:var(--success)] p-4 shadow-lg shadow-slate-300/30 dark:shadow-none">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <Card className="cash-session-panel border-l-4 border-l-[color:var(--success)] p-2.5 shadow-lg shadow-slate-300/30 dark:shadow-none">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone="green">Caja abierta</Badge>
           <span className="text-sm text-[var(--text-muted)]">
-            Abierta desde {formatTimeStable(cashSession.openedAt)}
+            Caja abierta · {formatDateTimeStable(cashSession.openedAt)}
           </span>
         </div>
         <Button
@@ -162,14 +162,14 @@ export function CashSessionPanel({
       </div>
 
       {detailsVisible ? (
-        <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="mt-2 border-t border-[color:var(--panel-border)] pt-2">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <p className="text-sm text-[var(--text-muted)]">
-                Abierta por {cashSession.openedByName} el{" "}
+                Abierta por {cashSession.openedByName} ·{" "}
                 {formatDateTimeStable(cashSession.openedAt)}
               </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <Summary label="Inicial" value={formatARS(cashSession.openingAmount)} />
                 <Summary
                   label="Ventas efectivo"
@@ -209,7 +209,7 @@ export function CashSessionPanel({
           </div>
 
           {recentMovements.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
               {recentMovements.map((movement) => (
                 <span
                   key={movement.id}
@@ -226,7 +226,7 @@ export function CashSessionPanel({
           {mode === "movement" ? (
             <form
               action={movementAction}
-              className="app-panel-secondary mt-3 grid gap-3 rounded-lg p-3 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(0,1fr)_auto]"
+              className="app-panel-secondary mt-2 grid gap-2 rounded-lg p-2.5 shadow-sm dark:shadow-none md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(0,1fr)_auto]"
             >
               <Select name="type" defaultValue="EXPENSE">
                 {Object.entries(movementLabels).map(([value, label]) => (
@@ -247,7 +247,7 @@ export function CashSessionPanel({
           {mode === "close" ? (
             <form
               action={closeAction}
-              className="mt-3 grid gap-3 rounded-lg border p-3 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto] badge-danger"
+              className="mt-2 grid gap-2 rounded-lg border p-2.5 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto] badge-danger"
             >
               <Input
                 name="countedCashAmount"
@@ -278,7 +278,7 @@ function Summary({
   strong?: boolean;
 }) {
   return (
-    <div className="app-panel-elevated min-w-0 rounded-md px-3 py-2 shadow-sm dark:shadow-none">
+    <div className="app-panel-elevated min-w-0 rounded-md px-3 py-1.5 shadow-sm dark:shadow-none">
       <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
         {label}
       </p>

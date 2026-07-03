@@ -358,6 +358,7 @@ export async function updatePaymentSettingsAction(
       })
     );
     const mercadoPagoAccounts = parseMercadoPagoAccounts(formData);
+    const disconnectingMercadoPagoAccount = hasMercadoPagoDisconnectIntent(formData);
 
     const enabledMethods = methodSettings.filter((setting) => setting.enabled);
     if (enabledMethods.length === 0) {
@@ -500,7 +501,11 @@ export async function updatePaymentSettingsAction(
       }
     });
 
-    return { success: "Medios de pago guardados." };
+    return {
+      success: disconnectingMercadoPagoAccount
+        ? "Cuenta Mercado Pago desvinculada correctamente."
+        : "Medios de pago guardados."
+    };
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "No se pudo guardar medios de pago."
@@ -599,7 +604,8 @@ export async function createMercadoPagoOAuthLinkAction(
       qrCodeDataUrl,
       expiresAt: link.expiresAt,
       environment: link.environment,
-      message: "Enlace de conexion Mercado Pago generado."
+      message: "Enlace de conexion Mercado Pago generado.",
+      technicalDetail: null
     };
   } catch (error) {
     return {
@@ -611,7 +617,11 @@ export async function createMercadoPagoOAuthLinkAction(
       message:
         error instanceof Error
           ? error.message
-          : "No se pudo generar el enlace OAuth de Mercado Pago."
+          : "No se pudo generar el enlace OAuth de Mercado Pago.",
+      technicalDetail:
+        error instanceof Error
+          ? JSON.stringify({ message: error.message }, null, 2)
+          : null
     };
   }
 }
@@ -800,7 +810,9 @@ type MercadoPagoAccountInput = {
 };
 
 function parseMercadoPagoAccounts(formData: FormData): MercadoPagoAccountInput[] {
-  const defaultAccountValue = readText(formData, "mpDefaultAccount");
+  const defaultAccountValue =
+    readText(formData, "mpDefaultAccountOverride") ||
+    readText(formData, "mpDefaultAccount");
   const accounts = formData.getAll("mpAccountId").map((rawId) => {
     const id = String(rawId);
     return parseMercadoPagoAccountInput(formData, id, defaultAccountValue === id);
@@ -835,7 +847,7 @@ function parseMercadoPagoAccountInput(
   const pollSeconds = readPositiveInt(
     formData,
     `${prefix}-amountMatchingPollSeconds`,
-    20
+    5
   );
 
   return {
@@ -854,16 +866,20 @@ function parseMercadoPagoAccountInput(
     defaultAccount,
     instructions: readOptionalText(formData, `${prefix}-instructions`),
     enableAmountMatching: isChecked(formData, `${prefix}-enableAmountMatching`),
-    amountMatchingWindowMinutes: Math.max(1, Math.min(windowMinutes, 60)),
+    amountMatchingWindowMinutes: normalizeMercadoPagoOption(windowMinutes, [5, 10, 15, 30], 10),
     amountMatchingTolerance: parseOptionalDecimal(
       formData.get(`${prefix}-amountMatchingTolerance`),
       "La tolerancia de match"
     ) ?? new Prisma.Decimal(0),
     amountMatchingAutoApprove: isChecked(formData, `${prefix}-amountMatchingAutoApprove`),
-    amountMatchingPollSeconds: Math.max(15, Math.min(pollSeconds, 300)),
+    amountMatchingPollSeconds: normalizeMercadoPagoOption(pollSeconds, [5, 10, 15, 30], 5),
     showRecentMovements: isChecked(formData, `${prefix}-showRecentMovements`),
     deleteAccount: isChecked(formData, `${prefix}-deleteAccount`)
   };
+}
+
+function normalizeMercadoPagoOption(value: number, options: number[], fallback: number) {
+  return options.includes(value) ? value : fallback;
 }
 
 async function saveMercadoPagoAccounts(
@@ -890,6 +906,15 @@ async function saveMercadoPagoAccounts(
         data: {
           enabled: false,
           defaultAccount: false,
+          accessToken: protectMercadoPagoToken(`DISCONNECTED:${randomUUID()}`),
+          oauthRefreshToken: null,
+          oauthTokenExpiresAt: null,
+          oauthScope: null,
+          oauthConnectedAt: null,
+          oauthLastRefreshAt: null,
+          oauthRequiresReconnect: true,
+          lastConnectionStatus: "DISCONNECTED",
+          lastConnectionMessage: "Cuenta desvinculada desde Fox Point.",
           deletedAt: new Date()
         }
       });
@@ -954,6 +979,36 @@ async function saveMercadoPagoAccounts(
       }
     });
   }
+
+  const defaultAccount = await tx.mercadoPagoAccount.findFirst({
+    where: { deletedAt: null, enabled: true, defaultAccount: true },
+    select: { id: true }
+  });
+
+  if (!defaultAccount) {
+    const fallbackAccounts = await tx.mercadoPagoAccount.findMany({
+      where: { deletedAt: null, enabled: true },
+      select: {
+        id: true,
+        environment: true,
+        name: true,
+        createdAt: true
+      }
+    });
+    const fallbackAccount = fallbackAccounts.sort((left, right) => {
+      if (left.environment !== right.environment) {
+        return left.environment === MercadoPagoEnvironment.PRODUCTION ? -1 : 1;
+      }
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    })[0];
+
+    if (fallbackAccount) {
+      await tx.mercadoPagoAccount.update({
+        where: { id: fallbackAccount.id },
+        data: { defaultAccount: true }
+      });
+    }
+  }
 }
 
 function parseMercadoPagoMode(value: FormDataEntryValue | null) {
@@ -967,6 +1022,15 @@ function parseMercadoPagoMode(value: FormDataEntryValue | null) {
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function hasMercadoPagoDisconnectIntent(formData: FormData) {
+  for (const key of formData.keys()) {
+    if (key.startsWith("mp-") && key.endsWith("-deleteAccount")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function readOptionalText(formData: FormData, key: string) {

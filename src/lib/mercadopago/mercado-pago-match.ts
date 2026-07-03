@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 export function normalizeMercadoPagoPollSeconds(value: number | null | undefined) {
-  return Math.max(15, Math.min(Math.trunc(value ?? 20), 300));
+  return Math.max(5, Math.min(Math.trunc(value ?? 5), 30));
 }
 
 export function isMercadoPagoApprovedStatus(status: string | null | undefined) {

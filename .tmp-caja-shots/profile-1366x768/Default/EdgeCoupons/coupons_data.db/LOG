@@ -1,0 +1,5 @@
+2026/07/02-16:33:24.555 3e14 Creating DB C:\Users\ivand\OneDrive\Escritorio\proyecto-cobros\pos-universal\.tmp-caja-shots\profile-1366x768\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/07/02-16:33:24.566 3e14 Reusing MANIFEST C:\Users\ivand\OneDrive\Escritorio\proyecto-cobros\pos-universal\.tmp-caja-shots\profile-1366x768\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/07/02-16:33:24.838 6620 Level-0 table #5: started
+2026/07/02-16:33:24.843 6620 Level-0 table #5: 682901 bytes OK
+2026/07/02-16:33:24.845 6620 Delete type=0 #3
