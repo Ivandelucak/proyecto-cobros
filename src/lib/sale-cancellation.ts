@@ -37,10 +37,10 @@ export async function cancelSale(input: {
     throw new Error("Usuario invalido.");
   }
 
-  const cashSetting = await getCashRegisterSetting();
+  const cashSetting = await getCashRegisterSetting(user.businessId ?? undefined);
   const allowedRoles = cashSetting.allowCashierCancelSale
-    ? [Role.ADMIN, Role.CASHIER]
-    : [Role.ADMIN];
+    ? [Role.OWNER, Role.ADMIN, Role.CASHIER]
+    : [Role.OWNER, Role.ADMIN];
   assertRole(user.role, allowedRoles, "anular ventas");
 
   return prisma.$transaction(async (tx) => {
@@ -63,18 +63,20 @@ export async function cancelSale(input: {
       throw new Error("La venta ya esta anulada.");
     }
 
-    if (
-      sale.fiscalStatus === FiscalStatus.ISSUED ||
-      sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ||
-      sale.fiscalDocument?.status === FiscalDocumentStatus.ISSUED
-    ) {
-      await markCreditNoteRequiredTx(tx, sale.id, user.id, reason);
-      return { status: "credit_note_required", saleId: sale.id };
-    }
+    const fiscalSetting = await getFiscalSettingOrDefault(user.businessId ?? undefined, tx);
+    const allowCancel = fiscalSetting.allowCancelBeforeIssue;
 
-    const fiscalSetting = await getFiscalSettingOrDefault(tx);
-    if (sale.requiresFiscalInvoice && !fiscalSetting.allowCancelBeforeIssue) {
-      throw new Error("La configuracion fiscal no permite anular antes de emitir.");
+    if (
+      sale.fiscalStatus !== FiscalStatus.NOT_REQUESTED &&
+      sale.fiscalStatus !== FiscalStatus.FAILED &&
+      sale.fiscalStatus !== FiscalStatus.CANCELLED_BEFORE_ISSUE &&
+      sale.fiscalStatus !== FiscalStatus.CANCELLED_BY_CREDIT_NOTE
+    ) {
+      if (!allowCancel || sale.fiscalStatus === FiscalStatus.READY_TO_ISSUE) {
+        throw new Error(
+          "No se puede anular la venta porque tiene una factura electronica emitida o en proceso."
+        );
+      }
     }
 
     await tx.sale.update({
@@ -83,13 +85,16 @@ export async function cancelSale(input: {
         status: SaleStatus.CANCELLED,
         cancelledAt: new Date(),
         cancelledById: user.id,
-        cancellationReason: reason
+        cancellationReason: input.reason.trim() || null
       }
     });
 
     for (const item of sale.items) {
-      const product = await tx.product.findUnique({
-        where: { id: item.productId },
+      if (item.isManual || !item.productId) {
+        continue;
+      }
+      const product = await tx.product.findFirst({
+        where: { id: item.productId, deletedAt: null },
         select: {
           id: true,
           stock: true
@@ -110,6 +115,7 @@ export async function cancelSale(input: {
 
       await tx.stockMovement.create({
         data: {
+          businessId: user.businessId!,
           productId: product.id,
           type: StockMovementType.MANUAL_ADJUSTMENT,
           quantity: new Prisma.Decimal(item.quantity),

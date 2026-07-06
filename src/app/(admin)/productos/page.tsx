@@ -27,7 +27,8 @@ type ProductsPageProps = {
 };
 
 export default async function ProductosPage({ searchParams }: ProductsPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -39,11 +40,13 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
 
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
+      where: { businessId },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }),
     prisma.product.findMany({
       where: {
+        businessId,
         deletedAt: null,
         ...(status === "active" ? { active: true } : {}),
         ...(status === "inactive" ? { active: false } : {}),
@@ -56,11 +59,11 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
             ? {
                 OR: [
                   { name: { contains: q } },
-                { barcode: { contains: q } },
-                { sku: { contains: q } }
-              ]
-            }
-          : {})
+                  { barcode: { contains: q } },
+                  { sku: { contains: q } }
+                ]
+              }
+            : {})
       },
       include: {
         category: {

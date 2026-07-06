@@ -80,10 +80,14 @@ export function getDefaultFiscalSetting(): FiscalSettingView {
 }
 
 export async function getFiscalSettingOrDefault(
+  businessId?: string,
   client: FiscalSettingsClient = prisma
 ): Promise<FiscalSettingView> {
+  if (!businessId) {
+    return getDefaultFiscalSetting();
+  }
   const setting = await client.fiscalSetting.findUnique({
-    where: { id: FISCAL_SETTING_ID },
+    where: { businessId },
     select: {
       enabled: true,
       environment: true,

@@ -23,6 +23,7 @@ type MercadoPagoOAuthState = {
   nonce: string;
   environment: MercadoPagoEnvironment;
   issuedAt: number;
+  businessId?: string;
 };
 
 type MercadoPagoOAuthTokenResponse = {
@@ -84,13 +85,15 @@ export class MercadoPagoOAuthError extends Error {
 }
 
 export function createMercadoPagoOAuthAuthorizationUrl(
+  businessId?: string,
   environment: MercadoPagoEnvironment = MercadoPagoEnvironment.PRODUCTION
 ): MercadoPagoOAuthLink {
   const config = getMercadoPagoOAuthConfig();
   const state = signMercadoPagoOAuthState({
     nonce: randomBytes(16).toString("hex"),
     environment,
-    issuedAt: Date.now()
+    issuedAt: Date.now(),
+    businessId
   });
   const url = new URL(config.authBaseUrl);
 
@@ -144,11 +147,16 @@ export async function connectMercadoPagoOAuthAccount(input: {
     where: {
       mpUserId: mercadoPagoUserId,
       environment: parsedState.environment,
+      businessId: parsedState.businessId || "default",
       deletedAt: null
     }
   });
   const hasDefault = await prisma.mercadoPagoAccount.findFirst({
-    where: { defaultAccount: true, deletedAt: null },
+    where: {
+      defaultAccount: true,
+      businessId: parsedState.businessId || "default",
+      deletedAt: null
+    },
     select: { id: true }
   });
 
@@ -189,6 +197,7 @@ export async function connectMercadoPagoOAuthAccount(input: {
   const account = await prisma.mercadoPagoAccount.create({
     data: {
       ...data,
+      businessId: parsedState.businessId || "default",
       defaultAccount: !hasDefault
     }
   });
@@ -418,7 +427,8 @@ function validateMercadoPagoOAuthState(value: string): MercadoPagoOAuthState {
   return {
     nonce: String(parsed.nonce ?? ""),
     environment,
-    issuedAt: parsed.issuedAt
+    issuedAt: parsed.issuedAt || Date.now(),
+    businessId: parsed.businessId ? String(parsed.businessId) : undefined
   };
 }
 

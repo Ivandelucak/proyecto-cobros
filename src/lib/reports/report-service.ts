@@ -218,16 +218,18 @@ export function buildReportQuickRanges(method: PaymentMethod | null) {
 }
 
 export async function getReportDashboardData(
-  filters: ReportFilters
+  filters: ReportFilters,
+  businessId: string
 ): Promise<ReportDashboardData> {
   const period = buildPeriod(filters);
   const previousPeriod = buildPreviousPeriod(period);
-  const saleWhere = buildSaleWhere(period, filters.method, SaleStatus.PAID);
-  const cancelledWhere = buildSaleWhere(period, filters.method, SaleStatus.CANCELLED);
-  const previousSaleWhere = buildSaleWhere(previousPeriod, filters.method, SaleStatus.PAID);
+  const saleWhere = buildSaleWhere(period, filters.method, SaleStatus.PAID, businessId);
+  const cancelledWhere = buildSaleWhere(period, filters.method, SaleStatus.CANCELLED, businessId);
+  const previousSaleWhere = buildSaleWhere(previousPeriod, filters.method, SaleStatus.PAID, businessId);
   const purchaseWhere = {
     status: PurchaseStatus.RECEIVED,
-    createdAt: { gte: period.start, lt: period.end }
+    createdAt: { gte: period.start, lt: period.end },
+    businessId
   } satisfies Prisma.PurchaseWhereInput;
 
   const [
@@ -282,13 +284,13 @@ export async function getReportDashboardData(
       take: 10
     }),
     prisma.product.findMany({
-      where: { deletedAt: null, active: true },
+      where: { deletedAt: null, active: true, businessId },
       include: { category: { select: { name: true } } },
       orderBy: { stock: "asc" },
       take: 200
     }),
     prisma.sale.findMany({
-      where: { createdAt: { gte: period.start, lt: period.end } },
+      where: { createdAt: { gte: period.start, lt: period.end }, businessId },
       include: {
         user: { select: { name: true } },
         customer: { select: { name: true, businessName: true } }
@@ -303,6 +305,9 @@ export async function getReportDashboardData(
       take: 25
     }),
     prisma.customerAccountMovement.findMany({
+      where: {
+        customer: { businessId }
+      },
       include: {
         customer: {
           select: {
@@ -317,14 +322,16 @@ export async function getReportDashboardData(
     prisma.customerAccountMovement.findMany({
       where: {
         type: CustomerAccountMovementType.PAYMENT,
-        createdAt: { gte: period.start, lt: period.end }
+        createdAt: { gte: period.start, lt: period.end },
+        customer: { businessId }
       },
       select: { amount: true }
     }),
-    getPaymentMethodSettings(),
+    getPaymentMethodSettings(businessId),
     prisma.paymentAttempt.findMany({
       where: {
         createdAt: { gte: period.start, lt: period.end },
+        businessId,
         ...(filters.method ? { method: filters.method } : {})
       },
       include: {
@@ -490,10 +497,12 @@ export async function getReportDashboardData(
 function buildSaleWhere(
   period: { start: Date; end: Date },
   method: PaymentMethod | null,
-  status: SaleStatus
+  status: SaleStatus,
+  businessId: string
 ): Prisma.SaleWhereInput {
   return {
     status,
+    businessId,
     createdAt: { gte: period.start, lt: period.end },
     ...(method ? { payments: { some: { method } } } : {})
   };
@@ -505,14 +514,14 @@ function summarizeSales(
     items: Array<{
       quantity: Prisma.Decimal;
       subtotal: Prisma.Decimal;
-      product: { cost: Prisma.Decimal | null };
+      product: { cost: Prisma.Decimal | null } | null;
     }>;
   }>
 ) {
   const totalSold = sum(sales.map((sale) => sale.total));
   const estimatedProfit = sales.reduce((acc, sale) => {
     const saleProfit = sale.items.reduce((itemAcc, item) => {
-      if (!item.product.cost) {
+      if (!item.product || !item.product.cost) {
         return itemAcc;
       }
       return itemAcc.plus(item.subtotal.minus(item.product.cost.mul(item.quantity)));
@@ -612,7 +621,7 @@ function buildDailySales(
 function buildProductReports(
   sales: Array<{
     items: Array<{
-      productId: string;
+      productId: string | null;
       productNameSnapshot: string;
       quantity: Prisma.Decimal;
       subtotal: Prisma.Decimal;
@@ -621,7 +630,7 @@ function buildProductReports(
         name: string;
         cost: Prisma.Decimal | null;
         category: { name: string };
-      };
+      } | null;
     }>;
   }>
 ) {
@@ -629,10 +638,11 @@ function buildProductReports(
 
   for (const sale of sales) {
     for (const item of sale.items) {
-      const current = map.get(item.productId) ?? {
-        productId: item.productId,
-        name: item.productNameSnapshot || item.product.name,
-        categoryName: item.product.category.name,
+      const idKey = item.productId ?? `manual_${item.productNameSnapshot}`;
+      const current = map.get(idKey) ?? {
+        productId: idKey,
+        name: item.productId ? (item.productNameSnapshot || item.product?.name || "Sin nombre") : `Manual: ${item.productNameSnapshot}`,
+        categoryName: item.product?.category?.name || "Artículo manual",
         quantity: ZERO,
         revenue: ZERO,
         estimatedProfit: ZERO,
@@ -641,15 +651,17 @@ function buildProductReports(
 
       current.quantity = current.quantity.plus(item.quantity);
       current.revenue = current.revenue.plus(item.subtotal);
-      if (item.product.cost && !current.missingCost) {
+
+      const cost = item.product?.cost ?? null;
+      if (cost && !current.missingCost) {
         current.estimatedProfit = (current.estimatedProfit ?? ZERO).plus(
-          item.subtotal.minus(item.product.cost.mul(item.quantity))
+          item.subtotal.minus(cost.mul(item.quantity))
         );
       } else {
         current.estimatedProfit = null;
         current.missingCost = true;
       }
-      map.set(item.productId, current);
+      map.set(idKey, current);
     }
   }
 

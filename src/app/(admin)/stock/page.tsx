@@ -18,7 +18,8 @@ type StockPageProps = {
 };
 
 export default async function StockPage({ searchParams }: StockPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const categoryId = params.categoryId ?? "";
@@ -27,11 +28,16 @@ export default async function StockPage({ searchParams }: StockPageProps) {
   const barcode = params.barcode?.trim() ?? "";
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
+      where: {
+        businessId,
+        active: true
+      },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }),
     prisma.product.findMany({
       where: {
+        businessId,
         active: true,
         deletedAt: null,
         ...(categoryId ? { categoryId } : {}),

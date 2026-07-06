@@ -82,7 +82,10 @@ export async function runArcaPreflightValidation(
 
   if (pointOfSale && voucherType && errors.length === 0) {
     try {
-      const lastVoucher = await getLastAuthorizedVoucher({
+      if (!input.businessId) {
+        throw new Error("No se puede consultar WSFEv1 sin identificar el comercio.");
+      }
+      const lastVoucher = await getLastAuthorizedVoucher(input.businessId, {
         pointOfSale,
         voucherType
       });

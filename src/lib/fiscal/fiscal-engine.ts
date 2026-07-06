@@ -175,7 +175,6 @@ export async function prepareFiscalDocumentDraft(
   userId?: string | null
 ) {
   return prisma.$transaction(async (tx) => {
-    const setting = await getFiscalSettingOrDefault(tx);
     const sale = await tx.sale.findUnique({
       where: { id: saleId },
       include: {
@@ -198,6 +197,10 @@ export async function prepareFiscalDocumentDraft(
     if (!sale) {
       throw new Error("Venta no encontrada.");
     }
+
+    const setting = await getFiscalSettingOrDefault(sale.businessId ?? undefined, tx);
+
+
 
     if (sale.fiscalStatus === FiscalStatus.ISSUED) {
       throw new Error("La venta ya fue emitida fiscalmente.");
@@ -438,17 +441,50 @@ export async function recordFiscalEvent(
   client: FiscalEngineClient,
   input: FiscalEventInput
 ) {
-  return client.fiscalEvent.create({
-    data: {
-      saleId: input.saleId ?? null,
-      fiscalDocumentId: input.fiscalDocumentId ?? null,
-      type: input.type,
-      message: input.message,
-      metadata: input.metadata,
-      userId: input.userId ?? null
+  try {
+    let safeMessage = input.message || "";
+    // Truncar para mantener el mensaje corto y humano
+    if (safeMessage.length > 500) {
+      safeMessage = safeMessage.slice(0, 497) + "...";
     }
-  });
+    // Limpiar partes sensibles del mensaje por seguridad
+    safeMessage = safeMessage
+      .replace(/<(?:[\w-]+:)?token\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?token>/gi, "<token>[oculto]</token>")
+      .replace(/<(?:[\w-]+:)?sign\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?sign>/gi, "<sign>[oculto]</sign>")
+      .replace(/-----BEGIN [\s\S]*?-----END [^-]+-----/g, "[PEM oculto]");
+
+    let safeMetadata = input.metadata;
+    if (safeMetadata && typeof safeMetadata === "object") {
+      try {
+        const str = JSON.stringify(safeMetadata);
+        const cleanedStr = str
+          .replace(/<(?:[\w-]+:)?token\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?token>/gi, "<token>[oculto]</token>")
+          .replace(/<(?:[\w-]+:)?sign\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?sign>/gi, "<sign>[oculto]</sign>")
+          .replace(/<(?:[\w-]+:)?in0\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?in0>/gi, "<in0>[CMS oculto]</in0>")
+          .replace(/-----BEGIN [\s\S]*?-----END [^-]+-----/g, "[PEM oculto]");
+        safeMetadata = JSON.parse(cleanedStr);
+      } catch (e) {
+        console.error("Error al sanitizar metadata en recordFiscalEvent:", e);
+      }
+    }
+
+    return await client.fiscalEvent.create({
+      data: {
+        saleId: input.saleId ?? null,
+        fiscalDocumentId: input.fiscalDocumentId ?? null,
+        type: input.type,
+        message: safeMessage,
+        metadata: safeMetadata !== undefined ? safeMetadata : undefined,
+        userId: input.userId ?? null
+      }
+    });
+  } catch (eventError) {
+    // BLINDADO: Nunca lanzar error que rompa la emision
+    console.error("No se pudo registrar evento fiscal (blindado):", eventError);
+    return null;
+  }
 }
+
 
 function buildFiscalCustomerSnapshot(
   customer:

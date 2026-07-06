@@ -12,20 +12,49 @@ type EditarProductoPageProps = {
 };
 
 export default async function EditarProductoPage({ params }: EditarProductoPageProps) {
-  await requireAdminPage();
-
+  const user = await requireAdminPage();
   const { id } = await params;
-  const [product, categories] = await Promise.all([
-    prisma.product.findUnique({ where: { id } }),
-    prisma.category.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true }
-    })
-  ]);
+  const product = await prisma.product.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    }
+  });
 
   if (!product) {
     redirect("/productos");
   }
+
+  const rawCategories = await prisma.category.findMany({
+    where: {
+      businessId: user.businessId!,
+      OR: [
+        { active: true },
+        { id: product.categoryId }
+      ]
+    },
+    include: {
+      parent: {
+        select: {
+          name: true
+        }
+      }
+    },
+    orderBy: { name: "asc" }
+  });
+
+  // Construct label showing hierarchy and deduplicate by id
+  const categoryOptionsMap = new Map<string, { id: string; name: string }>();
+  for (const cat of rawCategories) {
+    if (!categoryOptionsMap.has(cat.id)) {
+      const displayName = cat.parent ? `${cat.parent.name} > ${cat.name}` : cat.name;
+      categoryOptionsMap.set(cat.id, { id: cat.id, name: displayName });
+    }
+  }
+
+  const categories = Array.from(categoryOptionsMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 
   return (
     <section className="space-y-5">

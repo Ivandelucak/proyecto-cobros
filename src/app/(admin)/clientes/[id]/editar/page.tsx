@@ -12,9 +12,14 @@ type EditarClientePageProps = {
 };
 
 export default async function EditarClientePage({ params }: EditarClientePageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    }
+  });
 
   if (!customer) {
     redirect("/clientes");

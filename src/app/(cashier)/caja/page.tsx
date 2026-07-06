@@ -1,4 +1,5 @@
 import { Role } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { CashRegister } from "./cash-register";
 import { getSuggestedCashProductsAction } from "./actions";
 import { CashSessionPanel } from "./cash-session-panel";
@@ -14,6 +15,11 @@ import { getActiveMercadoPagoAccountViews } from "@/lib/mercadopago/mercado-pago
 import { getPrintSetting } from "@/lib/print-settings";
 
 export default async function CajaPage() {
+  const user = await getCurrentUser();
+  if (!user || !user.businessId) {
+    redirect("/login");
+  }
+
   const [
     cashSession,
     suggestedProducts,
@@ -22,18 +28,16 @@ export default async function CajaPage() {
     printSetting,
     cashSetting,
     fiscalSetting,
-    mercadoPagoAccounts,
-    user
+    mercadoPagoAccounts
   ] = await Promise.all([
-    getOpenCashSessionSnapshot(),
+    getOpenCashSessionSnapshot(user.businessId),
     getSuggestedCashProductsAction(),
-    getEnabledPaymentMethodSettings(),
+    getEnabledPaymentMethodSettings(user.businessId),
     getActiveCreditInstallmentPlans(),
-    getPrintSetting(),
-    getCashRegisterSetting(),
-    getFiscalSettingOrDefault(),
-    getActiveMercadoPagoAccountViews(),
-    getCurrentUser()
+    getPrintSetting(user.businessId),
+    getCashRegisterSetting(user.businessId),
+    getFiscalSettingOrDefault(user.businessId),
+    getActiveMercadoPagoAccountViews(user.businessId)
   ]);
 
   return (

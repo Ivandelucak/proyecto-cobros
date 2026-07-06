@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/ui";
 
-type RoleValue = "ADMIN" | "CASHIER";
+import { Role } from "@prisma/client";
+
 type NavGroup = "Operacion" | "Gestion" | "Control" | "Sistema";
 type NavIcon =
   | "cash"
@@ -47,9 +48,9 @@ const navItems = [
   cashierLabel?: string;
 }>;
 
-export function AdminNav({ role, compact = false }: { role: RoleValue; compact?: boolean }) {
+export function AdminNav({ role, compact = false }: { role: Role; compact?: boolean }) {
   const pathname = usePathname();
-  const visibleItems = navItems.filter((item) => role === "ADMIN" || !item.adminOnly);
+  const visibleItems = navItems.filter((item) => role === Role.OWNER || role === Role.ADMIN || !item.adminOnly);
   const groups = Array.from(new Set(visibleItems.map((item) => item.group)));
 
   return (
@@ -64,7 +65,7 @@ export function AdminNav({ role, compact = false }: { role: RoleValue; compact?:
             .map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const label =
-            role === "CASHIER" && item.cashierLabel ? item.cashierLabel : item.label;
+            role === Role.CASHIER && item.cashierLabel ? item.cashierLabel : item.label;
 
           return (
             <Link

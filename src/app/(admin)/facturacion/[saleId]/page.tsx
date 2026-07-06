@@ -2,6 +2,7 @@ import {
   FiscalCustomerCondition,
   FiscalDocumentIdentityType,
   FiscalStatus,
+  FiscalDocumentStatus,
   PaymentMethod,
   SaleStatus,
   UnitType
@@ -50,40 +51,44 @@ type FacturacionDetallePageProps = {
 export default async function FacturacionDetallePage({
   params
 }: FacturacionDetallePageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
   const { saleId } = await params;
 
-  const [sale, readiness, setting, paymentMethods] = await Promise.all([
-    prisma.sale.findUnique({
-      where: { id: saleId },
-      include: {
-        customer: true,
-        fiscalDocument: {
-          include: {
-            items: true
-          }
-        },
-        items: {
-          orderBy: { productNameSnapshot: "asc" }
-        },
-        payments: {
-          orderBy: { createdAt: "asc" }
-        },
-        user: {
-          select: {
-            name: true
-          }
+  const sale = await prisma.sale.findFirst({
+    where: {
+      id: saleId,
+      businessId: user.businessId!
+    },
+    include: {
+      customer: true,
+      fiscalDocument: {
+        include: {
+          items: true
+        }
+      },
+      items: {
+        orderBy: { productNameSnapshot: "asc" }
+      },
+      payments: {
+        orderBy: { createdAt: "asc" }
+      },
+      user: {
+        select: {
+          name: true
         }
       }
-    }),
-    validateFiscalReadiness(saleId),
-    getFiscalSettingOrDefault(),
-    getPaymentMethodSettings()
-  ]);
+    }
+  });
 
   if (!sale) {
     notFound();
   }
+
+  const [readiness, setting, paymentMethods] = await Promise.all([
+    validateFiscalReadiness(saleId),
+    getFiscalSettingOrDefault(user.businessId!),
+    getPaymentMethodSettings(user.businessId!)
+  ]);
 
   const paymentLabels = Object.fromEntries(
     paymentMethods.map((method) => [method.method, method.label])
@@ -96,6 +101,17 @@ export default async function FacturacionDetallePage({
     sale.status === SaleStatus.PAID && isPreparableFiscalStatus(sale.fiscalStatus);
   const pendingAge = pendingAgeLabel(sale);
   const fiscalDocument = sale.fiscalDocument;
+
+  const errorDetails = fiscalDocument?.responseJson && typeof fiscalDocument.responseJson === "object"
+    ? (fiscalDocument.responseJson as any).errorDetails
+    : null;
+  const observations = fiscalDocument?.responseJson && typeof fiscalDocument.responseJson === "object"
+    ? (fiscalDocument.responseJson as any).observations
+    : null;
+  const rawResponse = fiscalDocument?.responseJson && typeof fiscalDocument.responseJson === "object"
+    ? (fiscalDocument.responseJson as any).rawResponse
+    : null;
+
   const returnTo = buildReturnToHref(`/facturacion/${sale.id}`);
   const shouldShowArcaPreview =
     sale.requiresFiscalInvoice &&
@@ -175,6 +191,51 @@ export default async function FacturacionDetallePage({
               </p>
             ) : null}
           </Card>
+
+          {fiscalDocument?.status === FiscalDocumentStatus.FAILED && (
+            <Card className="border-red-200 bg-red-50 p-5 dark:border-red-900/60 dark:bg-red-950/20 text-red-800 dark:text-red-200">
+              <h2 className="text-sm font-semibold flex items-center gap-1.5 text-red-900 dark:text-red-100">
+                ❌ Error en la emisión fiscal
+              </h2>
+              <p className="mt-2 text-sm">
+                {fiscalDocument.errorMessage || "Ocurrió un error desconocido al solicitar el CAE."}
+              </p>
+
+              {(errorDetails || observations || rawResponse) && (
+                <details className="mt-4 border-t border-red-200/50 pt-3 dark:border-red-900/40 text-xs">
+                  <summary className="cursor-pointer font-semibold hover:text-red-900 dark:hover:text-red-100 select-none">
+                    Detalle técnico de soporte (Admin)
+                  </summary>
+                  <div className="mt-3 space-y-3 font-mono text-xs max-h-80 overflow-auto rounded bg-black/5 p-3 dark:bg-black/30 text-red-950 dark:text-red-300">
+                    {observations && observations.length > 0 && (
+                      <div>
+                        <span className="font-bold block">Observaciones de ARCA:</span>
+                        <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                          {observations.map((obs: string, idx: number) => (
+                            <li key={idx}>{obs}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {errorDetails?.technicalMessage && (
+                      <div>
+                        <span className="font-bold block">Detalle del error:</span>
+                        <pre className="whitespace-pre-wrap break-words mt-1">{errorDetails.technicalMessage}</pre>
+                      </div>
+                    )}
+                    {rawResponse && (
+                      <div>
+                        <span className="font-bold block">Respuesta cruda de ARCA:</span>
+                        <pre className="whitespace-pre-wrap break-words mt-1">
+                          {typeof rawResponse === "string" ? rawResponse : JSON.stringify(rawResponse, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+            </Card>
+          )}
 
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
@@ -592,9 +653,12 @@ function ArcaPreviewSection({
       </div>
 
       <details className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#121922]">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-          Request tecnico JSON
+        <summary className="cursor-pointer text-sm font-semibold text-gray-950 dark:text-[#F3F7FA] select-none">
+          ⚙️ Request técnico JSON (Soporte / Administrador)
         </summary>
+        <p className="mt-2 text-xs text-gray-500 dark:text-[#7F8D9A]">
+          Este JSON contiene la estructura interna que se envía al motor fiscal de ARCA. No contiene firmas, claves de acceso ni certificados.
+        </p>
         <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-white p-4 text-xs text-gray-800 dark:bg-[#0B1015] dark:text-[#F3F7FA]">
           {JSON.stringify(request, null, 2)}
         </pre>

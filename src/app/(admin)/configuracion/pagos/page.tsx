@@ -10,12 +10,12 @@ import { PaymentSettingsForm } from "../payment-settings-form";
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionPagosPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   const [paymentMethods, creditPlans, mercadoPagoAccounts] = await Promise.all([
-    getPaymentMethodSettings(),
+    getPaymentMethodSettings(user.businessId!),
     getCreditInstallmentPlans(),
-    getMercadoPagoAccountViews()
+    getMercadoPagoAccountViews(user.businessId!)
   ]);
   const mercadoPagoOAuthStatus = getMercadoPagoOAuthConfigStatus();
 

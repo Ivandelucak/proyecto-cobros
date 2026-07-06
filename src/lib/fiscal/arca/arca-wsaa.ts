@@ -40,8 +40,8 @@ export type ArcaAuthToken = {
   alreadyAuthenticated: boolean;
 };
 
-export async function getArcaAuthToken(options: { forceRefresh?: boolean } = {}) {
-  const setting = await getArcaSettingWithSecrets();
+export async function getArcaAuthToken(businessId: string, options: { forceRefresh?: boolean } = {}) {
+  const setting = await getArcaSettingWithSecrets(businessId);
   validateArcaWsaaSetting(setting);
 
   if (!options.forceRefresh && isCachedTokenUsable(setting)) {
@@ -158,9 +158,9 @@ export async function getArcaAuthToken(options: { forceRefresh?: boolean } = {})
   } satisfies ArcaAuthToken;
 }
 
-async function getArcaSettingWithSecrets() {
+async function getArcaSettingWithSecrets(businessId: string) {
   const setting = await prisma.fiscalSetting.findUnique({
-    where: { id: FISCAL_SETTING_ID },
+    where: { businessId },
     select: {
       id: true,
       environment: true,

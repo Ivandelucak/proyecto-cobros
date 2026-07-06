@@ -60,19 +60,23 @@ export async function createProductAction(
   const submitIntent = readString(formData, "submitIntent");
 
   try {
-    const data = await parseProductForm(formData);
-    await validateUniqueProductFields(data);
+    const data = await parseProductForm(formData, user.businessId!);
+    await validateUniqueProductFields(data, user.businessId!);
     let productId = "";
 
     await prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
-        data
+        data: {
+          ...data,
+          businessId: user.businessId!
+        }
       });
       productId = product.id;
 
       if (!data.stock.equals(0)) {
         await tx.stockMovement.create({
           data: {
+            businessId: user.businessId!,
             productId: product.id,
             type: StockMovementType.MANUAL_ADJUSTMENT,
             quantity: data.stock,
@@ -108,12 +112,12 @@ export async function updateProductAction(
   const user = await requireAdminUser();
 
   try {
-    const data = await parseProductForm(formData);
-    await validateUniqueProductFields(data, productId);
+    const data = await parseProductForm(formData, user.businessId!);
+    await validateUniqueProductFields(data, user.businessId!, productId);
 
     await prisma.$transaction(async (tx) => {
-      const currentProduct = await tx.product.findUnique({
-        where: { id: productId },
+      const currentProduct = await tx.product.findFirst({
+        where: { id: productId, businessId: user.businessId! },
         select: { id: true, stock: true }
       });
 
@@ -129,6 +133,7 @@ export async function updateProductAction(
       if (!currentProduct.stock.equals(data.stock)) {
         await tx.stockMovement.create({
           data: {
+            businessId: user.businessId!,
             productId,
             type: StockMovementType.MANUAL_ADJUSTMENT,
             quantity: data.stock.minus(currentProduct.stock),
@@ -160,6 +165,13 @@ export async function updateProductAction(
 export async function setProductActiveAction(productId: string, active: boolean) {
   const user = await requireAdminUser();
 
+  const existingProduct = await prisma.product.findFirst({
+    where: { id: productId, businessId: user.businessId! }
+  });
+  if (!existingProduct) {
+    throw new Error("Producto no encontrado.");
+  }
+
   const product = await prisma.product.update({
     where: { id: productId },
     data: { active }
@@ -180,7 +192,7 @@ export async function checkProductBarcodeAction(
   barcode: string,
   excludeProductId?: string
 ): Promise<BarcodeCheckResult> {
-  await requireAdminUser();
+  const user = await requireAdminUser();
   const code = barcode.trim();
 
   if (!code) {
@@ -188,7 +200,7 @@ export async function checkProductBarcodeAction(
   }
 
   const product = await prisma.product.findFirst({
-    where: { barcode: code },
+    where: { barcode: code, businessId: user.businessId! },
     select: {
       id: true,
       name: true,
@@ -215,14 +227,14 @@ async function requireAdminUser() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN) {
     redirect("/caja");
   }
 
   return user;
 }
 
-async function parseProductForm(formData: FormData): Promise<ParsedProductForm> {
+async function parseProductForm(formData: FormData, businessId: string): Promise<ParsedProductForm> {
   const name = readString(formData, "name");
   const categoryId = readString(formData, "categoryId");
   const unitType = parseUnitType(readString(formData, "unitType") || UnitType.UNIT);
@@ -245,8 +257,8 @@ async function parseProductForm(formData: FormData): Promise<ParsedProductForm> 
     throw new Error("La categoría es obligatoria.");
   }
 
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, businessId },
     select: { id: true }
   });
 
@@ -276,11 +288,12 @@ async function parseProductForm(formData: FormData): Promise<ParsedProductForm> 
   };
 }
 
-async function validateUniqueProductFields(data: ParsedProductForm, excludeId?: string) {
+async function validateUniqueProductFields(data: ParsedProductForm, businessId: string, excludeId?: string) {
   if (data.barcode) {
     const existingBarcode = await prisma.product.findFirst({
       where: {
         barcode: data.barcode,
+        businessId,
         ...(excludeId ? { NOT: { id: excludeId } } : {})
       },
       select: { id: true }
@@ -295,6 +308,7 @@ async function validateUniqueProductFields(data: ParsedProductForm, excludeId?: 
     const existingSku = await prisma.product.findFirst({
       where: {
         sku: data.sku,
+        businessId,
         ...(excludeId ? { NOT: { id: excludeId } } : {})
       },
       select: { id: true }

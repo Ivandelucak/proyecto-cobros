@@ -8,8 +8,10 @@ datasource db {
 }
 
 enum Role {
+  OWNER
   ADMIN
   CASHIER
+  VIEWER
 }
 
 enum BusinessType {
@@ -205,6 +207,43 @@ enum FiscalTaxTreatment {
   NON_TAXABLE
 }
 
+model Business {
+  id              String   @id @default(cuid())
+  name            String
+  legalName       String?
+  tradeName       String?
+  taxId           String?
+  fiscalCondition String?
+  phone           String?
+  email           String?
+  address         String?
+  logoUrl         String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users                 User[]
+  products              Product[]
+  categories            Category[]
+  customers             Customer[]
+  suppliers             Supplier[]
+  sales                 Sale[]
+  paymentAttempts       PaymentAttempt[]
+  cashSessions          CashSession[]
+  businessProfile       BusinessProfile?
+  paymentMethodSettings PaymentMethodSetting[]
+  mercadoPagoAccounts   MercadoPagoAccount[]
+  printSettings         PrintSetting[]
+  ticketSettings        TicketSetting[]
+  cashRegisterSettings  CashRegisterSetting[]
+  stockSettings         StockSetting[]
+  fiscalSettings        FiscalSetting[]
+  quotes                Quote[]
+  auditLogs             AuditLog[]
+  stockMovements        StockMovement[]
+  purchases             Purchase[]
+}
+
 model User {
   id                 String                    @id @default(cuid())
   name               String
@@ -212,6 +251,8 @@ model User {
   passwordHash       String
   role               Role
   active             Boolean                   @default(true)
+  businessId         String?
+  business           Business?                 @relation(fields: [businessId], references: [id], onDelete: Restrict)
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
   sales              Sale[]                    @relation("SaleUser")
@@ -228,10 +269,13 @@ model User {
   associatedPayments PaymentAttempt[]          @relation("PaymentAttemptAssociatedBy")
 
   @@index([role])
+  @@index([businessId])
 }
 
 model BusinessProfile {
-  id                String       @id
+  id                String       @id @default(cuid())
+  businessId        String       @unique
+  business          Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   name              String
   businessType      BusinessType @default(KIOSK)
   cuit              String?
@@ -253,7 +297,9 @@ model BusinessProfile {
 }
 
 model PaymentMethodSetting {
-  method                PaymentMethod            @id
+  businessId            String
+  business              Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  method                PaymentMethod
   label                 String
   enabled               Boolean                  @default(true)
   sortOrder             Int                      @default(0)
@@ -273,12 +319,15 @@ model PaymentMethodSetting {
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
+  @@id([businessId, method])
   @@index([enabled])
   @@index([sortOrder])
 }
 
 model MercadoPagoAccount {
   id                          String                 @id @default(cuid())
+  businessId                  String
+  business                    Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   name                        String
   enabled                     Boolean                @default(true)
   connectionType              MercadoPagoConnectionType @default(MANUAL_TOKEN)
@@ -327,6 +376,7 @@ model MercadoPagoAccount {
   @@index([defaultAccount])
   @@index([connectionType])
   @@index([oauthRequiresReconnect])
+  @@index([businessId])
 }
 
 model CreditInstallmentPlan {
@@ -341,7 +391,9 @@ model CreditInstallmentPlan {
 }
 
 model PrintSetting {
-  id              String         @id
+  id              String         @id @default(cuid())
+  businessId      String         @unique
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   printerName     String?
   paperSize       PrintPaperSize @default(TICKET_80)
   silentPrint     Boolean        @default(false)
@@ -353,7 +405,9 @@ model PrintSetting {
 }
 
 model TicketSetting {
-  id                  String   @id
+  id                  String   @id @default(cuid())
+  businessId          String   @unique
+  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   showBusinessName    Boolean  @default(true)
   showCuit            Boolean  @default(true)
   showAddress         Boolean  @default(true)
@@ -375,7 +429,9 @@ model TicketSetting {
 }
 
 model CashRegisterSetting {
-  id                        String   @id
+  id                        String   @id @default(cuid())
+  businessId                String   @unique
+  business                  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   requireOpenSession        Boolean  @default(true)
   showExpectedCashToCashier Boolean  @default(false)
   allowCashierCancelSale    Boolean  @default(false)
@@ -387,7 +443,9 @@ model CashRegisterSetting {
 }
 
 model StockSetting {
-  id                         String   @id
+  id                         String   @id @default(cuid())
+  businessId                 String   @unique
+  business                   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   lowStockEnabled            Boolean  @default(true)
   defaultMinStock            Decimal? @db.Decimal(12, 3)
   allowManualStockAdjustment Boolean  @default(true)
@@ -397,7 +455,9 @@ model StockSetting {
 }
 
 model FiscalSetting {
-  id                         String                     @id
+  id                         String                     @id @default(cuid())
+  businessId                 String                     @unique
+  business                   Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
   enabled                    Boolean                    @default(false)
   environment                FiscalEnvironment          @default(HOMOLOGACION)
   cuit                       String?
@@ -458,7 +518,7 @@ model FiscalDocument {
   relatedFiscalDocuments  FiscalDocument[]            @relation("FiscalDocumentRelated")
   requestJson             Json?
   responseJson            Json?
-  errorMessage            String?
+  errorMessage            String?                     @db.Text
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
   items                   FiscalDocumentItem[]
@@ -493,7 +553,7 @@ model FiscalEvent {
   fiscalDocumentId String?
   fiscalDocument   FiscalDocument? @relation(fields: [fiscalDocumentId], references: [id], onDelete: SetNull)
   type             String
-  message          String
+  message          String          @db.Text
   metadata         Json?
   userId           String?
   user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -508,6 +568,8 @@ model FiscalEvent {
 
 model AuditLog {
   id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   userId      String?
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action      String
@@ -520,28 +582,35 @@ model AuditLog {
   @@index([userId])
   @@index([entity])
   @@index([createdAt])
+  @@index([businessId])
 }
 
 model Category {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  parentId  String?
-  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children  Category[] @relation("CategoryHierarchy")
-  active    Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  products  Product[]
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  parentId   String?
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Category[] @relation("CategoryHierarchy")
+  active     Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  products   Product[]
 
+  @@unique([businessId, name])
   @@index([active])
   @@index([parentId])
+  @@index([businessId])
 }
 
 model Product {
   id                    String              @id @default(cuid())
+  businessId            String
+  business              Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   name                  String
-  barcode               String?             @unique
-  sku                   String?             @unique
+  barcode               String?
+  sku                   String?
   brand                 String?
   categoryId            String
   category              Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
@@ -564,13 +633,18 @@ model Product {
   stockMovements        StockMovement[]
   purchaseItems         PurchaseItem[]
 
+  @@unique([businessId, barcode])
+  @@unique([businessId, sku])
   @@index([categoryId])
   @@index([active, deletedAt])
   @@index([name])
+  @@index([businessId])
 }
 
 model Customer {
   id               String                      @id @default(cuid())
+  businessId       String
+  business         Business                    @relation(fields: [businessId], references: [id], onDelete: Cascade)
   name             String
   document         String?
   phone            String?
@@ -594,10 +668,13 @@ model Customer {
   @@index([document])
   @@index([phone])
   @@index([active, deletedAt])
+  @@index([businessId])
 }
 
 model Quote {
   id                       String      @id @default(cuid())
+  businessId               String
+  business                 Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
   quoteNumber              Int         @unique @default(autoincrement())
   customerId               String?
   customer                 Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -624,6 +701,7 @@ model Quote {
   @@index([status])
   @@index([createdAt])
   @@index([validUntil])
+  @@index([businessId])
 }
 
 model QuoteItem {
@@ -645,6 +723,8 @@ model QuoteItem {
 
 model Sale {
   id                         String                      @id @default(cuid())
+  businessId                 String
+  business                   Business                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
   saleNumber                 Int                         @unique @default(autoincrement())
   total                      Decimal                     @db.Decimal(12, 2)
   subtotal                   Decimal                     @db.Decimal(12, 2)
@@ -666,7 +746,7 @@ model Sale {
   fiscalRequestedAt          DateTime?
   fiscalIssuedAt             DateTime?
   fiscalCancelledAt          DateTime?
-  fiscalFailureReason        String?
+  fiscalFailureReason        String?                 @db.Text
   fiscalDocumentId           String?                     @unique
   fiscalDocument             FiscalDocument?             @relation("SalePrimaryFiscalDocument", fields: [fiscalDocumentId], references: [id], onDelete: SetNull)
   fiscalCustomerNameSnapshot String?
@@ -691,6 +771,7 @@ model Sale {
   @@index([cancelledById])
   @@index([fiscalStatus])
   @@index([requiresFiscalInvoice])
+  @@index([businessId])
 }
 
 model CustomerAccountMovement {
@@ -718,6 +799,8 @@ model CustomerAccountMovement {
 
 model CashSession {
   id                 String            @id @default(cuid())
+  businessId         String
+  business           Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   openedAt           DateTime          @default(now())
   closedAt           DateTime?
   openingAmount      Decimal           @db.Decimal(12, 2)
@@ -739,6 +822,7 @@ model CashSession {
   @@index([openedAt])
   @@index([openedById])
   @@index([closedById])
+  @@index([businessId])
 }
 
 model CashMovement {
@@ -762,13 +846,14 @@ model SaleItem {
   id                  String   @id @default(cuid())
   saleId              String
   sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId           String
-  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId           String?
+  product             Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
   productNameSnapshot String
   unitPrice           Decimal  @db.Decimal(12, 2)
   quantity            Decimal  @db.Decimal(12, 3)
   subtotal            Decimal  @db.Decimal(12, 2)
   unitTypeSnapshot    UnitType
+  isManual            Boolean  @default(false)
 
   @@index([saleId])
   @@index([productId])
@@ -799,6 +884,8 @@ model Payment {
 
 model PaymentAttempt {
   id                   String               @id @default(cuid())
+  businessId           String
+  business             Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
   saleId               String?
   sale                 Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
   method               PaymentMethod        @default(MERCADOPAGO)
@@ -831,10 +918,13 @@ model PaymentAttempt {
   @@index([origin])
   @@index([createdAt])
   @@index([associatedByUserId])
+  @@index([businessId])
 }
 
 model StockMovement {
   id            String            @id @default(cuid())
+  businessId    String
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   productId     String
   product       Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
   type          StockMovementType
@@ -851,16 +941,19 @@ model StockMovement {
   @@index([productId])
   @@index([type])
   @@index([userId])
+  @@index([businessId])
 }
 
 model Supplier {
   id        String     @id @default(cuid())
-  name      String
-  cuit      String?
-  phone     String?
-  email     String?
-  address   String?
-  notes     String?
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  cuit       String?
+  phone      String?
+  email      String?
+  address    String?
+  notes      String?
   active    Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -870,10 +963,13 @@ model Supplier {
   @@index([cuit])
   @@index([phone])
   @@index([active])
+  @@index([businessId])
 }
 
 model Purchase {
   id             String         @id @default(cuid())
+  businessId     String
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   purchaseNumber Int            @unique @default(autoincrement())
   supplierId     String?
   supplier       Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -890,6 +986,7 @@ model Purchase {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([businessId])
 }
 
 model PurchaseItem {

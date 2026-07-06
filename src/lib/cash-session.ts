@@ -16,9 +16,9 @@ export type CashSessionSummary = {
   expectedCash: string;
 };
 
-export async function getOpenCashSessionSnapshot() {
+export async function getOpenCashSessionSnapshot(businessId: string) {
   const session = await prisma.cashSession.findFirst({
-    where: { status: CashSessionStatus.OPEN },
+    where: { status: CashSessionStatus.OPEN, businessId },
     include: {
       openedBy: {
         select: { name: true, email: true }

@@ -18,13 +18,15 @@ type ClientesPageProps = {
 };
 
 export default async function ClientesPage({ searchParams }: ClientesPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "active";
   const customers = await prisma.customer.findMany({
     where: {
+      businessId,
       deletedAt: null,
       ...(status === "active" ? { active: true } : {}),
       ...(status === "inactive" ? { active: false } : {}),

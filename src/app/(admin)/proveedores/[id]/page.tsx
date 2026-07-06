@@ -14,10 +14,13 @@ type ProveedorDetallePageProps = {
 };
 
 export default async function ProveedorDetallePage({ params }: ProveedorDetallePageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
   const { id } = await params;
-  const supplier = await prisma.supplier.findUnique({
-    where: { id },
+  const supplier = await prisma.supplier.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    },
     include: {
       purchases: {
         orderBy: { createdAt: "desc" },

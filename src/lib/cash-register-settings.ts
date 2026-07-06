@@ -26,10 +26,14 @@ export function getDefaultCashRegisterSetting(): CashRegisterSettingView {
 }
 
 export async function getCashRegisterSetting(
+  businessId?: string,
   client: CashRegisterSettingsClient = prisma
 ): Promise<CashRegisterSettingView> {
+  if (!businessId) {
+    return getDefaultCashRegisterSetting();
+  }
   const setting = await client.cashRegisterSetting.findUnique({
-    where: { id: CASH_REGISTER_SETTING_ID }
+    where: { businessId }
   });
 
   return setting ?? getDefaultCashRegisterSetting();

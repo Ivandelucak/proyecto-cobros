@@ -96,7 +96,7 @@ export async function updateBusinessProfileAction(
     const logoUrl = await resolveLogoUrl(formData);
 
     await prisma.businessProfile.upsert({
-      where: { id: BUSINESS_PROFILE_ID },
+      where: { businessId: user.businessId! },
       update: {
         name,
         businessType: businessType as BusinessType,
@@ -116,7 +116,7 @@ export async function updateBusinessProfileAction(
         generalFooterText: readOptionalText(formData, "generalFooterText")
       },
       create: {
-        id: BUSINESS_PROFILE_ID,
+        businessId: user.businessId!,
         name,
         businessType: businessType as BusinessType,
         cuit: readOptionalText(formData, "cuit"),
@@ -168,7 +168,7 @@ export async function updateTicketSettingsAction(
     const thankYouText = readText(formData, "thankYouText") || "Gracias por su compra";
 
     await prisma.ticketSetting.upsert({
-      where: { id: TICKET_SETTING_ID },
+      where: { businessId: user.businessId! },
       update: {
         ticketTitle,
         headerText: readOptionalText(formData, "headerText"),
@@ -188,7 +188,7 @@ export async function updateTicketSettingsAction(
         showBarcode: isChecked(formData, "showBarcode")
       },
       create: {
-        id: TICKET_SETTING_ID,
+        businessId: user.businessId!,
         ticketTitle,
         headerText: readOptionalText(formData, "headerText"),
         footerText: readOptionalText(formData, "footerText"),
@@ -244,7 +244,7 @@ export async function updateOperationalSettingsAction(
 
     await prisma.$transaction(async (tx) => {
       await tx.cashRegisterSetting.upsert({
-        where: { id: CASH_REGISTER_SETTING_ID },
+        where: { businessId: user.businessId! },
         update: {
           requireOpenSession: isChecked(formData, "requireOpenSession"),
           showExpectedCashToCashier: isChecked(formData, "showExpectedCashToCashier"),
@@ -254,7 +254,7 @@ export async function updateOperationalSettingsAction(
           quickProductsLimit
         },
         create: {
-          id: CASH_REGISTER_SETTING_ID,
+          businessId: user.businessId!,
           requireOpenSession: isChecked(formData, "requireOpenSession"),
           showExpectedCashToCashier: isChecked(formData, "showExpectedCashToCashier"),
           allowCashierCancelSale: isChecked(formData, "allowCashierCancelSale"),
@@ -265,7 +265,7 @@ export async function updateOperationalSettingsAction(
       });
 
       await tx.stockSetting.upsert({
-        where: { id: STOCK_SETTING_ID },
+        where: { businessId: user.businessId! },
         update: {
           lowStockEnabled: isChecked(formData, "lowStockEnabled"),
           defaultMinStock,
@@ -273,7 +273,7 @@ export async function updateOperationalSettingsAction(
           showLowStockWarnings: isChecked(formData, "showLowStockWarnings")
         },
         create: {
-          id: STOCK_SETTING_ID,
+          businessId: user.businessId!,
           lowStockEnabled: isChecked(formData, "lowStockEnabled"),
           defaultMinStock,
           allowManualStockAdjustment: isChecked(formData, "allowManualStockAdjustment"),
@@ -423,7 +423,12 @@ export async function updatePaymentSettingsAction(
     await prisma.$transaction(async (tx) => {
       for (const setting of methodSettings) {
         await tx.paymentMethodSetting.upsert({
-          where: { method: setting.method },
+          where: {
+            businessId_method: {
+              businessId: user.businessId!,
+              method: setting.method
+            }
+          },
           update: {
             label: setting.label,
             enabled: setting.enabled,
@@ -442,11 +447,14 @@ export async function updatePaymentSettingsAction(
             fixedSurcharge: setting.fixedSurcharge,
             mercadoPagoMode: setting.mercadoPagoMode
           },
-          create: setting
+          create: {
+            ...setting,
+            businessId: user.businessId!
+          }
         });
       }
 
-      await saveMercadoPagoAccounts(tx, mercadoPagoAccounts);
+      await saveMercadoPagoAccounts(user.businessId!, tx, mercadoPagoAccounts);
 
       for (const plan of planInputs) {
         const data = {
@@ -514,9 +522,16 @@ export async function updatePaymentSettingsAction(
 }
 
 export async function testMercadoPagoAccountAction(accountId: string) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
+    const belongs = await prisma.mercadoPagoAccount.findFirst({
+      where: { id: accountId, businessId: user.businessId!, deletedAt: null }
+    });
+    if (!belongs) {
+      throw new Error("Acceso denegado a la cuenta de Mercado Pago.");
+    }
+
     const result = await testMercadoPagoAccountConnection(accountId);
     await prisma.mercadoPagoAccount.update({
       where: { id: accountId },
@@ -535,8 +550,8 @@ export async function testMercadoPagoAccountAction(accountId: string) {
     return result;
   } catch (error) {
     await prisma.mercadoPagoAccount
-      .update({
-        where: { id: accountId },
+      .updateMany({
+        where: { id: accountId, businessId: user.businessId! },
         data: {
           lastConnectionTestAt: new Date(),
           lastConnectionStatus: "ERROR",
@@ -580,14 +595,14 @@ export async function testMercadoPagoAccessTokenAction(accessToken: string) {
 export async function createMercadoPagoOAuthLinkAction(
   environment: MercadoPagoEnvironment
 ) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
     if (!Object.values(MercadoPagoEnvironment).includes(environment)) {
       throw new Error("Entorno Mercado Pago invalido.");
     }
 
-    const link = createMercadoPagoOAuthAuthorizationUrl(environment);
+    const link = createMercadoPagoOAuthAuthorizationUrl(user.businessId ?? undefined, environment);
     const qrCodeDataUrl = await QRCode.toDataURL(link.url, {
       errorCorrectionLevel: "M",
       margin: 1,
@@ -631,9 +646,16 @@ export async function searchMercadoPagoMovementsAction(input: {
   minutes?: number;
   limit?: number;
 }) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   try {
+    const belongs = await prisma.mercadoPagoAccount.findFirst({
+      where: { id: input.accountId, businessId: user.businessId!, deletedAt: null }
+    });
+    if (!belongs) {
+      throw new Error("Acceso denegado a la cuenta de Mercado Pago.");
+    }
+
     const movements = await searchRecentMercadoPagoPayments({
       accountId: input.accountId,
       minutes: input.minutes ?? 120,
@@ -675,6 +697,13 @@ export async function setupMercadoPagoPosAction(
   const user = await requireAdminPage();
 
   try {
+    const belongs = await prisma.mercadoPagoAccount.findFirst({
+      where: { id: accountId, businessId: user.businessId!, deletedAt: null }
+    });
+    if (!belongs) {
+      throw new Error("Acceso denegado a la cuenta de Mercado Pago.");
+    }
+
     const result = await setupMercadoPagoStoreAndPos(accountId, input);
     await createAuditLog({
       userId: user.id,
@@ -718,6 +747,13 @@ export async function testMercadoPagoPosAction(
   const user = await requireAdminPage();
 
   try {
+    const belongs = await prisma.mercadoPagoAccount.findFirst({
+      where: { id: accountId, businessId: user.businessId!, deletedAt: null }
+    });
+    if (!belongs) {
+      throw new Error("Acceso denegado a la cuenta de Mercado Pago.");
+    }
+
     const result = await testMercadoPagoPosSetup(accountId, input);
     await createAuditLog({
       userId: user.id,
@@ -883,6 +919,7 @@ function normalizeMercadoPagoOption(value: number, options: number[], fallback: 
 }
 
 async function saveMercadoPagoAccounts(
+  businessId: string,
   tx: Prisma.TransactionClient,
   accounts: MercadoPagoAccountInput[]
 ) {
@@ -894,7 +931,7 @@ async function saveMercadoPagoAccounts(
 
   if (defaultCount === 1) {
     await tx.mercadoPagoAccount.updateMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, businessId },
       data: { defaultAccount: false }
     });
   }
@@ -953,6 +990,7 @@ async function saveMercadoPagoAccounts(
       await tx.mercadoPagoAccount.create({
         data: {
           ...data,
+          businessId,
           connectionType: MercadoPagoConnectionType.MANUAL_TOKEN,
           accessToken: protectMercadoPagoToken(account.accessToken)
         }
@@ -981,13 +1019,13 @@ async function saveMercadoPagoAccounts(
   }
 
   const defaultAccount = await tx.mercadoPagoAccount.findFirst({
-    where: { deletedAt: null, enabled: true, defaultAccount: true },
+    where: { deletedAt: null, enabled: true, defaultAccount: true, businessId },
     select: { id: true }
   });
 
   if (!defaultAccount) {
     const fallbackAccounts = await tx.mercadoPagoAccount.findMany({
-      where: { deletedAt: null, enabled: true },
+      where: { deletedAt: null, enabled: true, businessId },
       select: {
         id: true,
         environment: true,

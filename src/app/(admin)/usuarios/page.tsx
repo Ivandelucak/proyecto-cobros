@@ -17,12 +17,15 @@ type UsuariosPageProps = {
 };
 
 const roleLabels: Record<Role, string> = {
+  OWNER: "Dueño",
   ADMIN: "Administrador",
-  CASHIER: "Cajero"
+  CASHIER: "Cajero",
+  VIEWER: "Visualizador"
 };
 
 export default async function UsuariosPage({ searchParams }: UsuariosPageProps) {
-  await requireAdminPage();
+  const adminUser = await requireAdminPage();
+  const businessId = adminUser.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -31,9 +34,10 @@ export default async function UsuariosPage({ searchParams }: UsuariosPageProps) 
 
   const users = await prisma.user.findMany({
     where: {
+      businessId,
       ...(status === "active" ? { active: true } : {}),
       ...(status === "inactive" ? { active: false } : {}),
-      ...(role === Role.ADMIN || role === Role.CASHIER ? { role } : {}),
+      ...(Object.values(Role).includes(role as Role) ? { role: role as Role } : {}),
       ...(q
         ? {
             OR: [{ name: { contains: q } }, { email: { contains: q } }]
@@ -60,8 +64,10 @@ export default async function UsuariosPage({ searchParams }: UsuariosPageProps) 
           <Input name="q" placeholder="Buscar por nombre o email" defaultValue={q} />
           <Select name="role" defaultValue={role}>
             <option value="all">Todos los roles</option>
+            <option value="OWNER">Dueños</option>
             <option value="ADMIN">Administradores</option>
             <option value="CASHIER">Cajeros</option>
+            <option value="VIEWER">Visualizadores</option>
           </Select>
           <Select name="status" defaultValue={status}>
             <option value="active">Activos</option>

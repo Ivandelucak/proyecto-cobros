@@ -6,15 +6,27 @@ import { PriceAdjustmentForm } from "./price-adjustment-form";
 export const dynamic = "force-dynamic";
 
 export default async function AjustePreciosPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
-  const [categories, productsWithBrand] = await Promise.all([
+  const [rawCategories, productsWithBrand] = await Promise.all([
     prisma.category.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true }
+      where: {
+        businessId,
+        active: true
+      },
+      include: {
+        parent: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: { name: "asc" }
     }),
     prisma.product.findMany({
       where: {
+        businessId,
         deletedAt: null,
         brand: { not: null }
       },
@@ -22,6 +34,19 @@ export default async function AjustePreciosPage() {
       orderBy: { brand: "asc" }
     })
   ]);
+
+  // Construct label showing hierarchy and deduplicate by id
+  const categoryOptionsMap = new Map<string, { id: string; name: string }>();
+  for (const cat of rawCategories) {
+    if (!categoryOptionsMap.has(cat.id)) {
+      const displayName = cat.parent ? `${cat.parent.name} > ${cat.name}` : cat.name;
+      categoryOptionsMap.set(cat.id, { id: cat.id, name: displayName });
+    }
+  }
+
+  const categories = Array.from(categoryOptionsMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
   const brands = [
     ...new Set(
       productsWithBrand

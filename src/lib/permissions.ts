@@ -18,7 +18,7 @@ export const ADMIN_ROUTES = [
 ];
 
 export function canAccessAdmin(role: Role) {
-  return role === Role.ADMIN;
+  return role === Role.ADMIN || role === Role.OWNER;
 }
 
 export function isAdminRoute(pathname: string) {
@@ -28,23 +28,23 @@ export function isAdminRoute(pathname: string) {
 }
 
 export function canAccessCashRegister(role: Role) {
-  return role === Role.ADMIN || role === Role.CASHIER;
+  return role === Role.ADMIN || role === Role.CASHIER || role === Role.OWNER;
 }
 
 export function canManageProducts(role: Role) {
-  return role === Role.ADMIN;
+  return role === Role.ADMIN || role === Role.OWNER;
 }
 
 export function canManageStock(role: Role) {
-  return role === Role.ADMIN;
+  return role === Role.ADMIN || role === Role.OWNER;
 }
 
 export function canImportExportProducts(role: Role) {
-  return role === Role.ADMIN;
+  return role === Role.ADMIN || role === Role.OWNER;
 }
 
 export function canViewReports(role: Role) {
-  return role === Role.ADMIN;
+  return role === Role.ADMIN || role === Role.OWNER;
 }
 
 export function assertRole(role: Role, allowedRoles: Role[], action = "esta accion") {

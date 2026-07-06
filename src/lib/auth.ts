@@ -10,6 +10,7 @@ export type AuthSession = {
   userId: string;
   email: string;
   role: Role;
+  businessId?: string | null;
   exp: number;
 };
 
@@ -35,14 +36,15 @@ export async function validateCredentials(email: string, password: string) {
 }
 
 export function getPostLoginPath(role: Role) {
-  return role === Role.ADMIN ? "/admin" : "/caja";
+  return role === Role.OWNER || role === Role.ADMIN ? "/admin" : "/caja";
 }
 
-export function encodeSession(user: Pick<User, "id" | "email" | "role">) {
+export function encodeSession(user: Pick<User, "id" | "email" | "role" | "businessId">) {
   const payload: AuthSession = {
     userId: user.id,
     email: user.email,
     role: user.role,
+    businessId: user.businessId,
     exp: Date.now() + 1000 * 60 * 60 * 12
   };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -67,6 +69,7 @@ export function decodeSession(token: string | undefined) {
       typeof payload.userId !== "string" ||
       typeof payload.email !== "string" ||
       !Object.values(Role).includes(payload.role) ||
+      (payload.businessId !== undefined && payload.businessId !== null && typeof payload.businessId !== "string") ||
       typeof payload.exp !== "number" ||
       payload.exp < Date.now()
     ) {
@@ -79,7 +82,7 @@ export function decodeSession(token: string | undefined) {
   }
 }
 
-export async function setSessionCookie(user: Pick<User, "id" | "email" | "role">) {
+export async function setSessionCookie(user: Pick<User, "id" | "email" | "role" | "businessId">) {
   const cookieStore = await cookies();
   cookieStore.set(AUTH_COOKIE_NAME, encodeSession(user), {
     httpOnly: true,
@@ -113,11 +116,21 @@ export async function getCurrentUser() {
       name: true,
       email: true,
       role: true,
-      active: true
+      active: true,
+      businessId: true
     }
   });
 
-  if (!user?.active) {
+  if (!user?.active || !user.businessId) {
+    return null;
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId, active: true },
+    select: { id: true }
+  });
+
+  if (!business) {
     return null;
   }
 
@@ -146,4 +159,17 @@ function safeEqual(left: string, right: string) {
   }
 
   return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+export async function getCurrentBusinessId(): Promise<string | null> {
+  const session = await getSessionFromCookie();
+  return session?.businessId ?? null;
+}
+
+export async function requireBusinessContext(): Promise<string> {
+  const businessId = await getCurrentBusinessId();
+  if (!businessId) {
+    throw new Error("Acceso denegado: Se requiere el contexto de un comercio.");
+  }
+  return businessId;
 }

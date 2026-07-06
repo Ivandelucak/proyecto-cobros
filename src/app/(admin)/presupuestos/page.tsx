@@ -23,7 +23,8 @@ type PresupuestosPageProps = {
 };
 
 export default async function PresupuestosPage({ searchParams }: PresupuestosPageProps) {
-  await requireQuotePage();
+  const user = await requireQuotePage();
+  const businessId = user.businessId!;
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = parseStatus(params.status);
@@ -31,6 +32,7 @@ export default async function PresupuestosPage({ searchParams }: PresupuestosPag
 
   const quotes = await prisma.quote.findMany({
     where: {
+      businessId,
       ...(status ? { status } : {}),
       ...(q
         ? {
@@ -170,10 +172,10 @@ export default async function PresupuestosPage({ searchParams }: PresupuestosPag
 
 async function requireQuotePage() {
   const user = await getCurrentUser();
-  if (!user) {
+  if (!user || !user.businessId) {
     redirect("/login");
   }
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
   return user;

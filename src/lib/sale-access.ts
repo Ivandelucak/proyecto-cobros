@@ -83,6 +83,7 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
           pointOfSale: true,
           number: true,
           cae: true,
+          caeDueDate: true,
           issueDate: true,
           errorMessage: true
         }
@@ -96,11 +97,11 @@ export async function getAccessibleSaleOrRedirect(saleId: string) {
     }
   });
 
-  if (!sale) {
-    redirect(user.role === Role.ADMIN ? "/ventas" : "/caja");
+  if (!sale || sale.businessId !== user.businessId) {
+    redirect(user.role === Role.OWNER || user.role === Role.ADMIN ? "/ventas" : "/caja");
   }
 
-  if (user.role !== Role.ADMIN && sale.userId !== user.id) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && sale.userId !== user.id) {
     redirect("/caja");
   }
 

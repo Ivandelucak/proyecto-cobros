@@ -137,6 +137,7 @@ export async function restoreJsonBackup(filename: string, userId: string) {
       await tx.auditLog.createMany({
         data: [
           {
+            businessId: "default",
             userId: restoredUserId,
             action: "BACKUP_RESTORE_ATTEMPT",
             entity: "Maintenance",
@@ -144,6 +145,7 @@ export async function restoreJsonBackup(filename: string, userId: string) {
             metadata: { filename: safeFilename }
           },
           {
+            businessId: "default",
             userId: restoredUserId,
             action: "BACKUP_RESTORED",
             entity: "Maintenance",

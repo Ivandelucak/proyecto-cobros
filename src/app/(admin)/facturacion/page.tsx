@@ -41,16 +41,18 @@ const filterLabels: Array<{ label: string; value: FiscalStatus | "ALL" }> = [
 export default async function FacturacionPage({
   searchParams
 }: FacturacionPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
   const params = (await searchParams) ?? {};
   const statusFilter = parseFiscalStatusFilter(param(params.status));
   const paymentMethod = parsePaymentMethod(param(params.paymentMethod));
   const query = param(params.q).trim();
   const from = parseDate(param(params.from));
   const to = parseDate(param(params.to), true);
-  const setting = await getFiscalSettingOrDefault();
+  const setting = await getFiscalSettingOrDefault(businessId);
 
   const where: Prisma.SaleWhereInput = {
+    businessId,
     ...buildFiscalStatusWhere(statusFilter),
     ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(paymentMethod ? { payments: { some: { method: paymentMethod } } } : {}),

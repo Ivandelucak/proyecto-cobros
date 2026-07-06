@@ -29,9 +29,12 @@ export function getDefaultPrintSetting(): PrintSettingView {
   };
 }
 
-export async function getPrintSetting(): Promise<PrintSettingView> {
+export async function getPrintSetting(businessId?: string): Promise<PrintSettingView> {
+  if (!businessId) {
+    return getDefaultPrintSetting();
+  }
   const setting = await prisma.printSetting.findUnique({
-    where: { id: PRINT_SETTING_ID }
+    where: { businessId }
   });
 
   return setting
@@ -46,12 +49,12 @@ export async function getPrintSetting(): Promise<PrintSettingView> {
     : getDefaultPrintSetting();
 }
 
-export async function updatePrintSetting(input: PrintSettingView) {
+export async function updatePrintSetting(businessId: string, input: PrintSettingView) {
   return prisma.printSetting.upsert({
-    where: { id: PRINT_SETTING_ID },
+    where: { businessId },
     update: input,
     create: {
-      id: PRINT_SETTING_ID,
+      businessId,
       ...input
     }
   });

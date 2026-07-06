@@ -29,7 +29,10 @@ export async function createCustomerAction(
 
   try {
     const customer = await prisma.customer.create({
-      data: parseCustomerForm(formData)
+      data: {
+        ...parseCustomerForm(formData),
+        businessId: user.businessId!
+      }
     });
     await createAuditLog({
       userId: user.id,

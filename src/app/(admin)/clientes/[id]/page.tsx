@@ -35,10 +35,13 @@ const paymentLabels: Record<PaymentMethod, string> = {
 };
 
 export default async function ClienteDetallePage({ params }: ClienteDetallePageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({
-    where: { id },
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    },
     include: {
       accountMovements: {
         include: { user: { select: { name: true } }, sale: { select: { saleNumber: true } } },

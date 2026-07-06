@@ -35,10 +35,15 @@ export type CreditInstallmentPlanView = {
   active: boolean;
 };
 
-export async function getPaymentMethodSettings(client: PaymentSettingsClient = prisma) {
-  const rows = await client.paymentMethodSetting.findMany({
-    orderBy: [{ sortOrder: "asc" }, { method: "asc" }]
-  });
+export async function getPaymentMethodSettings(businessId?: string, client: PaymentSettingsClient = prisma) {
+  const rows = businessId
+    ? await client.paymentMethodSetting.findMany({
+        where: { businessId },
+        orderBy: [{ sortOrder: "asc" }, { method: "asc" }]
+      })
+    : await client.paymentMethodSetting.findMany({
+        orderBy: [{ sortOrder: "asc" }, { method: "asc" }]
+      });
 
   if (rows.length === 0) {
     return DEFAULT_PAYMENT_METHOD_SETTINGS.map((setting) => ({
@@ -79,9 +84,10 @@ export async function getPaymentMethodSettings(client: PaymentSettingsClient = p
 }
 
 export async function getEnabledPaymentMethodSettings(
+  businessId?: string,
   client: PaymentSettingsClient = prisma
 ) {
-  return (await getPaymentMethodSettings(client)).filter((setting) => setting.enabled);
+  return (await getPaymentMethodSettings(businessId, client)).filter((setting) => setting.enabled);
 }
 
 export async function getCreditInstallmentPlans(client: PaymentSettingsClient = prisma) {

@@ -20,11 +20,11 @@ export default async function CashierLayout({
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
 
-  const businessProfile = await getBusinessProfileOrDefault();
+  const businessProfile = await getBusinessProfileOrDefault(user.businessId ?? undefined);
 
   return (
     <AppShell

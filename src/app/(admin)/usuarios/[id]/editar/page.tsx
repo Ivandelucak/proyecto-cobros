@@ -12,11 +12,14 @@ type EditarUsuarioPageProps = {
 };
 
 export default async function EditarUsuarioPage({ params }: EditarUsuarioPageProps) {
-  await requireAdminPage();
+  const currentUser = await requireAdminPage();
 
   const { id } = await params;
-  const user = await prisma.user.findUnique({
-    where: { id },
+  const user = await prisma.user.findFirst({
+    where: {
+      id,
+      businessId: currentUser.businessId!
+    },
     select: {
       id: true,
       name: true,

@@ -29,13 +29,15 @@ type TicketPageProps = {
 export default async function TicketPage({ params, searchParams }: TicketPageProps) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const [{ sale }, business, printSetting, ticketSetting, paymentMethods] =
+  const { sale, user } = await getAccessibleSaleOrRedirect(id);
+  const businessId = sale.businessId;
+
+  const [business, printSetting, ticketSetting, paymentMethods] =
     await Promise.all([
-      getAccessibleSaleOrRedirect(id),
-      getBusinessProfileOrDefault(),
-      getPrintSetting(),
-      getTicketSetting(),
-      getPaymentMethodSettings()
+      getBusinessProfileOrDefault(businessId),
+      getPrintSetting(businessId),
+      getTicketSetting(businessId),
+      getPaymentMethodSettings(businessId)
     ]);
   const rawReturnTo = param(query.returnTo);
   const returnTo = isSafeInternalReturnTo(rawReturnTo) ? rawReturnTo : null;
@@ -220,7 +222,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
               <p className="break-words font-semibold uppercase">
                 {item.productNameSnapshot}
               </p>
-              {ticketSetting.showBarcode && (item.product.barcode || item.product.sku) ? (
+              {ticketSetting.showBarcode && item.product && (item.product.barcode || item.product.sku) ? (
                 <p className="text-[11px]">Cod: {item.product.barcode ?? item.product.sku}</p>
               ) : null}
               <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] gap-2">

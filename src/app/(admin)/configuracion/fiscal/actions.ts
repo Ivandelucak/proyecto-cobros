@@ -112,13 +112,13 @@ export async function updateFiscalSettingsAction(
     };
 
     const setting = await prisma.fiscalSetting.upsert({
-      where: { id: FISCAL_SETTING_ID },
+      where: { businessId: user.businessId! },
       update: {
         ...baseData,
         ...credentialUpdate
       },
       create: {
-        id: FISCAL_SETTING_ID,
+        businessId: user.businessId!,
         ...baseData,
         arcaCertificatePem: credentialUpdate.arcaCertificatePem ?? null,
         arcaPrivateKeyPem: credentialUpdate.arcaPrivateKeyPem ?? null
@@ -159,21 +159,55 @@ export async function updateFiscalSettingsAction(
   }
 }
 
+function maskCuit(cuit: string): string {
+  const digits = cuit.replace(/\D/g, "");
+  if (digits.length <= 3) return digits;
+  return digits.substring(0, 2) + "*".repeat(digits.length - 3) + digits.slice(-1);
+}
+
 export async function testArcaWsaaAction(
   _prevState: ArcaTestState,
   _formData: FormData
 ): Promise<ArcaTestState> {
   const user = await requireAdminPage();
+  const businessId = user.businessId;
+
+  if (!businessId) {
+    return { error: "No se identifico el comercio del usuario." };
+  }
 
   try {
-    const auth = await getArcaAuthToken();
+    const setting = await prisma.fiscalSetting.findUnique({
+      where: { businessId },
+      select: {
+        id: true,
+        cuit: true,
+        arcaCertificatePem: true,
+        arcaPrivateKeyPem: true,
+        environment: true
+      }
+    });
+
+    if (
+      !setting ||
+      !setting.cuit?.trim() ||
+      !setting.arcaCertificatePem?.trim() ||
+      !setting.arcaPrivateKeyPem?.trim() ||
+      !setting.environment
+    ) {
+      return {
+        error: "Configuración fiscal incompleta. Cargá CUIT, certificado y clave privada para probar WSAA."
+      };
+    }
+
+    const auth = await getArcaAuthToken(businessId);
     const successMessage = auth.alreadyAuthenticated
       ? "ARCA informa que ya existe un Ticket de Acceso válido para este servicio."
       : auth.fromCache
         ? "Ya existe un token WSAA válido."
         : "Conexion WSAA homologacion exitosa.";
 
-    await markArcaWsaaSuccess();
+    await markArcaWsaaSuccess(businessId);
 
     await recordFiscalConnectivityEvent({
       userId: user.id,
@@ -191,7 +225,7 @@ export async function testArcaWsaaAction(
       userId: user.id,
       action: "ARCA_WSAA_TEST_OK",
       entity: "FiscalSetting",
-      entityId: FISCAL_SETTING_ID,
+      entityId: setting.id,
       description: successMessage,
       metadata: {
         expirationTime: auth.expirationTime.toISOString(),
@@ -206,13 +240,13 @@ export async function testArcaWsaaAction(
       success: successMessage,
       result: [
         { label: "Servicio", value: "wsfe" },
-        { label: "CUIT", value: auth.cuit },
+        { label: "CUIT", value: maskCuit(auth.cuit) },
         { label: "Vencimiento token", value: formatDateForUi(auth.expirationTime) }
       ]
     };
   } catch (error) {
     const arcaError = toArcaError(error, "No se pudo obtener token WSAA.");
-    await markArcaFailure("WSAA", arcaError.message, arcaError.details);
+    await markArcaFailure(businessId, "WSAA", arcaError.message, arcaError.details);
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSAA_TEST_FAILED",
@@ -234,16 +268,51 @@ export async function testArcaWsfeStatusAction(
   _formData: FormData
 ): Promise<ArcaTestState> {
   const user = await requireAdminPage();
+  const businessId = user.businessId;
+
+  if (!businessId) {
+    return { error: "No se identifico el comercio del usuario." };
+  }
 
   try {
+    const setting = await prisma.fiscalSetting.findUnique({
+      where: { businessId },
+      select: {
+        id: true,
+        cuit: true,
+        environment: true,
+        arcaWsaaToken: true,
+        arcaWsaaSign: true,
+        arcaTokenExpiresAt: true
+      }
+    });
+
+    const hasToken = Boolean(
+      setting?.arcaWsaaToken &&
+        setting?.arcaWsaaSign &&
+        setting?.arcaTokenExpiresAt &&
+        setting.arcaTokenExpiresAt.getTime() > Date.now()
+    );
+
+    if (
+      !setting ||
+      !setting.cuit?.trim() ||
+      !setting.environment ||
+      !hasToken
+    ) {
+      return {
+        error: "Configuración fiscal incompleta. Primero configurá los datos fiscales y probá WSAA."
+      };
+    }
+
     const [status, documentTypes, voucherTypes, vatTypes] = await Promise.all([
-      getWsfeServerStatus(),
-      getDocumentTypes(),
-      getVoucherTypes(),
-      getVatTypes()
+      getWsfeServerStatus(businessId),
+      getDocumentTypes(businessId),
+      getVoucherTypes(businessId),
+      getVatTypes(businessId)
     ]);
 
-    await markArcaWsfeSuccess("Estado WSFEv1 consultado correctamente.");
+    await markArcaWsfeSuccess(businessId, "Estado WSFEv1 consultado correctamente.");
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSFE_TEST_OK",
@@ -261,7 +330,7 @@ export async function testArcaWsfeStatusAction(
       userId: user.id,
       action: "ARCA_WSFE_TEST_OK",
       entity: "FiscalSetting",
-      entityId: FISCAL_SETTING_ID,
+      entityId: setting.id,
       description: "Consulto WSFEv1 homologacion correctamente.",
       metadata: {
         appServer: status.appServer,
@@ -285,7 +354,7 @@ export async function testArcaWsfeStatusAction(
     };
   } catch (error) {
     const arcaError = toArcaError(error, "No se pudo consultar WSFEv1.");
-    await markArcaFailure("WSFE", arcaError.message, arcaError.details);
+    await markArcaFailure(businessId, "WSFE", arcaError.message, arcaError.details);
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSFE_TEST_FAILED",
@@ -307,20 +376,54 @@ export async function queryLastArcaVoucherAction(
   formData: FormData
 ): Promise<ArcaTestState> {
   const user = await requireAdminPage();
+  const businessId = user.businessId;
+
+  if (!businessId) {
+    return { error: "No se identifico el comercio del usuario." };
+  }
 
   try {
-    const setting = await getFiscalSettingOrDefault();
-    if (!setting.pointOfSale) {
-      throw new Error("Falta punto de venta.");
+    const setting = await prisma.fiscalSetting.findUnique({
+      where: { businessId },
+      select: {
+        id: true,
+        cuit: true,
+        pointOfSale: true,
+        fiscalCondition: true,
+        environment: true,
+        arcaWsaaToken: true,
+        arcaWsaaSign: true,
+        arcaTokenExpiresAt: true
+      }
+    });
+
+    const hasToken = Boolean(
+      setting?.arcaWsaaToken &&
+        setting?.arcaWsaaSign &&
+        setting?.arcaTokenExpiresAt &&
+        setting.arcaTokenExpiresAt.getTime() > Date.now()
+    );
+
+    if (
+      !setting ||
+      !setting.cuit?.trim() ||
+      !setting.pointOfSale ||
+      !setting.fiscalCondition ||
+      !setting.environment ||
+      !hasToken
+    ) {
+      return {
+        error: "Configuración fiscal incompleta. Primero configurá los datos fiscales y probá WSAA."
+      };
     }
 
     const voucherType = parseVoucherType(formData.get("voucherType"));
-    const result = await getLastAuthorizedVoucher({
+    const result = await getLastAuthorizedVoucher(businessId, {
       pointOfSale: setting.pointOfSale,
       voucherType
     });
 
-    await markArcaWsfeSuccess("Ultimo comprobante consultado correctamente.");
+    await markArcaWsfeSuccess(businessId, "Ultimo comprobante consultado correctamente.");
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSFE_TEST_OK",
@@ -340,7 +443,7 @@ export async function queryLastArcaVoucherAction(
     };
   } catch (error) {
     const arcaError = toArcaError(error, "No se pudo consultar ultimo comprobante.");
-    await markArcaFailure("WSFE", arcaError.message, arcaError.details);
+    await markArcaFailure(businessId, "WSFE", arcaError.message, arcaError.details);
     await recordFiscalConnectivityEvent({
       userId: user.id,
       type: "ARCA_WSFE_TEST_FAILED",
@@ -453,6 +556,7 @@ function parseVoucherType(value: FormDataEntryValue | null) {
 }
 
 async function markArcaFailure(
+  businessId: string,
   scope: "WSAA" | "WSFE",
   message: string,
   details?: string
@@ -470,15 +574,15 @@ async function markArcaFailure(
           arcaLastError: sanitizeArcaDetail(details) ?? message
         };
 
-  await prisma.fiscalSetting.updateMany({
-    where: { id: FISCAL_SETTING_ID },
+  await prisma.fiscalSetting.update({
+    where: { businessId },
     data
   });
 }
 
-async function markArcaWsaaSuccess() {
-  await prisma.fiscalSetting.updateMany({
-    where: { id: FISCAL_SETTING_ID },
+async function markArcaWsaaSuccess(businessId: string) {
+  await prisma.fiscalSetting.update({
+    where: { businessId },
     data: {
       arcaLastConnectionStatus: "OK",
       arcaLastConnectionTestAt: new Date(),
@@ -487,9 +591,9 @@ async function markArcaWsaaSuccess() {
   });
 }
 
-async function markArcaWsfeSuccess(message: string) {
-  await prisma.fiscalSetting.updateMany({
-    where: { id: FISCAL_SETTING_ID },
+async function markArcaWsfeSuccess(businessId: string, message: string) {
+  await prisma.fiscalSetting.update({
+    where: { businessId },
     data: {
       arcaLastWsfeStatus: "OK",
       arcaLastWsfeTestAt: new Date(),

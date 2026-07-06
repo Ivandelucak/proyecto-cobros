@@ -7,8 +7,8 @@ import { FiscalSettingsForm } from "./fiscal-settings-form";
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionFiscalPage() {
-  await requireAdminPage();
-  const setting = await getFiscalSettingOrDefault();
+  const user = await requireAdminPage();
+  const setting = await getFiscalSettingOrDefault(user.businessId!);
 
   return (
     <div className="space-y-5">

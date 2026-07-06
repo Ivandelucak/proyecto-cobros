@@ -1,4 +1,5 @@
 import { PaymentMethod, Prisma, Role, SaleStatus } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,11 @@ type VentasPageProps = {
 
 export default async function VentasPage({ searchParams }: VentasPageProps) {
   const user = await getCurrentUser();
+  if (!user || !user.businessId) {
+    redirect("/login");
+  }
+  const businessId = user.businessId;
+
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const from = params.from ?? "";
@@ -35,14 +41,18 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
   const status = parseSaleStatus(params.status);
   const method = parsePaymentMethod(params.method);
   const returnTo = buildReturnToHref("/ventas", params);
-  const where = buildSaleWhere({
+  const baseWhere = buildSaleWhere({
     q,
     from,
     to,
     status,
     method,
-    userId: user?.role === Role.CASHIER ? user.id : null
+    userId: user.role === Role.CASHIER ? user.id : null
   });
+  const where = {
+    ...baseWhere,
+    businessId
+  };
 
   const [sales, paymentMethods] = await Promise.all([
     prisma.sale.findMany({
@@ -73,7 +83,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
       orderBy: { createdAt: "desc" },
       take: 100
     }),
-    getPaymentMethodSettings()
+    getPaymentMethodSettings(businessId)
   ]);
   const paymentLabels = {
     ...fallbackPaymentLabels,

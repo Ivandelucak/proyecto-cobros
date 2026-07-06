@@ -16,13 +16,15 @@ type ProveedoresPageProps = {
 };
 
 export default async function ProveedoresPage({ searchParams }: ProveedoresPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "active";
   const suppliers = await prisma.supplier.findMany({
     where: {
+      businessId,
       ...(status === "active" ? { active: true } : {}),
       ...(status === "inactive" ? { active: false } : {}),
       ...(q

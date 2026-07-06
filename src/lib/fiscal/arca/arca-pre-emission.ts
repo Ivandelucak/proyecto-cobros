@@ -14,6 +14,7 @@ import {
 import { calculateFiscalAmountsForSale } from "@/lib/fiscal/fiscal-amounts";
 import { fiscalTaxTreatmentLabel } from "@/lib/fiscal/fiscal-tax";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
+import { resolveReceiverVatConditionId } from "@/lib/fiscal/fiscal-documents";
 
 const ARCA_SERVICE = "WSFEv1";
 const FUTURE_OPERATION = "FECAESolicitar";
@@ -50,6 +51,7 @@ export type ArcaInvoiceRequestPreview = {
     docTypeCode: number;
     docNumber: string | null;
     docNumberForRequest: string;
+    condicionIVAReceptorId?: number;
   };
   header: {
     cantReg: 1;
@@ -79,6 +81,7 @@ export type ArcaInvoiceRequestPreview = {
       baseImp: string;
       importe: string;
     }>;
+    condicionIVAReceptorId?: number;
   };
   document: {
     type: FiscalDocumentType;
@@ -170,6 +173,7 @@ export type ArcaPreEmissionInput = {
   fiscalDocument: ArcaPreparedFiscalDocument | null;
   setting: FiscalSettingView;
   requireConnectionCredentials?: boolean;
+  businessId?: string;
 };
 
 export function validateArcaPreEmission(
@@ -349,7 +353,8 @@ export function buildArcaInvoiceRequest(
       docType: receiver.docType,
       docTypeCode,
       docNumber: receiver.docNumber,
-      docNumberForRequest: receiver.docNumber ?? "0"
+      docNumberForRequest: receiver.docNumber ?? "0",
+      condicionIVAReceptorId: resolveReceiverVatConditionId(receiver.condition, fiscalDocument.letter)
     },
     header: {
       cantReg: 1,
@@ -378,7 +383,8 @@ export function buildArcaInvoiceRequest(
         description: `IVA ${group.vatRate.toFixed(2)}%`,
         baseImp: decimalToMoneyString(group.baseImp),
         importe: decimalToMoneyString(group.importe)
-      }))
+      })),
+      condicionIVAReceptorId: resolveReceiverVatConditionId(receiver.condition, fiscalDocument.letter)
     },
     document: {
       type: fiscalDocument.type,
@@ -458,7 +464,7 @@ function resolveReceiver(input: ArcaPreEmissionInput) {
   };
 }
 
-function mapVoucherType(type: FiscalDocumentType, letter: FiscalDocumentLetter) {
+export function mapVoucherType(type: FiscalDocumentType, letter: FiscalDocumentLetter) {
   const codeMap: Record<FiscalDocumentType, Record<FiscalDocumentLetter, number | null>> = {
     INVOICE: { A: 1, B: 6, C: 11, M: null, E: null },
     DEBIT_NOTE: { A: 2, B: 7, C: 12, M: null, E: null },
@@ -477,7 +483,7 @@ function mapVoucherType(type: FiscalDocumentType, letter: FiscalDocumentLetter) 
   };
 }
 
-function mapDocumentTypeCode(type: FiscalDocumentIdentityType) {
+export function mapDocumentTypeCode(type: FiscalDocumentIdentityType) {
   const codeMap: Record<FiscalDocumentIdentityType, number> = {
     CUIT: 80,
     CUIL: 86,
@@ -603,7 +609,7 @@ function money(value: Prisma.Decimal) {
   return value.toDecimalPlaces(2);
 }
 
-function formatArcaVoucherDate(value: Date) {
+export function formatArcaVoucherDate(value: Date) {
   const parts = new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     year: "numeric",

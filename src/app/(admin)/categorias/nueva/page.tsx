@@ -7,10 +7,13 @@ import { CategoryForm } from "../category-form";
 export const dynamic = "force-dynamic";
 
 export default async function NuevaCategoriaPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   const parentOptions = await prisma.category.findMany({
-    where: { active: true },
+    where: {
+      businessId: user.businessId!,
+      active: true
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true }
   });

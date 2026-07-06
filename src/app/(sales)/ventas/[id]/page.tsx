@@ -11,6 +11,8 @@ import {
   fiscalStatusLabels,
   fiscalStatusTone
 } from "@/lib/fiscal/fiscal-status";
+import { fiscalDocumentTypeLabels } from "@/lib/fiscal/fiscal-documents";
+import { FiscalSaleActions } from "@/app/(admin)/facturacion/fiscal-sale-actions";
 import { formatARS } from "@/lib/money";
 import { providerStatusLabel } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
@@ -41,11 +43,11 @@ export default async function VentaDetallePage({
 }: VentaDetallePageProps) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const [{ sale, user }, paymentMethods, cashSetting, printSetting] = await Promise.all([
-    getAccessibleSaleOrRedirect(id),
-    getPaymentMethodSettings(),
-    getCashRegisterSetting(),
-    getPrintSetting()
+  const { sale, user } = await getAccessibleSaleOrRedirect(id);
+  const [paymentMethods, cashSetting, printSetting] = await Promise.all([
+    getPaymentMethodSettings(user.businessId!),
+    getCashRegisterSetting(user.businessId!),
+    getPrintSetting(user.businessId!)
   ]);
   const fallbackBackHref = user.role === Role.ADMIN ? "/ventas" : "/caja";
   const rawReturnTo = param(query.returnTo);
@@ -58,6 +60,14 @@ export default async function VentaDetallePage({
   const paymentLabels = Object.fromEntries(
     paymentMethods.map((method) => [method.method, method.label])
   ) as Record<PaymentMethod, string>;
+
+  const isAdminOrOwner = user.role === Role.ADMIN || user.role === Role.OWNER;
+  const canPrepare = isPreparableFiscalStatus(sale.fiscalStatus);
+  const canMarkNotRequested =
+    sale.fiscalStatus === FiscalStatus.PENDING ||
+    sale.fiscalStatus === FiscalStatus.FAILED;
+  const canCancelBeforeIssue =
+    sale.status === SaleStatus.PAID && isPreparableFiscalStatus(sale.fiscalStatus);
 
   return (
     <main className="min-h-screen bg-[var(--app-bg)] p-4 text-[var(--text-primary)] md:p-6">
@@ -131,7 +141,12 @@ export default async function VentaDetallePage({
                     {sale.items.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-[#121922]/30">
                         <td className="px-4 py-2 font-medium text-gray-950 dark:text-[#F3F7FA]">
-                          {item.productNameSnapshot}
+                          <div>{item.productNameSnapshot}</div>
+                          {item.isManual ? (
+                            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--accent)]">
+                              Artículo manual
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-2 text-right text-gray-700 dark:text-[#A9B6C2]">
                           {formatQuantity(item.quantity.toString(), item.unitTypeSnapshot)}
@@ -215,23 +230,52 @@ export default async function VentaDetallePage({
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[#7F8D9A] border-b border-gray-100 pb-2.5 dark:border-[#273342]">
                 Facturación
               </h2>
-              <div className="mt-3 space-y-2 text-xs">
+              <div className="mt-3 space-y-3 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 dark:text-[#7F8D9A]">Comprobante</span>
                   <span className="font-medium text-gray-950 dark:text-[#F3F7FA]">
                     {sale.fiscalDocument
-                      ? `Factura ${sale.fiscalDocument.letter}`
+                      ? `${fiscalDocumentTypeLabels[sale.fiscalDocument.type]} ${sale.fiscalDocument.letter}`
                       : "Ticket interno"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500 dark:text-[#7F8D9A]">Estado</span>
+                  <span className="text-gray-500 dark:text-[#7F8D9A]">Estado fiscal</span>
                   <Badge tone={fiscalStatusTone(sale.fiscalStatus)}>
                     {sale.fiscalStatus === FiscalStatus.NOT_REQUESTED
                       ? "No requerida"
                       : fiscalStatusLabels[sale.fiscalStatus]}
                   </Badge>
                 </div>
+
+                {sale.fiscalDocument && sale.fiscalStatus === FiscalStatus.ISSUED ? (
+                  <div className="mt-2 space-y-2 rounded-md bg-slate-50 p-2.5 dark:bg-[#18212B] text-gray-700 dark:text-[#A9B6C2]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Número:</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {String(sale.fiscalDocument.pointOfSale).padStart(5, "0")}-{String(sale.fiscalDocument.number).padStart(8, "0")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">CAE:</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{sale.fiscalDocument.cae}</span>
+                    </div>
+                    {sale.fiscalDocument.caeDueDate && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Vencimiento:</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {formatDateTimeStable(sale.fiscalDocument.caeDueDate).split(" ")[0]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {sale.fiscalFailureReason && (
+                  <p className="mt-2 rounded bg-red-50/50 p-2 text-red-600 dark:bg-red-950/20 dark:text-red-300">
+                    {sale.fiscalFailureReason}
+                  </p>
+                )}
 
                 {sale.fiscalDocument || sale.fiscalRequestedAt || sale.fiscalFailureReason ? (
                   <details className="mt-2 group">
@@ -264,6 +308,25 @@ export default async function VentaDetallePage({
                       )}
                     </div>
                   </details>
+                ) : null}
+
+                {isAdminOrOwner && sale.status !== SaleStatus.CANCELLED ? (
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#273342]">
+                    <FiscalSaleActions
+                      saleId={sale.id}
+                      fiscalStatus={sale.fiscalStatus}
+                      requiresFiscalInvoice={sale.requiresFiscalInvoice}
+                      canPrepare={canPrepare}
+                      canMarkNotRequested={canMarkNotRequested}
+                      canCancelBeforeIssue={canCancelBeforeIssue}
+                      mode="panel"
+                      prepareLabel={
+                        sale.fiscalStatus === FiscalStatus.READY_TO_ISSUE
+                          ? "Regenerar preparacion"
+                          : "Preparar factura"
+                      }
+                    />
+                  </div>
                 ) : null}
 
                 {sale.fiscalStatus === FiscalStatus.CREDIT_NOTE_REQUIRED ? (
@@ -451,4 +514,12 @@ function unitLabel(unitType: UnitType) {
   };
 
   return labels[unitType];
+}
+
+function isPreparableFiscalStatus(status: FiscalStatus) {
+  return (
+    status === FiscalStatus.PENDING ||
+    status === FiscalStatus.FAILED ||
+    status === FiscalStatus.READY_TO_ISSUE
+  );
 }

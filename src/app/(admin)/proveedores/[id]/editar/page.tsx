@@ -12,9 +12,14 @@ type EditarProveedorPageProps = {
 };
 
 export default async function EditarProveedorPage({ params }: EditarProveedorPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
   const { id } = await params;
-  const supplier = await prisma.supplier.findUnique({ where: { id } });
+  const supplier = await prisma.supplier.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    }
+  });
 
   if (!supplier) {
     redirect("/proveedores");

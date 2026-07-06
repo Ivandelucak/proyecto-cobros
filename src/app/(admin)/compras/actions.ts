@@ -72,6 +72,7 @@ export async function createPurchaseAction(
 
       const created = await tx.purchase.create({
         data: {
+          businessId: user.businessId!,
           supplierId: supplierId || null,
           userId: user.id,
           total,
@@ -101,6 +102,7 @@ export async function createPurchaseAction(
         });
         await tx.stockMovement.create({
           data: {
+            businessId: user.businessId!,
             productId: item.product.id,
             type: StockMovementType.PURCHASE,
             quantity: item.quantity,

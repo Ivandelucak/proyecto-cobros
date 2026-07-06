@@ -310,7 +310,7 @@ async function main() {
   });
 
   await prisma.businessProfile.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       name: "Fox Point Demo",
       businessType: BusinessType.KIOSK,
@@ -330,7 +330,7 @@ async function main() {
       preferredTheme: "light"
     },
     create: {
-      id: "default",
+      businessId: "default",
       name: "Fox Point Demo",
       businessType: BusinessType.KIOSK,
       currency: "ARS",
@@ -341,7 +341,7 @@ async function main() {
   });
 
   await prisma.printSetting.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       paperSize: PrintPaperSize.TICKET_80,
       silentPrint: false,
@@ -350,7 +350,7 @@ async function main() {
       marginMm: 2
     },
     create: {
-      id: "default",
+      businessId: "default",
       paperSize: PrintPaperSize.TICKET_80,
       silentPrint: false,
       autoPrintTicket: false,
@@ -360,7 +360,7 @@ async function main() {
   });
 
   await prisma.ticketSetting.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       showBusinessName: true,
       showCuit: true,
@@ -380,7 +380,7 @@ async function main() {
       nonFiscalLegend: "Ticket no fiscal"
     },
     create: {
-      id: "default",
+      businessId: "default",
       showBusinessName: true,
       showCuit: true,
       showAddress: true,
@@ -401,7 +401,7 @@ async function main() {
   });
 
   await prisma.cashRegisterSetting.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       requireOpenSession: true,
       showExpectedCashToCashier: false,
@@ -411,7 +411,7 @@ async function main() {
       quickProductsLimit: 12
     },
     create: {
-      id: "default",
+      businessId: "default",
       requireOpenSession: true,
       showExpectedCashToCashier: false,
       allowCashierCancelSale: false,
@@ -422,7 +422,7 @@ async function main() {
   });
 
   await prisma.stockSetting.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       lowStockEnabled: true,
       defaultMinStock: null,
@@ -430,7 +430,7 @@ async function main() {
       showLowStockWarnings: true
     },
     create: {
-      id: "default",
+      businessId: "default",
       lowStockEnabled: true,
       defaultMinStock: null,
       allowManualStockAdjustment: true,
@@ -439,7 +439,7 @@ async function main() {
   });
 
   await prisma.fiscalSetting.upsert({
-    where: { id: "default" },
+    where: { businessId: "default" },
     update: {
       enabled: false,
       environment: FiscalEnvironment.HOMOLOGACION,
@@ -453,7 +453,7 @@ async function main() {
       defaultCustomerDocType: FiscalDocumentIdentityType.CONSUMIDOR_FINAL
     },
     create: {
-      id: "default",
+      businessId: "default",
       enabled: false,
       environment: FiscalEnvironment.HOMOLOGACION,
       cashIssueMode: FiscalIssueMode.ASK,
@@ -469,13 +469,21 @@ async function main() {
 
   for (const setting of paymentMethodSettings) {
     await prisma.paymentMethodSetting.upsert({
-      where: { method: setting.method },
+      where: {
+        businessId_method: {
+          businessId: "default",
+          method: setting.method
+        }
+      },
       update: {
         label: setting.label,
         enabled: setting.enabled,
         sortOrder: setting.sortOrder
       },
-      create: setting
+      create: {
+        ...setting,
+        businessId: "default"
+      }
     });
   }
 
@@ -497,9 +505,14 @@ async function main() {
   const categories = new Map<string, { id: string }>();
   for (const name of categoryNames) {
     const category = await prisma.category.upsert({
-      where: { name },
+      where: {
+        businessId_name: {
+          businessId: "default",
+          name
+        }
+      },
       update: { active: true },
-      create: { name, active: true }
+      create: { businessId: "default", name, active: true }
     });
 
     categories.set(name, category);
@@ -513,7 +526,9 @@ async function main() {
 
     const stock = new Prisma.Decimal(product.stock);
     const savedProduct = await prisma.product.upsert({
-      where: product.barcode ? { barcode: product.barcode } : { sku: product.sku },
+      where: product.barcode
+        ? { businessId_barcode: { businessId: "default", barcode: product.barcode } }
+        : { businessId_sku: { businessId: "default", sku: product.sku } },
       update: {
         name: product.name,
         sku: product.sku,
@@ -530,6 +545,7 @@ async function main() {
         deletedAt: null
       },
       create: {
+        businessId: "default",
         name: product.name,
         barcode: product.barcode,
         sku: product.sku,
@@ -556,6 +572,7 @@ async function main() {
     if (!hasInitialMovement) {
       await prisma.stockMovement.create({
         data: {
+          businessId: "default",
           productId: savedProduct.id,
           type: StockMovementType.INITIAL_IMPORT,
           quantity: stock,

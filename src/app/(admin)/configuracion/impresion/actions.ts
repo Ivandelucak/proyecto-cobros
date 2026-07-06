@@ -37,7 +37,7 @@ export async function updatePrintSettingsAction(
       marginMm: clampInt(readInt(formData, "marginMm", 2), 0, 12)
     };
 
-    await updatePrintSetting(setting);
+    await updatePrintSetting(user.businessId!, setting);
 
     await createAuditLog({
       userId: user.id,

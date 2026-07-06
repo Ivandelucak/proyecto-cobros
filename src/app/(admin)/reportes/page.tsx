@@ -30,11 +30,11 @@ type ReportesPageProps = {
 };
 
 export default async function ReportesPage({ searchParams }: ReportesPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   const params = await searchParams;
   const filters = buildReportFilters(params);
-  const data = await getReportDashboardData(filters);
+  const data = await getReportDashboardData(filters, user.businessId!);
   const executive = data.executive;
   const paymentLabels = data.paymentLabels;
   const methodLabel = filters.method ? paymentLabels[filters.method] : "Todos los pagos";

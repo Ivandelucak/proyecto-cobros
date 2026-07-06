@@ -14,7 +14,8 @@ type AuditoriaPageProps = {
 };
 
 export default async function AuditoriaPage({ searchParams }: AuditoriaPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -23,6 +24,7 @@ export default async function AuditoriaPage({ searchParams }: AuditoriaPageProps
   const [logs, entities] = await Promise.all([
     prisma.auditLog.findMany({
       where: {
+        businessId,
         ...(entity !== "all" ? { entity } : {}),
         ...(q
           ? {
@@ -45,6 +47,7 @@ export default async function AuditoriaPage({ searchParams }: AuditoriaPageProps
       take: 200
     }),
     prisma.auditLog.findMany({
+      where: { businessId },
       distinct: ["entity"],
       select: { entity: true },
       orderBy: { entity: "asc" }

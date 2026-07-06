@@ -27,7 +27,12 @@ export async function createCategoryAction(
     const data = await parseCategoryForm(formData);
     await validateCategoryName(data.name);
 
-    const category = await prisma.category.create({ data });
+    const category = await prisma.category.create({
+      data: {
+        ...data,
+        businessId: user.businessId!
+      }
+    });
     await createAuditLog({
       userId: user.id,
       action: "CREATE",
@@ -100,7 +105,7 @@ async function requireAdminUser() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN) {
     redirect("/caja");
   }
 

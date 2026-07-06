@@ -12,11 +12,13 @@ import { Button } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/branding";
 import { cn } from "@/lib/ui";
 
+import { Role } from "@prisma/client";
+
 type AppShellProps = {
   user: {
     name: string;
     email: string;
-    role: "ADMIN" | "CASHIER";
+    role: Role;
   };
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
@@ -37,7 +39,15 @@ export function AppShell({
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
   const businessName = businessProfile?.name ?? APP_NAME;
   const businessImageUrl = businessProfile?.headerImageUrl ?? businessProfile?.logoUrl ?? null;
-  const roleChipLabel = user.role === "CASHIER" ? "Caja operativa" : "Admin operativo";
+
+  const roleChipLabel =
+    user.role === Role.OWNER
+      ? "Dueño"
+      : user.role === Role.CASHIER
+      ? "Caja operativa"
+      : user.role === Role.VIEWER
+      ? "Visualizador"
+      : "Admin operativo";
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden transition-colors duration-200">
@@ -145,6 +155,9 @@ export function AppShell({
   );
 }
 
-function roleLabel(role: "ADMIN" | "CASHIER") {
-  return role === "ADMIN" ? "Administrador" : "Cajero";
+function roleLabel(role: Role) {
+  if (role === Role.OWNER) return "Dueño";
+  if (role === Role.ADMIN) return "Administrador";
+  if (role === Role.CASHIER) return "Cajero";
+  return "Visualizador";
 }

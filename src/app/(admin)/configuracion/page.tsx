@@ -19,7 +19,8 @@ import { TicketSettingsForm } from "./ticket-settings-form";
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const [
     profile,
@@ -29,12 +30,12 @@ export default async function ConfiguracionPage() {
     cashSetting,
     stockSetting
   ] = await Promise.all([
-    getBusinessProfileOrDefault(),
-    getPaymentMethodSettings(),
-    getMercadoPagoAccountViews(),
-    getTicketSetting(),
-    getCashRegisterSetting(),
-    getStockSetting()
+    getBusinessProfileOrDefault(businessId),
+    getPaymentMethodSettings(businessId),
+    getMercadoPagoAccountViews(businessId),
+    getTicketSetting(businessId),
+    getCashRegisterSetting(businessId),
+    getStockSetting(businessId)
   ]);
   const activePaymentMethods = paymentMethods.filter((method) => method.enabled).length;
   const activeMercadoPagoAccounts = mercadoPagoAccounts.filter((account) => account.enabled).length;

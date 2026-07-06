@@ -7,10 +7,12 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import type { UserFormState } from "./actions";
 
+import { Role } from "@prisma/client";
+
 type UserFormValues = {
   name: string;
   email: string;
-  role: "ADMIN" | "CASHIER";
+  role: Role;
   active: boolean;
 };
 
@@ -52,9 +54,11 @@ export function UserForm({ action, initialValues, submitLabel }: UserFormProps) 
             />
           </Field>
           <Field label="Rol">
-            <Select name="role" defaultValue={initialValues?.role ?? "CASHIER"}>
+            <Select name="role" defaultValue={initialValues?.role ?? Role.CASHIER}>
+              <option value="OWNER">Dueño</option>
               <option value="ADMIN">Administrador</option>
               <option value="CASHIER">Cajero</option>
+              <option value="VIEWER">Visualizador</option>
             </Select>
           </Field>
           <Field label={isEditing ? "Nueva contrasena" : "Contrasena"}>

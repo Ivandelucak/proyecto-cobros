@@ -15,7 +15,7 @@ export async function adjustStock(input: AdjustStockInput) {
     throw new Error("Usuario invalido.");
   }
 
-  assertRole(user.role, [Role.ADMIN], "ajustar stock");
+  assertRole(user.role, [Role.OWNER, Role.ADMIN], "ajustar stock");
 
   return prisma.$transaction(async (tx) => {
     const product = await tx.product.findFirst({
@@ -45,6 +45,7 @@ export async function adjustStock(input: AdjustStockInput) {
 
     await tx.stockMovement.create({
       data: {
+        businessId: user.businessId!,
         productId: product.id,
         type: StockMovementType.MANUAL_ADJUSTMENT,
         quantity,

@@ -19,9 +19,12 @@ export function getDefaultStockSetting(): StockSettingView {
   };
 }
 
-export async function getStockSetting() {
+export async function getStockSetting(businessId?: string) {
+  if (!businessId) {
+    return getDefaultStockSetting();
+  }
   const setting = await prisma.stockSetting.findUnique({
-    where: { id: STOCK_SETTING_ID }
+    where: { businessId }
   });
 
   return setting

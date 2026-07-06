@@ -50,29 +50,28 @@ export async function validateFiscalReadiness(
   saleId: string,
   client: FiscalDocumentClient = prisma
 ): Promise<FiscalReadinessResult> {
-  const [setting, sale] = await Promise.all([
-    getFiscalSettingOrDefault(client),
-    client.sale.findUnique({
-      where: { id: saleId },
-      include: {
-        customer: true,
-        fiscalDocument: {
-          select: {
-            status: true
-          }
+  const sale = await client.sale.findUnique({
+    where: { id: saleId },
+    include: {
+      customer: true,
+      fiscalDocument: {
+        select: {
+          status: true
         }
       }
-    })
-  ]);
-  const errors: string[] = [];
-  const warnings: string[] = [];
+    }
+  });
 
   if (!sale) {
     return {
       errors: ["Venta no encontrada."],
-      warnings
+      warnings: []
     };
   }
+
+  const setting = await getFiscalSettingOrDefault(sale.businessId ?? undefined, client);
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
   if (!setting.enabled) {
     warnings.push("El modulo fiscal esta deshabilitado.");
@@ -162,4 +161,41 @@ export function determineFiscalDocumentTypeAndLetter(input: {
 
 export function hasFiscalCustomerDocument(customer: FiscalCustomerForDocument | null) {
   return Boolean(customer?.docNumber || customer?.document);
+}
+
+export function resolveReceiverVatConditionId(
+  fiscalCondition: string | null | undefined,
+  letter: string
+): number {
+  if (letter === "A") {
+    if (!fiscalCondition || fiscalCondition === "CONSUMIDOR_FINAL") {
+      throw new Error("La Factura A requiere un cliente identificado con condición de Responsable Inscripto.");
+    }
+  }
+
+  const condition = fiscalCondition?.toUpperCase() || "CONSUMIDOR_FINAL";
+
+  switch (condition) {
+    case "RESPONSABLE_INSCRIPTO":
+      return 1;
+    case "IVA_SUJETO_EXENTO":
+    case "EXENTO":
+      return 4;
+    case "CONSUMIDOR_FINAL":
+      return 5;
+    case "MONOTRIBUTO":
+    case "RESPONSABLE_MONOTRIBUTO":
+      return 6;
+    case "SUJETO_NO_CATEGORIZADO":
+      return 7;
+    case "MONOTRIBUTISTA_SOCIAL":
+      return 13;
+    case "IVA_NO_ALCANZADO":
+    case "NO_RESPONSABLE":
+      return 15;
+    case "MONOTRIBUTO_TRABAJADOR_INDEPENDIENTE_PROMOVIDO":
+      return 16;
+    default:
+      throw new Error("Falta condición frente al IVA del receptor.");
+  }
 }

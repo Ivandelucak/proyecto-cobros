@@ -12,9 +12,11 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function ComprasPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const purchases = await prisma.purchase.findMany({
+    where: { businessId },
     include: {
       supplier: { select: { name: true } },
       user: { select: { name: true } },

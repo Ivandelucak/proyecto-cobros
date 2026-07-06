@@ -16,12 +16,13 @@ type ImprimirPresupuestoPageProps = {
 export default async function ImprimirPresupuestoPage({
   params
 }: ImprimirPresupuestoPageProps) {
-  await requireQuotePage();
+  const user = await requireQuotePage();
+  const businessId = user.businessId!;
   const { id } = await params;
   const [business, quote] = await Promise.all([
-    getBusinessProfileOrDefault(),
-    prisma.quote.findUnique({
-      where: { id },
+    getBusinessProfileOrDefault(businessId),
+    prisma.quote.findFirst({
+      where: { id, businessId },
       include: {
         customer: { select: { address: true } },
         createdBy: { select: { name: true } },
@@ -90,10 +91,10 @@ export default async function ImprimirPresupuestoPage({
 
 async function requireQuotePage() {
   const user = await getCurrentUser();
-  if (!user) {
+  if (!user || !user.businessId) {
     redirect("/login");
   }
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
   return user;

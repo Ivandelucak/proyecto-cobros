@@ -77,8 +77,11 @@ export type RegisterPaymentInput = {
 
 export type RegisterSaleInput = {
   items: Array<{
-    productId: string;
+    productId?: string | null;
     quantity: string;
+    isManual?: boolean;
+    name?: string;
+    unitPrice?: string;
   }>;
   payments: RegisterPaymentInput[];
   customerId?: string | null;
@@ -309,11 +312,12 @@ export async function associateMercadoPagoRecentPaymentAction(input: {
 }
 
 export async function getSuggestedCashProductsAction() {
-  await requireCashierUser();
-  const cashSetting = await getCashRegisterSetting();
+  const user = await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting(user.businessId!);
 
   const products = await prisma.product.findMany({
     where: {
+      businessId: user.businessId!,
       active: true,
       deletedAt: null,
       ...(cashSetting.allowNegativeStock ? {} : { stock: { gt: 0 } })
@@ -331,8 +335,8 @@ export async function getSuggestedCashProductsAction() {
 }
 
 export async function searchCashProductsAction(query: string): Promise<ProductSearchResult> {
-  await requireCashierUser();
-  const cashSetting = await getCashRegisterSetting();
+  const user = await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting(user.businessId!);
 
   const search = query.trim();
   if (!search) {
@@ -341,6 +345,7 @@ export async function searchCashProductsAction(query: string): Promise<ProductSe
 
   const products = await prisma.product.findMany({
     where: {
+      businessId: user.businessId!,
       active: true,
       deletedAt: null,
       ...(cashSetting.allowNegativeStock ? {} : { stock: { gt: 0 } }),
@@ -377,8 +382,8 @@ export async function searchCashProductsAction(query: string): Promise<ProductSe
 export async function findCashProductByBarcodeAction(
   barcode: string
 ): Promise<BarcodeProductResult> {
-  await requireCashierUser();
-  const cashSetting = await getCashRegisterSetting();
+  const user = await requireCashierUser();
+  const cashSetting = await getCashRegisterSetting(user.businessId!);
   const code = barcode.trim();
 
   if (!code) {
@@ -386,7 +391,7 @@ export async function findCashProductByBarcodeAction(
   }
 
   const product = await prisma.product.findFirst({
-    where: { barcode: code },
+    where: { barcode: code, businessId: user.businessId! },
     include: {
       category: {
         select: { name: true }
@@ -414,7 +419,7 @@ export async function findCashProductByBarcodeAction(
 }
 
 export async function searchCashCustomersAction(query: string): Promise<CashCustomerResult[]> {
-  await requireCashierUser();
+  const user = await requireCashierUser();
 
   const search = query.trim();
   if (search.length < 2) {
@@ -423,6 +428,7 @@ export async function searchCashCustomersAction(query: string): Promise<CashCust
 
   const customers = await prisma.customer.findMany({
     where: {
+      businessId: user.businessId!,
       active: true,
       deletedAt: null,
       OR: [
@@ -478,8 +484,11 @@ export async function confirmRegisterSaleAction(
     }
 
     const items = input.items.map((item) => ({
-      productId: item.productId,
-      quantity: parseLocalizedDecimal(item.quantity)
+      productId: item.productId ?? null,
+      quantity: parseLocalizedDecimal(item.quantity),
+      isManual: item.isManual ?? false,
+      name: item.name,
+      unitPrice: item.unitPrice ? parseLocalizedDecimal(item.unitPrice) : undefined
     }));
     const payments = buildPayments(input.payments);
     const sale = await confirmSale({
@@ -530,7 +539,7 @@ export async function openCashSessionAction(
 
   try {
     const existingOpenSession = await prisma.cashSession.findFirst({
-      where: { status: CashSessionStatus.OPEN },
+      where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
       select: { id: true }
     });
 
@@ -545,6 +554,7 @@ export async function openCashSessionAction(
 
     const cashSession = await prisma.cashSession.create({
       data: {
+        businessId: user.businessId!,
         openingAmount,
         notes: readOptionalText(formData, "notes"),
         status: CashSessionStatus.OPEN,
@@ -578,7 +588,7 @@ export async function addCashMovementAction(
 
   try {
     const openSession = await prisma.cashSession.findFirst({
-      where: { status: CashSessionStatus.OPEN },
+      where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
       select: { id: true }
     });
 
@@ -641,7 +651,7 @@ export async function closeCashSessionAction(
 
   try {
     const openSession = await prisma.cashSession.findFirst({
-      where: { status: CashSessionStatus.OPEN },
+      where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
       select: { id: true }
     });
 
@@ -701,7 +711,7 @@ async function requireCashierUser() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
 

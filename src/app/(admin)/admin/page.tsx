@@ -12,7 +12,8 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -20,9 +21,10 @@ export default async function AdminPage() {
   end.setDate(end.getDate() + 1);
 
   const [cashSession, todaySales, stockLowProducts, latestSales, customers, latestPurchases, fiscalCounts] = await Promise.all([
-    getOpenCashSessionSnapshot(),
+    getOpenCashSessionSnapshot(businessId),
     prisma.sale.findMany({
       where: {
+        businessId,
         status: SaleStatus.PAID,
         createdAt: { gte: start, lt: end }
       },
@@ -32,12 +34,16 @@ export default async function AdminPage() {
     }),
     prisma.product.findMany({
       where: {
+        businessId,
         active: true,
         deletedAt: null
       },
       orderBy: { stock: "asc" }
     }),
     prisma.sale.findMany({
+      where: {
+        businessId
+      },
       include: {
         user: { select: { name: true } }
       },
@@ -45,10 +51,13 @@ export default async function AdminPage() {
       take: 6
     }),
     prisma.customer.findMany({
-      where: { active: true, deletedAt: null },
+      where: { businessId, active: true, deletedAt: null },
       select: { id: true }
     }),
     prisma.purchase.findMany({
+      where: {
+        businessId
+      },
       include: { supplier: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take: 6
@@ -57,6 +66,7 @@ export default async function AdminPage() {
       by: ["fiscalStatus"],
       _count: { _all: true },
       where: {
+        businessId,
         fiscalStatus: {
           in: [
             FiscalStatus.PENDING,

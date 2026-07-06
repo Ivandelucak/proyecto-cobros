@@ -42,10 +42,13 @@ export function getDefaultTicketSetting(): TicketSettingView {
   };
 }
 
-export async function getTicketSetting() {
+export async function getTicketSetting(businessId?: string) {
+  if (!businessId) {
+    return getDefaultTicketSetting();
+  }
   const setting = await prisma.ticketSetting.findUnique({
-    where: { id: TICKET_SETTING_ID }
+    where: { businessId }
   });
 
-  return setting ?? getDefaultTicketSetting();
+  return setting ?? { ...getDefaultTicketSetting(), businessId, id: businessId };
 }

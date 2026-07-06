@@ -32,7 +32,7 @@ export async function previewProductsImportAction(
   _prevState: ImportProductsState,
   formData: FormData
 ): Promise<ImportProductsState> {
-  await requireAdminUser();
+  const user = await requireAdminUser();
 
   try {
     const file = formData.get("file");
@@ -50,7 +50,7 @@ export async function previewProductsImportAction(
     }
 
     return {
-      preview: await buildPreview(rows)
+      preview: await buildPreview(rows, user.businessId!)
     };
   } catch (error) {
     return { error: getErrorMessage(error) };
@@ -65,8 +65,8 @@ export async function confirmProductsImportAction(
 
   try {
     const rows = parseRowsJson(String(formData.get("rowsJson") ?? ""));
-    const preview = await buildPreview(rows);
-    const result = await importValidRows(preview.rows, user.id);
+    const preview = await buildPreview(rows, user.businessId!);
+    const result = await importValidRows(preview.rows, user.id, user.businessId!);
 
     revalidatePath("/productos");
     revalidatePath("/productos/importar");
@@ -79,7 +79,7 @@ export async function confirmProductsImportAction(
   }
 }
 
-async function buildPreview(rows: ProductImportRow[]) {
+async function buildPreview(rows: ProductImportRow[], businessId: string) {
   const barcodes = unique(rows.map((row) => row.barcode).filter(Boolean));
   const skus = unique(rows.map((row) => row.sku).filter(Boolean));
   const productFilters: Prisma.ProductWhereInput[] = [];
@@ -96,6 +96,7 @@ async function buildPreview(rows: ProductImportRow[]) {
     productFilters.length > 0
       ? prisma.product.findMany({
           where: {
+            businessId,
             deletedAt: null,
             OR: productFilters
           },
@@ -108,6 +109,7 @@ async function buildPreview(rows: ProductImportRow[]) {
         })
       : Promise.resolve([]),
     prisma.category.findMany({
+      where: { businessId },
       select: { name: true }
     })
   ]);
@@ -119,7 +121,7 @@ async function buildPreview(rows: ProductImportRow[]) {
   );
 }
 
-async function importValidRows(rows: ProductImportPreviewRow[], userId: string) {
+async function importValidRows(rows: ProductImportPreviewRow[], userId: string, businessId: string) {
   const validRows = rows.filter((row) => row.action !== "error");
 
   return prisma.$transaction(async (tx) => {
@@ -131,6 +133,7 @@ async function importValidRows(rows: ProductImportPreviewRow[], userId: string) 
       categoriesCreated: 0
     };
     const categories = await tx.category.findMany({
+      where: { businessId },
       select: { id: true, name: true }
     });
     const categoriesByName = new Map(
@@ -142,6 +145,7 @@ async function importValidRows(rows: ProductImportPreviewRow[], userId: string) 
       if (!categoriesByName.has(key)) {
         const category = await tx.category.create({
           data: {
+            businessId,
             name: categoryName,
             active: true
           },
@@ -167,6 +171,7 @@ async function importValidRows(rows: ProductImportPreviewRow[], userId: string) 
         const stock = toDecimalOrZero(row.stock);
         const product = await tx.product.create({
           data: {
+            businessId,
             name: row.name,
             barcode: row.barcode,
             sku: row.sku,
@@ -188,6 +193,7 @@ async function importValidRows(rows: ProductImportPreviewRow[], userId: string) 
         if (stock.gt(0)) {
           await tx.stockMovement.create({
             data: {
+              businessId,
               productId: product.id,
               type: StockMovementType.INITIAL_IMPORT,
               quantity: stock,
@@ -281,6 +287,7 @@ async function importValidRows(rows: ProductImportPreviewRow[], userId: string) 
       if (newStock && !currentProduct.stock.equals(newStock)) {
         await tx.stockMovement.create({
           data: {
+            businessId,
             productId: currentProduct.id,
             type: StockMovementType.MANUAL_ADJUSTMENT,
             quantity: newStock.minus(currentProduct.stock),
@@ -305,7 +312,7 @@ async function requireAdminUser() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN) {
     redirect("/caja");
   }
 

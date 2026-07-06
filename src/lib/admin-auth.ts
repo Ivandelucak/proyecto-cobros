@@ -9,7 +9,7 @@ export async function requireAdminPage() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN) {
     redirect("/caja");
   }
 

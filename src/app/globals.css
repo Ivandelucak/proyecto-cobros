@@ -290,6 +290,14 @@ html.theme-transitioning *::after {
     color: var(--success);
   }
 
+  .dark .badge-success,
+  html[data-theme="dark"] .badge-success {
+    border-color: rgba(40, 163, 106, 0.4);
+    background: rgba(40, 163, 106, 0.15);
+    color: #4ade80;
+  }
+
+
   .badge-warning {
     border-color: color-mix(in srgb, var(--warning) 48%, var(--panel-border));
     background: color-mix(in srgb, var(--warning) 13%, transparent);
@@ -651,4 +659,20 @@ html.theme-transitioning *::after {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Sobrescribir estilos verdes hardcodeados en dark mode */
+.dark .bg-\[\#E8F6EF\],
+html[data-theme="dark"] .bg-\[\#E8F6EF\],
+.dark .bg-emerald-50,
+html[data-theme="dark"] .bg-emerald-50 {
+  background-color: rgba(40, 163, 106, 0.15) !important;
+  border-color: rgba(40, 163, 106, 0.35) !important;
+}
+
+.dark .text-\[\#1F8F63\],
+html[data-theme="dark"] .text-\[\#1F8F63\],
+.dark .text-emerald-800,
+html[data-theme="dark"] .text-emerald-800 {
+  color: #4ade80 !important;
 }

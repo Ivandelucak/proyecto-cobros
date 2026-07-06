@@ -18,17 +18,21 @@ type CategoriasPageProps = {
 };
 
 export default async function CategoriasPage({ searchParams }: CategoriasPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
+  const businessId = user.businessId!;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
 
   const categories = await prisma.category.findMany({
-    where: q
-      ? {
-          name: { contains: q }
-        }
-      : {},
+    where: {
+      businessId,
+      ...(q
+        ? {
+            name: { contains: q }
+          }
+        : {})
+    },
     include: {
       parent: { select: { name: true } },
       _count: { select: { products: true } }

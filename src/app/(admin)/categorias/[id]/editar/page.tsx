@@ -12,14 +12,20 @@ type EditarCategoriaPageProps = {
 };
 
 export default async function EditarCategoriaPage({ params }: EditarCategoriaPageProps) {
-  await requireAdminPage();
+  const user = await requireAdminPage();
 
   const { id } = await params;
   const [category, parentOptions] = await Promise.all([
-    prisma.category.findUnique({ where: { id } }),
+    prisma.category.findFirst({
+      where: {
+        id,
+        businessId: user.businessId!
+      }
+    }),
     prisma.category.findMany({
       where: {
         id: { not: id },
+        businessId: user.businessId!,
         active: true
       },
       orderBy: { name: "asc" },

@@ -69,10 +69,12 @@ export function getDefaultBusinessProfile(): BusinessProfileView {
   };
 }
 
-export async function getBusinessProfileOrDefault() {
-  return (
-    (await prisma.businessProfile.findUnique({
-      where: { id: BUSINESS_PROFILE_ID }
-    })) ?? getDefaultBusinessProfile()
-  );
+export async function getBusinessProfileOrDefault(businessId?: string) {
+  if (!businessId) {
+    return getDefaultBusinessProfile();
+  }
+  const profile = await prisma.businessProfile.findUnique({
+    where: { businessId }
+  });
+  return profile ?? { ...getDefaultBusinessProfile(), businessId, id: businessId };
 }

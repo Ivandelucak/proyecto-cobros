@@ -7,10 +7,15 @@ import type { MercadoPagoAccountView } from "./mercado-pago-types";
 type MercadoPagoAccountClient = Prisma.TransactionClient | typeof prisma;
 
 export async function getMercadoPagoAccountViews(
+  businessId: string,
   client: MercadoPagoAccountClient = prisma
 ): Promise<MercadoPagoAccountView[]> {
+  if (!businessId) return [];
   const accounts = await client.mercadoPagoAccount.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      businessId
+    },
     orderBy: [{ defaultAccount: "desc" }, { enabled: "desc" }, { name: "asc" }]
   });
 
@@ -57,17 +62,20 @@ export async function getMercadoPagoAccountViews(
 }
 
 export async function getActiveMercadoPagoAccountViews(
+  businessId: string,
   client: MercadoPagoAccountClient = prisma
 ) {
-  return (await getMercadoPagoAccountViews(client)).filter((account) => account.enabled);
+  if (!businessId) return [];
+  return (await getMercadoPagoAccountViews(businessId, client)).filter((account) => account.enabled);
 }
 
-export async function getMercadoPagoAccountWithToken(id: string) {
+export async function getMercadoPagoAccountWithToken(id: string, businessId?: string) {
   const account = await prisma.mercadoPagoAccount.findFirst({
     where: {
       id,
       enabled: true,
-      deletedAt: null
+      deletedAt: null,
+      ...(businessId ? { businessId } : {})
     }
   });
 

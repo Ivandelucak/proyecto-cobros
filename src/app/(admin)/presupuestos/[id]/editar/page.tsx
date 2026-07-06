@@ -13,10 +13,13 @@ type EditarPresupuestoPageProps = {
 };
 
 export default async function EditarPresupuestoPage({ params }: EditarPresupuestoPageProps) {
-  await requireQuotePage();
+  const user = await requireQuotePage();
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    },
     include: {
       items: {
         include: {
@@ -68,10 +71,10 @@ export default async function EditarPresupuestoPage({ params }: EditarPresupuest
 
 async function requireQuotePage() {
   const user = await getCurrentUser();
-  if (!user) {
+  if (!user || !user.businessId) {
     redirect("/login");
   }
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
   return user;

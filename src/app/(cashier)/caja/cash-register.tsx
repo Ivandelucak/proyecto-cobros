@@ -16,6 +16,7 @@ import { MercadoPagoQrModal } from "@/components/payments/mercado-pago-qr-modal"
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TrashIcon } from "@/components/ui/icons";
+
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { AppAccordion, AppModal } from "@/components/ui/overlay";
@@ -56,6 +57,7 @@ import {
 
 type CartItem = CashProductResult & {
   quantity: string;
+  isManual?: boolean;
 };
 
 type PaymentMethodValue =
@@ -213,6 +215,11 @@ export function CashRegister({
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const [suggestedProducts, setSuggestedProducts] = useState(initialSuggestedProducts);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualItemName, setManualItemName] = useState("");
+  const [manualItemPrice, setManualItemPrice] = useState("");
+  const [manualItemQuantity, setManualItemQuantity] = useState("1");
+  const [manualItemError, setManualItemError] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethodValue>(defaultPaymentMethod);
@@ -1078,6 +1085,43 @@ export function CashRegister({
     setCart((currentCart) => currentCart.filter((item) => item.id !== productId));
   }
 
+  function handleAddManualItem(event: any) {
+    event.preventDefault();
+    setManualItemError(null);
+
+    const name = manualItemName.trim();
+    if (name.length < 2) {
+      setManualItemError("El nombre debe tener al menos 2 caracteres.");
+      return;
+    }
+    if (name.length > 80) {
+      setManualItemError("El nombre no puede superar los 80 caracteres.");
+      return;
+    }
+
+    const priceNum = safeNumber(manualItemPrice.replace(",", "."));
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setManualItemError("El precio unitario debe ser mayor a cero.");
+      return;
+    }
+
+    const qtyNum = safeNumber(manualItemQuantity.replace(",", "."));
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      setManualItemError("La cantidad debe ser mayor a cero.");
+      return;
+    }
+
+    const newItem = createManualCartItem(name, String(priceNum), String(qtyNum));
+    setCart((currentCart) => [...currentCart, newItem]);
+
+    setManualItemName("");
+    setManualItemPrice("");
+    setManualItemQuantity("1");
+    setIsManualModalOpen(false);
+
+    showMessage(`Artículo manual "${name}" agregado.`, "ok");
+  }
+
   function addPayment() {
     setSaleSuccess(null);
 
@@ -1680,8 +1724,11 @@ export function CashRegister({
       );
       const result = await confirmRegisterSaleAction({
         items: cart.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity
+          productId: item.isManual ? null : item.id,
+          quantity: item.quantity,
+          isManual: item.isManual || false,
+          name: item.isManual ? item.name : undefined,
+          unitPrice: item.isManual ? item.salePrice : undefined
         })),
         payments: finalPayments.map((payment) => ({
           method: payment.method,
@@ -1992,6 +2039,14 @@ export function CashRegister({
             >
               Buscar
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="btn-secondary h-10 shrink-0 px-4 2xl:h-11 2xl:px-5"
+              onClick={() => setIsManualModalOpen(true)}
+            >
+              Ítem manual
+            </Button>
           </form>
 
           <div className="cash-shortcuts mt-2 flex flex-wrap gap-1.5 text-xs text-[var(--text-secondary)]">
@@ -2068,7 +2123,13 @@ export function CashRegister({
                             {item.name}
                           </div>
                           <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                            {item.categoryName} - {formatStock(item.stock, item.unitType)}
+                            {item.isManual ? (
+                              <span className="font-bold text-[color:var(--primary)] uppercase tracking-wider text-[10px]">
+                                Artículo manual
+                              </span>
+                            ) : (
+                              `${item.categoryName} - ${formatStock(item.stock, item.unitType)}`
+                            )}
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
@@ -2678,6 +2739,95 @@ export function CashRegister({
         onCancel={cancelMercadoPagoQrAttempt}
         onGenerateNew={generateMercadoPagoQr}
       />
+      <AppModal
+        open={isManualModalOpen}
+        onClose={() => {
+          setIsManualModalOpen(false);
+          setManualItemError(null);
+        }}
+        title="Agregar artículo manual"
+        description="Usalo para vender un artículo que no está cargado en Productos."
+        panelClassName="max-w-md"
+      >
+        <form onSubmit={handleAddManualItem} className="space-y-4">
+          {manualItemError ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200">
+              {manualItemError}
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                Nombre del artículo
+              </span>
+              <Input
+                required
+                value={manualItemName}
+                onChange={(e) => setManualItemName(e.target.value)}
+                placeholder="Ej: Pan suelto, Bolsa de hielo, etc."
+                className="h-10 text-sm font-semibold"
+                maxLength={80}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                  Precio unitario
+                </span>
+                <Input
+                  required
+                  inputMode="decimal"
+                  value={manualItemPrice}
+                  onChange={(e) => setManualItemPrice(sanitizeMoneyInput(e.target.value))}
+                  placeholder="0.00"
+                  className="h-10 text-sm font-semibold"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                  Cantidad
+                </span>
+                <Input
+                  required
+                  inputMode="decimal"
+                  value={manualItemQuantity}
+                  onChange={(e) => setManualItemQuantity(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))}
+                  placeholder="1"
+                  className="h-10 text-sm font-semibold"
+                />
+              </label>
+            </div>
+
+            <div className="app-panel-secondary rounded-lg p-3 text-xs text-[var(--text-secondary)]">
+              <p className="font-semibold">
+                Subtotal estimado: {formatARS(safeNumber(manualItemPrice.replace(",", ".")) * safeNumber(manualItemQuantity.replace(",", ".")))}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                Este artículo se agregará sólo a esta venta. No se guardará en Productos ni modificará stock.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-[color:var(--panel-border)]">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsManualModalOpen(false);
+                setManualItemError(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary">
+              Agregar a venta
+            </Button>
+          </div>
+        </form>
+      </AppModal>
       <MercadoPagoMovementsDrawer
         open={mercadoPagoMovementsModalOpen}
         context={movementModalContext}
@@ -3211,136 +3361,6 @@ function MercadoPagoInfoBadge({ children }: { children: ReactNode }) {
     <span className="badge-neutral rounded-full px-2 py-0.5 text-[11px] font-semibold">
       {children}
     </span>
-  );
-}
-
-function MercadoPagoInlineMovements({
-  movements,
-  account,
-  targetAmount,
-  lastQueryAt,
-  pollingEnabled,
-  pollSeconds,
-  disabled,
-  onRefresh,
-  onAssociate
-}: {
-  movements: MercadoPagoMovementView[];
-  account: MercadoPagoAccountView | null;
-  targetAmount: number;
-  lastQueryAt: string | null;
-  pollingEnabled: boolean;
-  pollSeconds: number;
-  disabled: boolean;
-  onRefresh: () => void;
-  onAssociate: (movement: MercadoPagoMovementView) => void;
-}) {
-  const visibleMovements = movements.slice(0, 5);
-
-  return (
-    <details className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-2" open={visibleMovements.length > 0}>
-      <summary className="cursor-pointer list-none">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[var(--text-primary)]">
-              Ultimos cobros detectados
-            </p>
-            <p className="truncate text-[11px] text-[var(--text-muted)]">
-              {pollingEnabled
-                ? `Buscando cada ${pollSeconds}s`
-                : visibleMovements.length > 0
-                  ? `${visibleMovements.length} visibles`
-                  : "Actualiza para consultar pagos aprobados"}
-            </p>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Ultima consulta: {formatMercadoPagoClock(lastQueryAt)}
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={disabled || !account}
-            onClick={(event) => {
-              event.preventDefault();
-              onRefresh();
-            }}
-          >
-            Actualizar
-          </Button>
-        </div>
-      </summary>
-
-      <div className="mt-2 space-y-2">
-        <p className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-2.5 py-2 text-[11px] leading-4 text-[var(--text-secondary)]">
-          Fox Point consulta cobros disponibles por API de Mercado Pago. Algunos movimientos de cuenta pueden demorar o no estar disponibles como pagos.
-        </p>
-        {visibleMovements.length === 0 ? (
-          <p className="rounded-md border border-dashed border-[color:var(--panel-border)] px-3 py-2 text-xs text-[var(--text-muted)]">
-            Sin cobros cargados en esta vista.
-          </p>
-        ) : (
-          visibleMovements.map((movement) => {
-            const approved = isMercadoPagoMovementApproved(movement);
-            const matchesAmount = account
-              ? isMercadoPagoMovementAmountMatch({
-                  movement,
-                  targetAmount,
-                  tolerance: account.amountMatchingTolerance
-                })
-              : false;
-
-            return (
-              <div
-                key={movement.id}
-                className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-2.5 py-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="font-bold text-[var(--text-primary)]">
-                        {formatARS(movement.amount)}
-                      </p>
-                      <MercadoPagoMovementBadge tone={approved ? "ok" : "muted"}>
-                        {mercadoPagoMovementStatusLabel(movement.status)}
-                      </MercadoPagoMovementBadge>
-                      {matchesAmount ? (
-                        <MercadoPagoMovementBadge tone="warn">Coincide</MercadoPagoMovementBadge>
-                      ) : null}
-                      {movement.alreadyUsed ? (
-                        <MercadoPagoMovementBadge tone="muted">
-                          {movement.usedSaleNumber
-                            ? `Usado #${movement.usedSaleNumber}`
-                            : "Usado"}
-                        </MercadoPagoMovementBadge>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
-                      {formatMercadoPagoDate(movement.dateApproved ?? movement.dateCreated)} - ID{" "}
-                      {shortReference(movement.id)}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
-                      {[movement.externalReference && shortReference(movement.externalReference), movement.paymentType]
-                        .filter(Boolean)
-                        .join(" - ") || "Sin referencia"}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={matchesAmount && approved ? "primary" : "secondary"}
-                    disabled={disabled || movement.alreadyUsed || !approved || !matchesAmount}
-                    onClick={() => onAssociate(movement)}
-                  >
-                    Aplicar a esta venta
-                  </Button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </details>
   );
 }
 
@@ -4384,8 +4404,28 @@ function allowsDecimal(item: QuantityConfig) {
   return item.allowsDecimalQuantity || decimalUnits.has(item.unitType);
 }
 
+function createManualCartItem(name: string, price: string, quantity: string): CartItem {
+  return {
+    id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    name,
+    barcode: null,
+    sku: null,
+    salePrice: price,
+    stock: "0",
+    unitType: "UNIT",
+    allowsDecimalQuantity: true,
+    categoryName: "Artículo manual",
+    quickAccess: false,
+    quantity,
+    isManual: true
+  } as any;
+}
+
 function isValidQuantity(quantity: string, item: CartItem, allowNegativeStock: boolean) {
   const value = safeNumber(quantity);
+  if (item.isManual) {
+    return value > 0;
+  }
   if (value <= 0 || (!allowNegativeStock && value > safeNumber(item.stock))) {
     return false;
   }

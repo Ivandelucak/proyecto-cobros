@@ -21,8 +21,11 @@ import { assertRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 type SaleItemInput = {
-  productId: string;
+  productId?: string | null;
   quantity: Prisma.Decimal.Value;
+  isManual?: boolean;
+  name?: string;
+  unitPrice?: Prisma.Decimal.Value;
 };
 
 type PaymentInput = {
@@ -56,7 +59,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
     throw new Error("Usuario inválido.");
   }
 
-  assertRole(user.role, [Role.ADMIN, Role.CASHIER], "confirmar ventas");
+  assertRole(user.role, [Role.OWNER, Role.ADMIN, Role.CASHIER], "confirmar ventas");
 
   if (input.items.length === 0) {
     throw new Error("La venta no tiene productos.");
@@ -67,9 +70,9 @@ export async function confirmSale(input: ConfirmSaleInput) {
   }
 
   return prisma.$transaction(async (tx) => {
-    const cashSetting = await getCashRegisterSetting(tx);
+    const cashSetting = await getCashRegisterSetting(user.businessId ?? undefined, tx);
     const cashSession = await tx.cashSession.findFirst({
-      where: { status: CashSessionStatus.OPEN },
+      where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
       select: { id: true }
     });
 
@@ -77,7 +80,10 @@ export async function confirmSale(input: ConfirmSaleInput) {
       throw new Error("No hay caja abierta para registrar la venta.");
     }
 
-    const productIds = [...new Set(input.items.map((item) => item.productId))];
+    const catalogItems = input.items.filter((item) => !item.isManual);
+    const manualItems = input.items.filter((item) => item.isManual);
+
+    const productIds = [...new Set(catalogItems.map((item) => item.productId as string))];
     const products = await tx.product.findMany({
       where: {
         id: { in: productIds },
@@ -91,10 +97,10 @@ export async function confirmSale(input: ConfirmSaleInput) {
       throw new Error("Uno o más productos no están disponibles.");
     }
 
-    const groupedItems = groupSaleItems(input.items);
+    const groupedCatalogItems = groupSaleItems(catalogItems);
     let subtotal = new Prisma.Decimal(0);
 
-    const saleItems = groupedItems.map((item) => {
+    const catalogSaleItems = groupedCatalogItems.map((item) => {
       const product = productsById.get(item.productId);
       if (!product) {
         throw new Error("Producto inválido.");
@@ -118,21 +124,60 @@ export async function confirmSale(input: ConfirmSaleInput) {
       return {
         product,
         quantity: item.quantity,
+        isManual: false,
         data: {
           productId: product.id,
           productNameSnapshot: product.name,
           unitPrice: product.salePrice,
           quantity: item.quantity,
           subtotal: itemSubtotal,
-          unitTypeSnapshot: product.unitType
+          unitTypeSnapshot: product.unitType,
+          isManual: false
         }
       };
     });
 
+    const manualSaleItems = manualItems.map((item) => {
+      if (!item.name || item.name.trim().length < 2) {
+        throw new Error("El nombre del artículo manual debe tener al menos 2 caracteres.");
+      }
+      if (item.name.trim().length > 80) {
+        throw new Error("El nombre del artículo manual es demasiado largo.");
+      }
+      const unitPrice = new Prisma.Decimal(item.unitPrice ?? 0);
+      if (unitPrice.lte(0)) {
+        throw new Error("El precio del artículo manual debe ser mayor a cero.");
+      }
+      const quantity = new Prisma.Decimal(item.quantity);
+      if (quantity.lte(0)) {
+        throw new Error("La cantidad del artículo manual debe ser mayor a cero.");
+      }
+
+      const itemSubtotal = unitPrice.mul(quantity).toDecimalPlaces(2);
+      subtotal = subtotal.plus(itemSubtotal);
+
+      return {
+        product: null,
+        quantity,
+        isManual: true,
+        data: {
+          productId: null,
+          productNameSnapshot: item.name.trim(),
+          unitPrice,
+          quantity,
+          subtotal: itemSubtotal,
+          unitTypeSnapshot: "UNIT" as const,
+          isManual: true
+        }
+      };
+    });
+
+    const saleItems = [...catalogSaleItems, ...manualSaleItems];
+
     const [paymentMethodSettings, activeCreditPlans, fiscalSetting] = await Promise.all([
-      getPaymentMethodSettings(tx),
+      getPaymentMethodSettings(user.businessId ?? undefined, tx),
       getActiveCreditInstallmentPlans(tx),
-      getFiscalSettingOrDefault(tx)
+      getFiscalSettingOrDefault(user.businessId ?? undefined, tx)
     ]);
     const paymentMethodSettingsByCode = new Map(
       paymentMethodSettings.map((setting) => [setting.method, setting])
@@ -219,6 +264,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
 
     const sale = await tx.sale.create({
       data: {
+        businessId: user.businessId!,
         userId: user.id,
         subtotal,
         total,
@@ -242,6 +288,9 @@ export async function confirmSale(input: ConfirmSaleInput) {
     });
 
     for (const item of saleItems) {
+      if (item.isManual || !item.product) {
+        continue;
+      }
       const previousStock = item.product.stock;
       const newStock = previousStock.minus(item.quantity);
 
@@ -252,6 +301,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
 
       await tx.stockMovement.create({
         data: {
+          businessId: user.businessId!,
           productId: item.product.id,
           type: StockMovementType.SALE,
           quantity: item.quantity.negated(),
@@ -488,6 +538,7 @@ function groupSaleItems(items: SaleItemInput[]) {
   const grouped = new Map<string, Prisma.Decimal>();
 
   for (const item of items) {
+    if (!item.productId) continue;
     const quantity = new Prisma.Decimal(item.quantity);
     grouped.set(
       item.productId,

@@ -19,10 +19,13 @@ type PresupuestoDetallePageProps = {
 };
 
 export default async function PresupuestoDetallePage({ params }: PresupuestoDetallePageProps) {
-  await requireQuotePage();
+  const user = await requireQuotePage();
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id,
+      businessId: user.businessId!
+    },
     include: {
       createdBy: { select: { name: true } },
       items: { orderBy: { id: "asc" } }
@@ -185,7 +188,7 @@ async function requireQuotePage() {
   if (!user) {
     redirect("/login");
   }
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
   return user;

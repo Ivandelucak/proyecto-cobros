@@ -17,7 +17,12 @@ export async function createSupplierAction(
   const user = await requireAdminPage();
 
   try {
-    const supplier = await prisma.supplier.create({ data: parseSupplierForm(formData) });
+    const supplier = await prisma.supplier.create({
+      data: {
+        ...parseSupplierForm(formData),
+        businessId: user.businessId!
+      }
+    });
     await createAuditLog({
       userId: user.id,
       action: "CREATE",

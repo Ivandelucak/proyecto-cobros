@@ -177,6 +177,7 @@ export async function createQuoteAction(
     const input = await parseQuoteForm(formData);
     const quote = await prisma.quote.create({
       data: {
+        businessId: user.businessId!,
         customerId: input.customerId,
         customerNameSnapshot: input.customerNameSnapshot,
         customerDocumentSnapshot: input.customerDocumentSnapshot,
@@ -320,6 +321,7 @@ export async function duplicateQuoteAction(quoteId: string) {
 
   const duplicated = await prisma.quote.create({
     data: {
+      businessId: user.businessId!,
       customerId: quote.customerId,
       customerNameSnapshot: quote.customerNameSnapshot,
       customerDocumentSnapshot: quote.customerDocumentSnapshot,
@@ -367,7 +369,7 @@ async function requireQuoteUser() {
     redirect("/login");
   }
 
-  if (user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
     redirect("/login");
   }
 

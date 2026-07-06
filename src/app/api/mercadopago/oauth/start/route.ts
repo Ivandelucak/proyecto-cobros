@@ -1,6 +1,7 @@
 import { MercadoPagoEnvironment } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { createMercadoPagoOAuthAuthorizationUrl } from "@/lib/mercadopago/mercado-pago-oauth";
+import { getSessionFromCookie } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,9 @@ export async function GET(request: NextRequest) {
   const environment = parseEnvironment(url.searchParams.get("environment"));
 
   try {
-    const link = createMercadoPagoOAuthAuthorizationUrl(environment);
+    const session = await getSessionFromCookie();
+    const businessId = session?.businessId ?? undefined;
+    const link = createMercadoPagoOAuthAuthorizationUrl(businessId, environment);
     const state = new URL(link.url).searchParams.get("state");
     const response = NextResponse.redirect(link.url);
     if (state) {

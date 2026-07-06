@@ -35,6 +35,7 @@ export async function createMercadoPagoQrOrder(input: {
   validateExternalReference(externalReference);
   const attempt = await prisma.paymentAttempt.create({
     data: {
+      businessId: account.businessId,
       mercadoPagoAccountId: account.id,
       externalReference,
       amount,

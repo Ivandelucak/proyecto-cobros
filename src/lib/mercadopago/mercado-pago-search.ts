@@ -170,6 +170,7 @@ export async function associateMercadoPagoPaymentByAmount(input: {
   });
 
   const data = {
+    businessId: account.businessId,
     mercadoPagoAccountId: account.id,
     providerPaymentId: candidate.id,
     amount: new Prisma.Decimal(candidate.amount).toDecimalPlaces(2),
@@ -248,6 +249,7 @@ export async function associateMercadoPagoRecentPayment(input: {
   }
 
   const data = {
+    businessId: account.businessId,
     mercadoPagoAccountId: account.id,
     method: input.paymentMethod ?? PaymentMethod.MERCADOPAGO,
     providerPaymentId: movement.id,

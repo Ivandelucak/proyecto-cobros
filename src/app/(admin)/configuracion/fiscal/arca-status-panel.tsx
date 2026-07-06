@@ -209,7 +209,7 @@ function StatusPill({ status }: { status: string | null }) {
   const normalized = status ?? "SIN PRUEBAS";
   const isOk = normalized === "OK";
   const className = isOk
-    ? "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
     : "border-slate-200 bg-slate-50 text-slate-700 dark:border-[#273342] dark:bg-[#121922] dark:text-[#A9B6C2]";
 
   return (
@@ -259,24 +259,24 @@ function ActionResult({ state }: { state: ArcaTestState }) {
       className={
         state.error
           ? "mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
-          : "mt-3 rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
+          : "mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
       }
     >
-      <p className="font-medium">{state.error ?? state.success}</p>
+      <p className="font-semibold">{state.error ?? state.success}</p>
       {state.result?.length ? (
-        <dl className="mt-2 grid gap-1">
+        <dl className="mt-2 grid gap-1 border-t border-emerald-200/55 pt-2 dark:border-[#28A36A]/20 text-xs">
           {state.result.map((item) => (
             <div key={item.label} className="flex justify-between gap-3">
-              <dt>{item.label}</dt>
-              <dd className="text-right font-semibold">{item.value}</dd>
+              <dt className="text-emerald-700 dark:text-[#D4F2E1]/80">{item.label}</dt>
+              <dd className="text-right font-semibold text-emerald-900 dark:text-[#D4F2E1]">{item.value}</dd>
             </div>
           ))}
         </dl>
       ) : null}
       {state.details ? (
         <details className="mt-2">
-          <summary className="cursor-pointer font-medium">Detalle tecnico</summary>
-          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-white/10">
+          <summary className="cursor-pointer font-medium select-none">Detalle técnico</summary>
+          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-black/5 p-2 text-xs dark:bg-black/30">
             {state.details}
           </pre>
         </details>
