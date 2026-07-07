@@ -70,6 +70,7 @@ function getTokenSecret() {
   return (
     process.env.TOKEN_ENCRYPTION_SECRET?.trim() ||
     process.env.APP_SECRET?.trim() ||
+    process.env.AUTH_SECRET?.trim() ||
     ""
   );
 }

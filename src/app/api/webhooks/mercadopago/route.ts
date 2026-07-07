@@ -1,6 +1,7 @@
 import { PaymentAttemptStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { mercadoPagoRequest } from "@/lib/mercadopago/mercado-pago-client";
+import { revealMercadoPagoToken } from "@/lib/mercadopago/mercado-pago-secrets";
 import type { MercadoPagoPaymentSearchResult } from "@/lib/mercadopago/mercado-pago-types";
 import { prisma } from "@/lib/prisma";
 
@@ -30,8 +31,9 @@ async function syncMercadoPagoPayment(paymentId: string) {
 
   for (const account of accounts) {
     try {
+      const decryptedToken = revealMercadoPagoToken(account.accessToken);
       const payment = await mercadoPagoRequest<MercadoPagoPaymentSearchResult>({
-        accessToken: account.accessToken,
+        accessToken: decryptedToken,
         path: `/v1/payments/${paymentId}`
       });
       const externalReference = payment.external_reference ?? null;

@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foxpoint-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # Se asume que las variables reales se definen en el archivo .env del VPS
+      - DATABASE_URL=mysql://app_user:26Mar2004@db:3306/pos_universal
+      - AUTH_SECRET=cambiar-por-un-secreto-muy-seguro-en-produccion
+      - TOKEN_ENCRYPTION_SECRET=cambiar-por-un-secreto-de-encriptacion-diferente
+      - SETUP_ADMIN_KEY=clave-maestra-para-creacion-de-comercios-2026
+      - ENABLE_SETUP_PAGE=true
+      - APP_PUBLIC_URL=https://tu-dominio-vps.com
+      - MP_CLIENT_ID=tu-client-id
+      - MP_CLIENT_SECRET=tu-client-secret
+      - MP_REDIRECT_URI=https://tu-dominio-vps.com/api/mercadopago/oauth/callback
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    container_name: foxpoint-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: pos_universal
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: password_seguro_db_2026
+      MYSQL_ROOT_PASSWORD: root_password_seguro_2026
+    ports:
+      - "127.0.0.1:3306:3306" # Expone el puerto localmente en el VPS para copias de seguridad
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "app_user", "-p26Mar2004"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql-data:
+    driver: local

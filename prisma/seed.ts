@@ -272,6 +272,10 @@ const creditInstallmentPlans = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.log("Seeding is disabled in production environment to prevent data overwrites.");
+    return;
+  }
   const passwordHashAdmin = await bcrypt.hash("admin123", 12);
   const passwordHashCashier = await bcrypt.hash("cajero123", 12);
 

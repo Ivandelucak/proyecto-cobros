@@ -143,6 +143,11 @@ function signValue(value: string) {
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    if (!secret || secret === "change-me" || secret === "credifer2026" || secret === "development-only-change-me") {
+      throw new Error("CRITICAL SECURITY ERROR: AUTH_SECRET must be explicitly set to a unique secure secret in production mode.");
+    }
+  }
   if (!secret || secret === "change-me") {
     return "development-only-change-me";
   }

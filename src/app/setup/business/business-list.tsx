@@ -23,11 +23,12 @@ type BusinessWithUsers = {
 
 type BusinessListProps = {
   businesses: BusinessWithUsers[];
+  setupKey?: string;
 };
 
-export function BusinessList({ businesses: initialBusinesses }: BusinessListProps) {
+export function BusinessList({ businesses: initialBusinesses, setupKey: initialSetupKey }: BusinessListProps) {
   const [businesses, setBusinesses] = useState(initialBusinesses);
-  const [setupKey, setSetupKey] = useState("");
+  const [setupKey, setSetupKey] = useState(initialSetupKey || "");
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   
