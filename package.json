@@ -16,13 +16,15 @@
     "prisma:seed": "prisma db seed"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/adapter-mariadb": "^6.19.3",
+    "@prisma/client": "^6.19.3",
     "autoprefixer": "^10.5.2",
     "bcryptjs": "^2.4.3",
+    "mariadb": "^3.4.5",
     "next": "^16.2.9",
     "node-forge": "^1.4.0",
     "postcss": "^8.4.49",
-    "prisma": "^5.22.0",
+    "prisma": "^6.19.3",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
