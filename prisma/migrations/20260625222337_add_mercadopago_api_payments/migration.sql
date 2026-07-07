@@ -1,8 +1,8 @@
 -- AlterTable
-ALTER TABLE `payment` ADD COLUMN `paymentAttemptId` VARCHAR(191) NULL;
+ALTER TABLE `Payment` ADD COLUMN `paymentAttemptId` VARCHAR(191) NULL;
 
 -- AlterTable
-ALTER TABLE `paymentmethodsetting` ADD COLUMN `mercadoPagoMode` ENUM('MANUAL', 'API_QR') NOT NULL DEFAULT 'MANUAL';
+ALTER TABLE `PaymentMethodSetting` ADD COLUMN `mercadoPagoMode` ENUM('MANUAL', 'API_QR') NOT NULL DEFAULT 'MANUAL';
 
 -- CreateTable
 CREATE TABLE `MercadoPagoAccount` (

@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `fiscalsetting` ADD COLUMN `arcaCertificatePem` TEXT NULL,
+ALTER TABLE `FiscalSetting` ADD COLUMN `arcaCertificatePem` TEXT NULL,
     ADD COLUMN `arcaLastConnectionStatus` VARCHAR(191) NULL,
     ADD COLUMN `arcaLastConnectionTestAt` DATETIME(3) NULL,
     ADD COLUMN `arcaLastError` TEXT NULL,

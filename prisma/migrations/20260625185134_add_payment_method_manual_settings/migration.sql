@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `paymentmethodsetting` ADD COLUMN `accountCuit` VARCHAR(191) NULL,
+ALTER TABLE `PaymentMethodSetting` ADD COLUMN `accountCuit` VARCHAR(191) NULL,
     ADD COLUMN `accountHolder` VARCHAR(191) NULL,
     ADD COLUMN `alias` VARCHAR(191) NULL,
     ADD COLUMN `askReference` BOOLEAN NOT NULL DEFAULT false,

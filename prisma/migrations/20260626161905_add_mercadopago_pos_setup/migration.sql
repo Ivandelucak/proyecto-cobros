@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `mercadopagoaccount` ADD COLUMN `externalStoreId` VARCHAR(191) NULL,
+ALTER TABLE `MercadoPagoAccount` ADD COLUMN `externalStoreId` VARCHAR(191) NULL,
     ADD COLUMN `lastPosSetupAt` DATETIME(3) NULL,
     ADD COLUMN `lastPosSetupError` TEXT NULL,
     ADD COLUMN `lastPosSetupStatus` VARCHAR(191) NULL,

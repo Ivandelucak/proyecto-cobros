@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `mercadopagoaccount`
+ALTER TABLE `MercadoPagoAccount`
     ADD COLUMN `connectionType` ENUM('MANUAL_TOKEN', 'OAUTH') NOT NULL DEFAULT 'MANUAL_TOKEN',
     ADD COLUMN `oauthRefreshToken` TEXT NULL,
     ADD COLUMN `oauthTokenExpiresAt` DATETIME(3) NULL,
@@ -15,7 +15,7 @@ ALTER TABLE `mercadopagoaccount`
     ADD COLUMN `lastConnectionMessage` TEXT NULL;
 
 -- CreateIndex
-CREATE INDEX `MercadoPagoAccount_connectionType_idx` ON `mercadopagoaccount`(`connectionType`);
+CREATE INDEX `MercadoPagoAccount_connectionType_idx` ON `MercadoPagoAccount`(`connectionType`);
 
 -- CreateIndex
-CREATE INDEX `MercadoPagoAccount_oauthRequiresReconnect_idx` ON `mercadopagoaccount`(`oauthRequiresReconnect`);
+CREATE INDEX `MercadoPagoAccount_oauthRequiresReconnect_idx` ON `MercadoPagoAccount`(`oauthRequiresReconnect`);

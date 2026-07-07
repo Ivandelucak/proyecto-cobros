@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE `mercadopagoaccount` ADD COLUMN `lastPosSetupStep` VARCHAR(191) NULL;
+ALTER TABLE `MercadoPagoAccount` ADD COLUMN `lastPosSetupStep` VARCHAR(191) NULL;
