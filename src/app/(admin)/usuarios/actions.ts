@@ -25,6 +25,9 @@ export async function createUserAction(
   formData: FormData
 ): Promise<UserFormState> {
   const currentUser = await requireAdminPage();
+  if (!currentUser.businessId) {
+    return { error: "Acceso denegado: El administrador no tiene un comercio asociado." };
+  }
 
   try {
     const data = parseUserForm(formData, true);
@@ -36,9 +39,24 @@ export async function createUserAction(
         email: data.email,
         role: data.role,
         active: data.active,
+        businessId: currentUser.businessId,
         passwordHash: await hashPassword(data.password)
       }
     });
+
+    // Validacion defensiva post-creacion
+    if (!user.businessId || user.businessId !== currentUser.businessId) {
+      throw new Error("Error de seguridad: El usuario no fue asociado correctamente al comercio actual.");
+    }
+    if (user.email !== data.email.toLowerCase().trim()) {
+      throw new Error("Error de seguridad: El email no coincide con el normalizado.");
+    }
+    if (user.role !== data.role) {
+      throw new Error("Error de seguridad: El rol no coincide con el seleccionado.");
+    }
+    if (user.active !== data.active) {
+      throw new Error("Error de seguridad: El estado de activacion no coincide.");
+    }
 
     await createAuditLog({
       userId: currentUser.id,
@@ -64,6 +82,14 @@ export async function updateUserAction(
   const currentUser = await requireAdminPage();
 
   try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { businessId: true }
+    });
+    if (!targetUser || targetUser.businessId !== currentUser.businessId) {
+      throw new Error("No tenes permisos para editar este usuario.");
+    }
+
     const data = parseUserForm(formData, false);
     await validateUniqueEmail(data.email, userId);
     await assertCanSaveUser(userId, data.role, data.active, currentUser.id);
@@ -105,11 +131,15 @@ export async function setUserActiveAction(userId: string, active: boolean) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, role: true }
+    select: { id: true, email: true, role: true, businessId: true }
   });
 
   if (!user) {
     return;
+  }
+
+  if (user.businessId !== currentUser.businessId) {
+    throw new Error("No tenes permisos para modificar este usuario.");
   }
 
   await assertCanSaveUser(userId, user.role, active, currentUser.id);
@@ -146,10 +176,10 @@ function parseUserForm(formData: FormData, passwordRequired: boolean): ParsedUse
     throw new Error("Rol invalido.");
   }
   if (passwordRequired && password.length < 6) {
-    throw new Error("La contrasena debe tener al menos 6 caracteres.");
+    throw new Error("La contraseña debe tener al menos 6 caracteres.");
   }
   if (!passwordRequired && password && password.length < 6) {
-    throw new Error("La nueva contrasena debe tener al menos 6 caracteres.");
+    throw new Error("La nueva contraseña debe tener al menos 6 caracteres.");
   }
 
   return {
@@ -164,13 +194,16 @@ function parseUserForm(formData: FormData, passwordRequired: boolean): ParsedUse
 async function validateUniqueEmail(email: string, excludeId?: string) {
   const existing = await prisma.user.findFirst({
     where: {
-      email,
+      email: email.toLowerCase().trim(),
       ...(excludeId ? { NOT: { id: excludeId } } : {})
     },
-    select: { id: true }
+    select: { id: true, businessId: true }
   });
 
   if (existing) {
+    if (!existing.businessId) {
+      throw new Error("Ya existe un usuario con ese email (usuario legacy sin comercio).");
+    }
     throw new Error("Ya existe un usuario con ese email.");
   }
 }

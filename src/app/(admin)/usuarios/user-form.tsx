@@ -61,7 +61,7 @@ export function UserForm({ action, initialValues, submitLabel }: UserFormProps) 
               <option value="VIEWER">Visualizador</option>
             </Select>
           </Field>
-          <Field label={isEditing ? "Nueva contrasena" : "Contrasena"}>
+          <Field label={isEditing ? "Nueva contraseña" : "Contraseña"}>
             <Input
               type="password"
               name="password"

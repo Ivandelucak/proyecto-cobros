@@ -28,6 +28,10 @@ export async function loginAction(
     return { error: "Credenciales inválidas." };
   }
 
+  if (!user.businessId) {
+    return { error: "El usuario no está asociado a un comercio. Contactá al administrador." };
+  }
+
   await setSessionCookie(user);
   redirect(getPostLoginPath(user.role));
 }

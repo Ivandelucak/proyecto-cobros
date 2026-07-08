@@ -444,15 +444,10 @@ export function CashRegister({
           currentPayments.reduce((sum, payment) => sum + safeNumber(payment.amount), 0)
         );
         const currentRemaining = Math.max(roundMoney(total - applied), 0);
-        if (amount > currentRemaining + 0.01) {
-          setMessage({
-            text: "El pago aprobado supera el saldo pendiente de esta venta.",
-            tone: "error"
-          });
-          return currentPayments;
-        }
+        const excess = amount > currentRemaining + 0.01;
+        const appliedAmount = excess ? currentRemaining : amount;
 
-        const nextRemaining = Math.max(roundMoney(currentRemaining - amount), 0);
+        const nextRemaining = Math.max(roundMoney(currentRemaining - appliedAmount), 0);
         setMessage({
           text:
             nextRemaining <= 0.01
@@ -469,7 +464,8 @@ export function CashRegister({
           {
             id: createPaymentId(),
             method,
-            amount: String(amount),
+            amount: String(appliedAmount),
+            receivedAmount: String(amount),
             externalId: attempt.providerPaymentId ?? attempt.externalReference,
             externalReference: attempt.externalReference,
             providerStatus:
@@ -478,13 +474,13 @@ export function CashRegister({
             mercadoPagoAccountName: attempt.accountName,
             mercadoPagoOrigin:
               method === "TRANSFER"
-                ? "Transferencia verificada por Mercado Pago"
-                : mercadoPagoAttemptOriginLabel(attempt.origin)
+                ? "MANUAL_TRANSFER"
+                : "MANUAL_RECENT_PAYMENT"
           }
         ];
       });
     },
-    [total]
+    [total, setMessage]
   );
 
   useBarcodeScanner({
@@ -1535,6 +1531,40 @@ export function CashRegister({
     transferVerificationEnabled
   ]);
 
+  function performMovementAssociation(
+    movement: MercadoPagoMovementView,
+    selectedAccount: any,
+    paymentMethod: "MERCADOPAGO" | "TRANSFER"
+  ) {
+    setMercadoPagoMatchPollingEnabled(false);
+    setMercadoPagoMatchStartedAt(null);
+    setMercadoPagoMatchTimedOut(false);
+    setMercadoPagoTechnicalDetail(null);
+
+    startTransition(async () => {
+      const result = await associateMercadoPagoRecentPaymentAction({
+        accountId: selectedAccount.id,
+        paymentId: movement.id,
+        paymentMethod
+      });
+      if (!result.ok || !result.attempt) {
+        setMercadoPagoMessage(result.error ?? "No se pudo asociar el pago.");
+        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
+        return;
+      }
+      setMercadoPagoAttempt(result.attempt);
+      setMercadoPagoApplyDialog(null);
+      setMercadoPagoMovementsModalOpen(false);
+      setMercadoPagoMessage(
+        paymentMethod === "TRANSFER"
+          ? "Transferencia verificada aplicada. Finaliza la venta para registrarla."
+          : "Cobro aplicado. Finaliza la venta para registrarla."
+      );
+      setMercadoPagoTechnicalDetail(null);
+      applyApprovedMercadoPagoAttempt(result.attempt);
+    });
+  }
+
   function associateMercadoPagoMovement(
     movement: MercadoPagoMovementView
   ) {
@@ -1570,13 +1600,21 @@ export function CashRegister({
       setMercadoPagoTechnicalDetail(null);
       return;
     }
-    setMercadoPagoApplyDialog({
-      movement,
-      accountName: account.name,
-      targetAmount: remaining,
-      paymentMethod,
-      allowPartial
-    });
+
+    const targetAmount = roundMoney(remaining);
+    const exactMatch = isMercadoPagoExactAmountMatch(movement.amount, targetAmount);
+
+    if (exactMatch) {
+      performMovementAssociation(movement, account, paymentMethod);
+    } else {
+      setMercadoPagoApplyDialog({
+        movement,
+        accountName: account.name,
+        targetAmount: remaining,
+        paymentMethod,
+        allowPartial
+      });
+    }
   }
 
   function confirmMercadoPagoMovementAssociation() {
@@ -1592,44 +1630,8 @@ export function CashRegister({
     if (!selectedAccount) {
       return;
     }
-    const movementAmount = roundMoney(safeNumber(movement.amount));
-    if (movementAmount > mercadoPagoApplyDialog.targetAmount + 0.01) {
-      return;
-    }
-    if (
-      movementAmount < mercadoPagoApplyDialog.targetAmount - 0.01 &&
-      !mercadoPagoApplyDialog.allowPartial
-    ) {
-      return;
-    }
 
-    setMercadoPagoMatchPollingEnabled(false);
-
-    setMercadoPagoMatchStartedAt(null);
-    setMercadoPagoMatchTimedOut(false);
-    setMercadoPagoTechnicalDetail(null);
-    startTransition(async () => {
-      const result = await associateMercadoPagoRecentPaymentAction({
-        accountId: selectedAccount.id,
-        paymentId: movement.id,
-        paymentMethod: mercadoPagoApplyDialog.paymentMethod
-      });
-      if (!result.ok || !result.attempt) {
-        setMercadoPagoMessage(result.error ?? "No se pudo asociar el pago.");
-        setMercadoPagoTechnicalDetail(result.technicalDetail ?? null);
-        return;
-      }
-      setMercadoPagoAttempt(result.attempt);
-      setMercadoPagoApplyDialog(null);
-      setMercadoPagoMovementsModalOpen(false);
-      setMercadoPagoMessage(
-        mercadoPagoApplyDialog.paymentMethod === "TRANSFER"
-          ? "Transferencia verificada aplicada. Finaliza la venta para registrarla."
-          : "Cobro aplicado. Finaliza la venta para registrarla."
-      );
-      setMercadoPagoTechnicalDetail(null);
-      applyApprovedMercadoPagoAttempt(result.attempt);
-    });
+    performMovementAssociation(movement, selectedAccount, mercadoPagoApplyDialog.paymentMethod);
   }
 
   function removePayment(paymentId: string) {
@@ -3629,15 +3631,10 @@ function MercadoPagoMovementRow({
   onAssociate: () => void;
 }) {
   const isTransferContext = context === "TRANSFER";
-  const matchesAmount = account
-    ? isMercadoPagoMovementAmountMatch({
-        movement,
-        targetAmount,
-        tolerance: amountTolerance
-      })
-    : false;
+  const matchesAmount = isMercadoPagoExactAmountMatch(movement.amount, targetAmount);
   const approved = isMercadoPagoMovementApproved(movement);
-  const exceedsPending = roundMoney(safeNumber(movement.amount)) > targetAmount + 0.01;
+  const movementAmount = roundMoney(safeNumber(movement.amount));
+  const diff = movementAmount - targetAmount;
 
   return (
     <div className="app-panel-elevated rounded-lg p-3 text-sm">
@@ -3651,7 +3648,20 @@ function MercadoPagoMovementRow({
               {mercadoPagoMovementStatusLabel(movement.status)}
             </MercadoPagoMovementBadge>
             {matchesAmount ? (
-              <MercadoPagoMovementBadge tone="warn">Coincide</MercadoPagoMovementBadge>
+              <MercadoPagoMovementBadge tone="ok">Coincide</MercadoPagoMovementBadge>
+            ) : approved && !movement.alreadyUsed ? (
+              <>
+                <MercadoPagoMovementBadge tone="warn">No coincide</MercadoPagoMovementBadge>
+                {diff > 0.01 ? (
+                  <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                    Sobran {formatARS(diff)}
+                  </span>
+                ) : diff < -0.01 ? (
+                  <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                    Faltan {formatARS(Math.abs(diff))}
+                  </span>
+                ) : null}
+              </>
             ) : null}
             {movement.alreadyUsed ? (
               <MercadoPagoMovementBadge tone="muted">
@@ -3685,15 +3695,17 @@ function MercadoPagoMovementRow({
           disabled={disabled || movement.alreadyUsed || !approved}
           onClick={onAssociate}
         >
-          {exceedsPending
-            ? "Ver detalle"
-            : isTransferContext
-              ? matchesAmount
-                ? "Aplicar transferencia"
-                : "Aplicar igualmente"
+          {movement.alreadyUsed
+            ? movement.usedSaleNumber
+              ? `Usado en #${movement.usedSaleNumber}`
+              : "Usado"
+            : !approved
+              ? "No aprobado"
               : matchesAmount
-                ? "Aplicar a esta venta"
-                : "Aplicar igualmente"}
+                ? isTransferContext
+                  ? "Aplicar transferencia"
+                  : "Aplicar a esta venta"
+                : "Usar igual"}
         </Button>
       </div>
       <AppAccordion title="Ver detalle tecnico" className="mt-2">
@@ -3727,14 +3739,13 @@ function MercadoPagoApplyPaymentDialog({
   const exceedsPending = amount > targetAmount + 0.01;
   const partialPayment = amount < targetAmount - 0.01;
   const partialBlocked = partialPayment && !state.allowPartial;
-  const statusTone = exactMatch ? "ok" : exceedsPending ? "danger" : "warn";
+  const statusTone = exactMatch ? "ok" : "warn";
   const statusLabel = exactMatch
     ? "Coincide"
-    : exceedsPending
-      ? "Excede pendiente"
-      : "Pago parcial";
+    : "No coincide";
   const isTransferPayment = state.paymentMethod === "TRANSFER";
-  const shouldBlockApply = exceedsPending || partialBlocked;
+  const shouldBlockApply = partialBlocked;
+  const diff = amount - targetAmount;
 
   return (
     <div
@@ -3786,23 +3797,15 @@ function MercadoPagoApplyPaymentDialog({
             </p>
           </div>
 
-          {exactMatch ? (
+          {!exactMatch ? (
+            <p className="badge-danger rounded-lg px-3 py-2 text-sm font-bold text-center">
+              El monto de la transferencia no coincide con el monto pendiente de la venta.
+            </p>
+          ) : (
             <p className="badge-success rounded-lg px-3 py-2 text-sm">
               El importe coincide exactamente con el saldo pendiente.
             </p>
-          ) : null}
-          {partialPayment ? (
-            <p className="badge-warning rounded-lg px-3 py-2 text-sm">
-              {partialBlocked
-                ? "El importe es menor al pendiente y la configuracion no permite pagos parciales."
-                : "El importe es menor al pendiente. Se cargara como pago parcial."}
-            </p>
-          ) : null}
-          {exceedsPending ? (
-            <p className="badge-danger rounded-lg px-3 py-2 text-sm">
-              El importe supera el saldo pendiente. No se puede aplicar este cobro a la venta actual.
-            </p>
-          ) : null}
+          )}
 
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             <MercadoPagoApplyDetail label="Cuenta" value={state.accountName} />
@@ -3810,11 +3813,23 @@ function MercadoPagoApplyPaymentDialog({
               label="Hora"
               value={formatMercadoPagoDate(movement.dateApproved ?? movement.dateCreated)}
             />
+            {!exactMatch ? (
+              <MercadoPagoApplyDetail
+                label="Diferencia"
+                value={
+                  diff > 0.01
+                    ? `Sobran ${formatARS(diff)}`
+                    : diff < -0.01
+                      ? `Faltan ${formatARS(Math.abs(diff))}`
+                      : "-"
+                }
+              />
+            ) : null}
             <MercadoPagoApplyDetail
               label="Referencia"
               value={movement.externalReference ?? "-"}
             />
-            <MercadoPagoApplyDetail label="ID del pago" value={movement.id} />
+            <MercadoPagoApplyDetail label="ID de pago (providerPaymentId)" value={movement.id} />
             <MercadoPagoApplyDetail
               label="Estado"
               value={mercadoPagoMovementStatusLabel(movement.status)}
@@ -3838,8 +3853,8 @@ function MercadoPagoApplyPaymentDialog({
             <Button type="button" variant="primary" disabled={pending} onClick={onConfirm}>
               {pending
                 ? "Aplicando..."
-                : partialPayment
-                  ? "Aplicar como pago parcial"
+                : !exactMatch
+                  ? "Aplicar igualmente"
                   : isTransferPayment
                     ? "Aplicar transferencia"
                     : "Aplicar cobro"}

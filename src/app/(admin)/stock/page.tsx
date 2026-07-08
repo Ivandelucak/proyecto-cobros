@@ -23,10 +23,10 @@ export default async function StockPage({ searchParams }: StockPageProps) {
 
   const params = await searchParams;
   const categoryId = params.categoryId ?? "";
-  const filter = params.filter ?? "low";
+  const filter = params.filter ?? "all";
   const q = params.q?.trim() ?? "";
   const barcode = params.barcode?.trim() ?? "";
-  const [categories, products] = await Promise.all([
+  const [categories, products, totalProductsCount] = await Promise.all([
     prisma.category.findMany({
       where: {
         businessId,
@@ -56,6 +56,13 @@ export default async function StockPage({ searchParams }: StockPageProps) {
       },
       include: { category: { select: { name: true } } },
       orderBy: { stock: "asc" }
+    }),
+    prisma.product.count({
+      where: {
+        businessId,
+        active: true,
+        deletedAt: null
+      }
     })
   ]);
 
@@ -108,11 +115,13 @@ export default async function StockPage({ searchParams }: StockPageProps) {
 
       {visibleProducts.length === 0 ? (
         <EmptyState
-          title="Sin alertas de stock"
+          title={totalProductsCount === 0 ? "Sin productos" : "Sin alertas de stock"}
           description={
-            barcode
-              ? "No se encontro producto con ese codigo."
-              : "No hay productos para el filtro seleccionado."
+            totalProductsCount === 0
+              ? "Todavía no hay productos cargados."
+              : barcode
+                ? "No se encontro producto con ese codigo."
+                : "No hay productos para el filtro seleccionado."
           }
         />
       ) : (
@@ -134,13 +143,20 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                   const suggestion = product.stock.lt(product.minStock)
                     ? product.minStock.minus(product.stock)
                     : new Prisma.Decimal(0);
+                  const isLow = product.stock.lt(product.minStock);
                   const out = product.stock.lte(0);
 
                   return (
                     <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">{product.name}</p>
-                        {out ? <Badge tone="red">Sin stock</Badge> : <Badge tone="amber">Bajo</Badge>}
+                        {out ? (
+                          <Badge tone="red">Sin stock</Badge>
+                        ) : isLow ? (
+                          <Badge tone="amber">Bajo</Badge>
+                        ) : (
+                          <Badge tone="green">OK</Badge>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {product.category.name}

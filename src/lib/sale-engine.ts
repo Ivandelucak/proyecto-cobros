@@ -328,9 +328,27 @@ export async function confirmSale(input: ConfirmSaleInput) {
 
     for (const payment of paymentRecords) {
       if (payment.paymentAttemptId) {
+        const attempt = approvedAttemptsById.get(payment.paymentAttemptId);
+        let extraDetail = {};
+        if (attempt && attempt.amount && !attempt.amount.equals(payment.amount)) {
+          const diff = attempt.amount.minus(payment.amount);
+          const detailMsg = `[Monto dif] Real: ${attempt.amount}, Aplicado: ${payment.amount}, Dif: ${diff}`;
+          const currentAttempt = await tx.paymentAttempt.findUnique({
+            where: { id: payment.paymentAttemptId },
+            select: { rawStatusDetail: true }
+          });
+          const newDetail = currentAttempt?.rawStatusDetail
+            ? `${currentAttempt.rawStatusDetail} | ${detailMsg}`.slice(0, 190)
+            : detailMsg.slice(0, 190);
+          extraDetail = { rawStatusDetail: newDetail };
+        }
+
         await tx.paymentAttempt.update({
           where: { id: payment.paymentAttemptId },
-          data: { saleId: sale.id }
+          data: {
+            saleId: sale.id,
+            ...extraDetail
+          }
         });
       }
     }
@@ -354,7 +372,7 @@ function buildPaymentRecords(
   activeCreditPlans: ActiveCreditInstallmentPlan[],
   approvedAttemptsById: Map<
     string,
-    { id: string; providerPaymentId: string | null; method: PaymentMethod }
+    { id: string; providerPaymentId: string | null; method: PaymentMethod; amount: Prisma.Decimal }
   >
 ) {
   const creditPayments = payments.filter((payment) => payment.method === PaymentMethod.CREDIT);
@@ -435,11 +453,16 @@ function buildPaymentRecords(
       ? approvedAttemptsById.get(payment.paymentAttemptId)
       : null;
 
+    const receivedAmount = approvedAttempt ? approvedAttempt.amount : null;
+    const changeAmount = (approvedAttempt && receivedAmount)
+      ? receivedAmount.minus(amount).toDecimalPlaces(2)
+      : null;
+
     return {
       method: payment.method,
       amount,
-      receivedAmount: null,
-      changeAmount: null,
+      receivedAmount,
+      changeAmount,
       installments: null,
       surchargeRate: null,
       surchargeAmount: null,
@@ -465,7 +488,7 @@ async function validatePaymentAttempts(
   ] as string[];
   const approvedAttemptsById = new Map<
     string,
-    { id: string; providerPaymentId: string | null; method: PaymentMethod }
+    { id: string; providerPaymentId: string | null; method: PaymentMethod; amount: Prisma.Decimal }
   >();
 
   if (attemptIds.length === 0) {
@@ -517,8 +540,9 @@ async function validatePaymentAttempts(
     if (attempt.providerPaymentId && usedProviderPaymentIds.has(attempt.providerPaymentId)) {
       throw new Error("Ese pago de Mercado Pago ya fue usado en otra venta.");
     }
-    if (!new Prisma.Decimal(payment.amount).toDecimalPlaces(2).equals(attempt.amount)) {
-      throw new Error("El monto aprobado por Mercado Pago no coincide con la venta.");
+    const paymentAmount = new Prisma.Decimal(payment.amount).toDecimalPlaces(2);
+    if (paymentAmount.gt(attempt.amount)) {
+      throw new Error("El importe a aplicar no puede superar el monto de la transferencia.");
     }
     if (attempt.method !== payment.method) {
       throw new Error("El metodo de pago no coincide con la verificacion aplicada.");
@@ -527,7 +551,8 @@ async function validatePaymentAttempts(
     approvedAttemptsById.set(attempt.id, {
       id: attempt.id,
       providerPaymentId: attempt.providerPaymentId,
-      method: attempt.method
+      method: attempt.method,
+      amount: attempt.amount
     });
   }
 
