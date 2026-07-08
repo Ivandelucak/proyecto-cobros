@@ -9,6 +9,17 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" }
+    ],
+    apple: [
+      { url: "/icon-180x180.png", sizes: "180x180", type: "image/png" }
+    ]
+  },
   openGraph: {
     title: APP_NAME,
     description: APP_DESCRIPTION,
