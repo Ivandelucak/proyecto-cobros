@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+
 export const dynamic = "force-dynamic";
 
 export default async function MobileCategoriasPage() {
@@ -23,10 +25,11 @@ export default async function MobileCategoriasPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-[#F3F7FA]">Categorías</h2>
-        <p className="text-xs text-[#A9B6C2]">Estructura de agrupación de productos.</p>
-      </div>
+      <MobilePageHeader
+        title="Categorías"
+        subtitle="Estructura de agrupación de productos."
+        fallbackUrl="/m"
+      />
 
       {/* List */}
       <div className="space-y-2.5">

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+import { MobileProductsFilters } from "@/components/mobile/MobileProductsFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -53,47 +54,18 @@ export default async function MobileProductosPage({ searchParams }: ProductosMob
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-[#F3F7FA]">Listado de Productos</h2>
-        <p className="text-xs text-[#A9B6C2]">Consulta rápida de precios y stock.</p>
-      </div>
+      <MobilePageHeader
+        title="Listado de Productos"
+        subtitle="Consulta rápida de precios y stock."
+        fallbackUrl="/m"
+      />
 
       {/* Filters form */}
-      <form className="space-y-2.5 bg-[#121922] border border-[#273342] p-3.5 rounded-lg shadow">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            placeholder="Buscar por nombre, código..."
-            className="flex-1 bg-[#0B1015] border border-[#273342] text-[#F3F7FA] placeholder-[#7F8D9A] text-xs rounded px-3 py-2 focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="bg-[#1D3140] hover:bg-[#3D6887] text-[#F3F7FA] font-bold text-xs px-3.5 py-2 rounded border border-[#273342]"
-          >
-            Buscar
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[#A9B6C2] uppercase font-bold tracking-wider">Categoría:</span>
-          <select
-            name="categoryId"
-            defaultValue={categoryId}
-            className="flex-1 bg-[#0B1015] border border-[#273342] text-[#F3F7FA] text-xs rounded px-2.5 py-1.5 focus:outline-none"
-            onChange={(e) => {
-              e.target.form?.requestSubmit();
-            }}
-          >
-            <option value="">Todas</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </form>
+      <MobileProductsFilters
+        categories={categories}
+        initialQ={q}
+        initialCategoryId={categoryId}
+      />
 
       {/* List */}
       <div className="space-y-2.5">

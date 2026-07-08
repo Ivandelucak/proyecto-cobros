@@ -5,6 +5,8 @@ import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { SaleStatus, Prisma } from "@prisma/client";
 
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+
 export const dynamic = "force-dynamic";
 
 export default async function MobileReportesPage() {
@@ -96,10 +98,11 @@ export default async function MobileReportesPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-[#F3F7FA]">Reportes Operativos</h2>
-        <p className="text-xs text-[#A9B6C2]">Estadísticas rápidas de facturación y productos.</p>
-      </div>
+      <MobilePageHeader
+        title="Reportes Operativos"
+        subtitle="Estadísticas rápidas de facturación y productos."
+        fallbackUrl="/m"
+      />
 
       {/* Today Financial Summary Card */}
       <Card className="p-4 bg-[#121922] border-[#273342] space-y-3">

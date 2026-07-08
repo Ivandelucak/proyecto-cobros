@@ -4,6 +4,8 @@ import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { formatDateTimeStable } from "@/lib/date-format";
 
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+
 export const dynamic = "force-dynamic";
 
 export default async function MobileComprasPage() {
@@ -24,10 +26,11 @@ export default async function MobileComprasPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-[#F3F7FA]">Ingresos / Compras</h2>
-        <p className="text-xs text-[#A9B6C2]">Registro de abastecimiento de mercadería.</p>
-      </div>
+      <MobilePageHeader
+        title="Ingresos / Compras"
+        subtitle="Registro de abastecimiento de mercadería."
+        fallbackUrl="/m"
+      />
 
       {/* List */}
       <div className="space-y-2.5">

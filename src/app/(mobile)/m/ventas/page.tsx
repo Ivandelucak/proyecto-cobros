@@ -7,6 +7,8 @@ import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { formatDateTimeStable } from "@/lib/date-format";
 
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+
 export const dynamic = "force-dynamic";
 
 type VentasMobilePageProps = {
@@ -46,6 +48,7 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
       ...(period !== "all" ? { createdAt: dateFilter } : {})
     },
     include: {
+      payments: { select: { id: true, amount: true, method: true } },
       user: { select: { name: true } }
     },
     orderBy: { createdAt: "desc" }
@@ -54,12 +57,11 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-[#F3F7FA]">Listado de Ventas</h2>
-          <p className="text-xs text-[#A9B6C2]">Consulta histórica y estado de cobros.</p>
-        </div>
-      </div>
+      <MobilePageHeader
+        title="Listado de Ventas"
+        subtitle="Consulta histórica y estado de cobros."
+        fallbackUrl="/m"
+      />
 
       {/* Date Filters */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 bg-[#121922] p-1 rounded-lg border border-[#273342]">

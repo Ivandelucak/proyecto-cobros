@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { quoteStatusLabels, quoteStatusTone } from "@/lib/quotes/quote-status";
 
+import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
+
 export const dynamic = "force-dynamic";
 
 type PresupuestosMobilePageProps = {
@@ -46,21 +48,22 @@ export default async function MobilePresupuestosPage({ searchParams }: Presupues
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-[#F3F7FA]">Presupuestos</h2>
-          <p className="text-xs text-[#A9B6C2]">Cotizaciones guardadas para clientes.</p>
-        </div>
-        <Link
-          href="/m/presupuestos/nuevo"
-          className="bg-[#4C7FA3] hover:bg-[#3D6887] text-[#0B1015] font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Nuevo
-        </Link>
-      </div>
+      <MobilePageHeader
+        title="Presupuestos"
+        subtitle="Cotizaciones guardadas para clientes."
+        fallbackUrl="/m"
+        rightAction={
+          <Link
+            href="/m/presupuestos/nuevo"
+            className="bg-[#4C7FA3] hover:bg-[#3D6887] text-[#0B1015] font-bold text-xs px-3.5 py-2.5 rounded-lg flex items-center gap-1 shadow"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Nuevo
+          </Link>
+        }
+      />
 
       {/* Search Input */}
       <form className="flex gap-2">
