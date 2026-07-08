@@ -3,16 +3,21 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireAdminPage, isMobileDevice } from "@/lib/admin-auth";
 import { getOpenCashSessionSnapshot } from "@/lib/cash-session";
 import { getCustomerBalanceMap } from "@/lib/customer-account";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const user = await requireAdminPage();
+  const isMobile = await isMobileDevice();
+  if (isMobile) {
+    redirect("/m");
+  }
   const businessId = user.businessId!;
 
   const start = new Date();

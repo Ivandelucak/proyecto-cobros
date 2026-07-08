@@ -1,0 +1,120 @@
+import { SaleStatus } from "@prisma/client";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { requireMobileAuth } from "@/lib/admin-auth";
+import { formatARS } from "@/lib/money";
+import { prisma } from "@/lib/prisma";
+import { formatDateTimeStable } from "@/lib/date-format";
+
+export const dynamic = "force-dynamic";
+
+type VentasMobilePageProps = {
+  searchParams: Promise<{
+    period?: string;
+  }>;
+};
+
+export default async function MobileVentasPage({ searchParams }: VentasMobilePageProps) {
+  const user = await requireMobileAuth();
+  const businessId = user.businessId!;
+
+  const params = await searchParams;
+  const period = params.period ?? "today";
+
+  let dateFilter = {};
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (period === "today") {
+    const end = new Date(today);
+    end.setDate(end.getDate() + 1);
+    dateFilter = { gte: today, lt: end };
+  } else if (period === "yesterday") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 1);
+    dateFilter = { gte: start, lt: today };
+  } else if (period === "week") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 7);
+    dateFilter = { gte: start };
+  }
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      businessId,
+      ...(period !== "all" ? { createdAt: dateFilter } : {})
+    },
+    include: {
+      user: { select: { name: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-[#F3F7FA]">Listado de Ventas</h2>
+          <p className="text-xs text-[#A9B6C2]">Consulta histórica y estado de cobros.</p>
+        </div>
+      </div>
+
+      {/* Date Filters */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 bg-[#121922] p-1 rounded-lg border border-[#273342]">
+        <FilterLink active={period === "today"} href="/m/ventas?period=today" label="Hoy" />
+        <FilterLink active={period === "yesterday"} href="/m/ventas?period=yesterday" label="Ayer" />
+        <FilterLink active={period === "week"} href="/m/ventas?period=week" label="7 días" />
+        <FilterLink active={period === "all"} href="/m/ventas?period=all" label="Todos" />
+      </div>
+
+      {/* Sales List */}
+      <div className="space-y-3">
+        {sales.length === 0 ? (
+          <Card className="p-8 text-center bg-[#121922] border-[#273342]">
+            <p className="text-sm text-[#A9B6C2]">No hay ventas para este período.</p>
+          </Card>
+        ) : (
+          sales.map((sale) => (
+            <Link key={sale.id} href={`/m/ventas/${sale.id}`} className="block">
+              <Card className="p-4 bg-[#121922] border-[#273342] hover:border-[#4C7FA3]/50 active:bg-[#1D3140]/10 transition-all flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-sm text-[#F3F7FA]">Venta #{sale.saleNumber}</h4>
+                    <p className="text-[11px] text-[#A9B6C2] mt-0.5">{formatDateTimeStable(sale.createdAt)}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="block font-bold text-sm text-[#F3F7FA]">{formatARS(sale.total)}</span>
+                    <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
+                      {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="mt-2.5 pt-2 border-t border-[#273342] flex justify-between items-center text-[10px] text-[#7F8D9A]">
+                  <span>Vendedor: {sale.user.name}</span>
+                  <span className="text-[#4C7FA3] font-bold">Ver detalle &rarr;</span>
+                </div>
+              </Card>
+            </Link>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FilterLink({ active, href, label }: { active: boolean; href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all text-center flex-1 whitespace-nowrap ${
+        active
+          ? "bg-[#4C7FA3] text-[#0B1015] shadow"
+          : "text-[#A9B6C2] hover:text-[#F3F7FA] hover:bg-[#1D3140]/20"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
