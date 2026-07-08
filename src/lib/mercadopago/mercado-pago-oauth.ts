@@ -320,6 +320,13 @@ export function getMercadoPagoOAuthConfigStatus(): MercadoPagoOAuthConfigStatus 
         ? [
             "authBaseUrl contiene mercadopago.com.ar/authorization. Se recomienda usar: https://auth.mercadopago.com/authorization"
           ]
+        : []),
+      ...(!authorizationUrlPreview ||
+      !authorizationUrlPreview.includes("?") ||
+      !authorizationUrlPreview.includes("client_id=") ||
+      !authorizationUrlPreview.includes("redirect_uri=") ||
+      !authorizationUrlPreview.includes("state=")
+        ? ["La URL OAuth no contiene parámetros requeridos."]
         : [])
     ],
     redirectUriExample: `https://tu-url-ngrok.ngrok-free.app${EXPECTED_CALLBACK_PATH}`,
