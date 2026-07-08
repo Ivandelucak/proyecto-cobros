@@ -11,7 +11,7 @@ import {
   revealMercadoPagoToken
 } from "./mercado-pago-secrets";
 
-const DEFAULT_MERCADO_PAGO_AUTH_URL = "https://auth.mercadopago.com.ar/authorization";
+const DEFAULT_MERCADO_PAGO_AUTH_URL = "https://auth.mercadopago.com/authorization";
 const MERCADO_PAGO_TOKEN_URL = "https://api.mercadopago.com/oauth/token";
 const OAUTH_STATE_TTL_MS = 30 * 60 * 1000;
 const TOKEN_REFRESH_WINDOW_MS = 10 * 60 * 1000;
@@ -314,7 +314,14 @@ export function getMercadoPagoOAuthConfigStatus(): MercadoPagoOAuthConfigStatus 
     openMode: "new_tab",
     stateValidation: "signed_state_with_optional_cookie",
     authorizationUrlPreview,
-    redirectUriWarnings: validateMercadoPagoRedirectUri(redirectUri),
+    redirectUriWarnings: [
+      ...validateMercadoPagoRedirectUri(redirectUri),
+      ...(authBaseUrl.includes("mercadopago.com.ar/authorization")
+        ? [
+            "authBaseUrl contiene mercadopago.com.ar/authorization. Se recomienda usar: https://auth.mercadopago.com/authorization"
+          ]
+        : [])
+    ],
     redirectUriExample: `https://tu-url-ngrok.ngrok-free.app${EXPECTED_CALLBACK_PATH}`,
     appPublicUrlConfigured: Boolean(appPublicUrl),
     appPublicUrl: appPublicUrl || null,
@@ -433,7 +440,11 @@ function validateMercadoPagoOAuthState(value: string): MercadoPagoOAuthState {
 }
 
 function getMercadoPagoAuthBaseUrl() {
-  return process.env.MP_OAUTH_AUTH_BASE_URL?.trim() || DEFAULT_MERCADO_PAGO_AUTH_URL;
+  return (
+    process.env.MP_AUTH_BASE_URL?.trim() ||
+    process.env.MP_OAUTH_AUTH_BASE_URL?.trim() ||
+    DEFAULT_MERCADO_PAGO_AUTH_URL
+  );
 }
 
 function createMercadoPagoOAuthAuthorizationUrlPreview(input: {
