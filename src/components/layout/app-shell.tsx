@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/app/auth-actions";
 import { AdminNav } from "@/components/admin/admin-nav";
-import { AppBrandCenter } from "@/components/brand/AppBrandCenter";
+import { BrandTitle } from "@/components/brand/BrandTitle";
 import { BusinessBrand } from "@/components/brand/BusinessBrand";
 import { BusinessHeaderIdentity } from "@/components/brand/BusinessHeaderIdentity";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -136,7 +136,7 @@ export function AppShell({
               </div>
             </div>
 
-            <AppBrandCenter className="hidden md:block" />
+            <BrandTitle className="hidden md:block" />
 
             <div className="col-start-2 flex shrink-0 items-center gap-2 justify-self-end md:col-start-3 xl:gap-3">
               <ThemeToggle />
