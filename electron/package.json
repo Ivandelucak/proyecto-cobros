@@ -1,0 +1,43 @@
+{
+  "name": "fox-point-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fox Point desktop client",
+  "author": "Fox Point",
+  "main": "main.js",
+  "build": {
+    "appId": "com.foxpoint.pos",
+    "productName": "Fox Point",
+    "artifactName": "FoxPoint-Setup-${version}.${ext}",
+    "electronVersion": "42.4.1",
+    "asar": true,
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "assets/**/*"
+    ],
+    "win": {
+      "icon": "assets/icon-256x256.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Fox Point"
+    }
+  }
+}

@@ -1,27 +1,41 @@
 /* global __dirname, clearTimeout, console, process, require, setTimeout, URL */
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 
-const DEV_ORIGIN = "http://localhost:3000";
-const DEV_START_URL = `${DEV_ORIGIN}/login`;
 const APP_NAME = "Fox Point";
+const APP_ID = "com.foxpoint.pos";
+const DEFAULT_APP_URL = "https://app.foxpoint.com.ar";
+const LOCAL_DEV_ORIGIN = "http://localhost:3000";
+const BACKGROUND_COLOR = "#0B1015";
 
 const isDevelopment = !app.isPackaged;
 const isSmokeTest = process.env.ELECTRON_SMOKE_TEST === "1";
 const allowedPaperSizes = new Set(["TICKET_80", "TICKET_58", "A4"]);
 
 let mainWindow = null;
+let cachedStartUrl = null;
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_ID);
+}
 
 function createMainWindow() {
+  const startUrl = getStartUrl();
+
   mainWindow = new BrowserWindow({
     title: APP_NAME,
-    width: 1366,
-    height: 768,
-    minWidth: 1200,
+    width: 1280,
+    height: 800,
+    minWidth: 1024,
     minHeight: 700,
-    backgroundColor: "#f8fafc",
+    backgroundColor: BACKGROUND_COLOR,
+    autoHideMenuBar: true,
+    resizable: true,
+    maximizable: true,
     show: false,
+    icon: getWindowIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
@@ -31,6 +45,8 @@ function createMainWindow() {
       allowRunningInsecureContent: false
     }
   });
+
+  mainWindow.setMenuBarVisibility(false);
 
   mainWindow.once("ready-to-show", () => {
     if (!isSmokeTest) {
@@ -67,28 +83,60 @@ function createMainWindow() {
     );
   }
 
-  void mainWindow.loadURL(getStartUrl());
+  void mainWindow.loadURL(startUrl);
 }
 
 function getStartUrl() {
-  if (isDevelopment) {
-    return process.env.ELECTRON_START_URL || DEV_START_URL;
+  if (cachedStartUrl) {
+    return cachedStartUrl;
   }
 
-  // Produccion empaquetada queda preparada para una etapa futura.
-  // Por ahora se mantiene apuntando a una instancia local controlada.
-  return process.env.ELECTRON_START_URL || DEV_START_URL;
+  cachedStartUrl = resolveAllowedAppUrl(
+    process.env.ELECTRON_APP_URL || process.env.ELECTRON_START_URL
+  );
+  return cachedStartUrl;
+}
+
+function resolveAllowedAppUrl(rawUrl) {
+  const fallbackUrl = DEFAULT_APP_URL;
+
+  if (!rawUrl) {
+    return fallbackUrl;
+  }
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const defaultOrigin = new URL(DEFAULT_APP_URL).origin;
+
+    if (parsedUrl.origin === defaultOrigin) {
+      return parsedUrl.toString();
+    }
+
+    if (isDevelopment && parsedUrl.origin === LOCAL_DEV_ORIGIN) {
+      return parsedUrl.toString();
+    }
+
+    console.warn(
+      `ELECTRON_APP_URL ignorada: origen no permitido (${parsedUrl.origin}).`
+    );
+  } catch {
+    console.warn("ELECTRON_APP_URL ignorada: URL invalida.");
+  }
+
+  return fallbackUrl;
 }
 
 function isAllowedAppUrl(url) {
   try {
     const parsedUrl = new URL(url);
+    const defaultOrigin = new URL(DEFAULT_APP_URL).origin;
+    const appOrigin = new URL(getStartUrl()).origin;
 
-    if (isDevelopment) {
-      return parsedUrl.origin === DEV_ORIGIN;
+    if (parsedUrl.origin === defaultOrigin || parsedUrl.origin === appOrigin) {
+      return true;
     }
 
-    return parsedUrl.origin === DEV_ORIGIN;
+    return isDevelopment && appOrigin === LOCAL_DEV_ORIGIN && parsedUrl.origin === LOCAL_DEV_ORIGIN;
   } catch {
     return false;
   }
@@ -97,12 +145,17 @@ function isAllowedAppUrl(url) {
 function openExternalUrl(url) {
   try {
     const parsedUrl = new URL(url);
-    if (parsedUrl.protocol === "https:") {
+    if (["https:", "http:", "mailto:"].includes(parsedUrl.protocol)) {
       void shell.openExternal(parsedUrl.toString());
     }
   } catch {
     // Ignora URLs malformadas.
   }
+}
+
+function getWindowIconPath() {
+  const iconPath = path.join(__dirname, "assets", "icon-256x256.png");
+  return fs.existsSync(iconPath) ? iconPath : undefined;
 }
 
 app.whenReady().then(() => {
