@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { formatStock } from "@/lib/stock-format";
 import { StockBarcodeFilter } from "./stock-barcode-filter";
@@ -18,7 +18,7 @@ type StockPageProps = {
 };
 
 export default async function StockPage({ searchParams }: StockPageProps) {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
   const businessId = user.businessId!;
 
   const params = await searchParams;

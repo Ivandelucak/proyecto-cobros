@@ -3,7 +3,7 @@
 import { Prisma, PurchaseStatus, StockMovementType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { createAuditLog } from "@/lib/audit-log";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -22,7 +22,7 @@ export async function createPurchaseAction(
   _state: PurchaseFormState,
   formData: FormData
 ): Promise<PurchaseFormState> {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
   let purchaseId = "";
 
   try {

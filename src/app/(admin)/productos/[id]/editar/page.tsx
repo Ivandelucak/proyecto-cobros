@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { updateProductAction } from "../../actions";
 import { ProductForm } from "../../product-form";
@@ -12,7 +12,7 @@ type EditarProductoPageProps = {
 };
 
 export default async function EditarProductoPage({ params }: EditarProductoPageProps) {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
   const { id } = await params;
   const product = await prisma.product.findFirst({
     where: {

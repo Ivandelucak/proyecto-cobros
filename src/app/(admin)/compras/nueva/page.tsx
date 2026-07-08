@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { createPurchaseAction } from "../actions";
 import { PurchaseForm } from "../purchase-form";
@@ -7,7 +7,7 @@ import { PurchaseForm } from "../purchase-form";
 export const dynamic = "force-dynamic";
 
 export default async function NuevaCompraPage() {
-  await requireAdminPage();
+  await requireOperationalUser();
 
   const [products, suppliers] = await Promise.all([
     prisma.product.findMany({

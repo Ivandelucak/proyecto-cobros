@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { createProductAction } from "../actions";
 import { ProductForm } from "../product-form";
@@ -7,7 +7,7 @@ import { ProductForm } from "../product-form";
 export const dynamic = "force-dynamic";
 
 export default async function NuevoProductoPage() {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
 
   const rawCategories = await prisma.category.findMany({
     where: {

@@ -15,3 +15,17 @@ export async function requireAdminPage() {
 
   return user;
 }
+
+export async function requireOperationalUser() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (user.role !== Role.OWNER && user.role !== Role.ADMIN && user.role !== Role.CASHIER) {
+    redirect("/caja");
+  }
+
+  return user;
+}

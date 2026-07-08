@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { formatStock, shouldUseDecimalQuantity } from "@/lib/stock-format";
 import { setProductActiveAction } from "./actions";
@@ -27,7 +27,7 @@ type ProductsPageProps = {
 };
 
 export default async function ProductosPage({ searchParams }: ProductsPageProps) {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
   const businessId = user.businessId!;
 
   const params = await searchParams;

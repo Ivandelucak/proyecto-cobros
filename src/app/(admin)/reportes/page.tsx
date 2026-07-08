@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { requireOperationalUser } from "@/lib/admin-auth";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import {
@@ -30,7 +30,7 @@ type ReportesPageProps = {
 };
 
 export default async function ReportesPage({ searchParams }: ReportesPageProps) {
-  const user = await requireAdminPage();
+  const user = await requireOperationalUser();
 
   const params = await searchParams;
   const filters = buildReportFilters(params);
