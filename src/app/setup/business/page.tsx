@@ -3,53 +3,33 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BusinessForm } from "./business-form";
 import { BusinessList } from "./business-list";
+import { SetupAccessForm } from "./setup-access-form";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  clearSetupAccessAction,
+  hasValidSetupAccess
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
-interface PageProps {
-  searchParams: Promise<{ key?: string }>;
-}
-
-export default async function SetupBusinessPage({ searchParams }: PageProps) {
+export default async function SetupBusinessPage() {
   if (process.env.ENABLE_SETUP_PAGE === "false") {
     notFound();
   }
 
-  const resolvedSearchParams = await searchParams;
-  const key = typeof resolvedSearchParams?.key === "string" ? resolvedSearchParams.key : "";
-  const SETUP_SECRET = process.env.SETUP_ADMIN_KEY || "development-only-change-me";
+  const hasSetupAccess = await hasValidSetupAccess();
 
-  if (key !== SETUP_SECRET) {
+  if (!hasSetupAccess) {
     return (
-      <main className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center px-4 text-[var(--text-primary)]">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] px-4 text-[var(--text-primary)]">
         <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-md dark:border-[#273342] dark:bg-[#18212B]">
-          <h1 className="text-2xl font-bold tracking-tight mb-2 text-center">Setup de Comercios</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
+          <h1 className="mb-2 text-center text-2xl font-bold tracking-tight">
+            Setup de Comercios
+          </h1>
+          <p className="mb-6 text-center text-sm text-gray-500 dark:text-gray-400">
             Se requiere la Clave de Setup/Admin para acceder a este panel.
           </p>
-          <form method="GET" action="/setup/business" className="space-y-4">
-            <div>
-              <label htmlFor="key" className="block text-sm font-medium mb-1">Clave de Setup/Admin</label>
-              <input
-                id="key"
-                name="key"
-                type="password"
-                required
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
-                placeholder="Ingresá la clave de setup"
-              />
-            </div>
-            {key && (
-              <p className="text-sm text-red-500 text-center">Clave incorrecta.</p>
-            )}
-            <button
-              type="submit"
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
-            >
-              Ingresar
-            </button>
-          </form>
+          <SetupAccessForm />
         </div>
       </main>
     );
@@ -59,6 +39,7 @@ export default async function SetupBusinessPage({ searchParams }: PageProps) {
   if (user) {
     redirect("/");
   }
+
   const businesses = await prisma.business.findMany({
     include: {
       users: {
@@ -72,6 +53,18 @@ export default async function SetupBusinessPage({ searchParams }: PageProps) {
     orderBy: { createdAt: "desc" }
   });
 
+  const businessViews = businesses.map((business) => ({
+    id: business.id,
+    name: business.name,
+    active: business.active,
+    createdAtLabel: formatSetupDate(business.createdAt),
+    users: business.users.map((user) => ({
+      email: user.email,
+      name: user.name,
+      role: user.role
+    }))
+  }));
+
   return (
     <main className="min-h-screen bg-[var(--app-bg)] px-6 py-10 text-[var(--text-primary)]">
       <div className="mx-auto max-w-5xl">
@@ -79,28 +72,48 @@ export default async function SetupBusinessPage({ searchParams }: PageProps) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Setup de Comercios</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Creación y visualización de comercios independientes en el sistema.
+              Creacion y visualizacion de comercios independientes en el sistema.
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <form action={clearSetupAccessAction}>
+              <button
+                type="submit"
+                className="btn-secondary h-10 rounded-md px-3 text-sm font-semibold"
+              >
+                Cerrar setup
+              </button>
+            </form>
+          </div>
         </header>
 
         <div className="grid gap-8 md:grid-cols-3">
           <section className="md:col-span-1">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-[#273342] dark:bg-[#18212B]">
               <h2 className="mb-4 text-xl font-semibold">Nuevo Comercio</h2>
-              <BusinessForm setupKey={key} />
+              <BusinessForm />
             </div>
           </section>
 
           <section className="md:col-span-2">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-[#273342] dark:bg-[#18212B]">
-              <h2 className="mb-4 text-xl font-semibold">Comercios Existentes ({businesses.length})</h2>
-              <BusinessList businesses={businesses} setupKey={key} />
+              <h2 className="mb-4 text-xl font-semibold">
+                Comercios Existentes ({businessViews.length})
+              </h2>
+              <BusinessList businesses={businessViews} />
             </div>
           </section>
         </div>
       </div>
     </main>
   );
+}
+
+function formatSetupDate(date: Date) {
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Argentina/Buenos_Aires"
+  }).format(date);
 }

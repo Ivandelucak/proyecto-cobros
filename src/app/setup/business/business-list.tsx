@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  toggleBusinessActiveAction, 
-  cleanDuplicateCategoriesAction, 
-  deleteBusinessAction 
+import {
+  cleanDuplicateCategoriesAction,
+  deleteBusinessAction,
+  toggleBusinessActiveAction
 } from "./actions";
 
 type BusinessWithUsers = {
   id: string;
   name: string;
   active: boolean;
-  createdAt: Date;
+  createdAtLabel: string;
   users: Array<{
     name: string;
     email: string;
@@ -23,92 +23,119 @@ type BusinessWithUsers = {
 
 type BusinessListProps = {
   businesses: BusinessWithUsers[];
-  setupKey?: string;
 };
 
-export function BusinessList({ businesses: initialBusinesses, setupKey: initialSetupKey }: BusinessListProps) {
+export function BusinessList({ businesses: initialBusinesses }: BusinessListProps) {
   const [businesses, setBusinesses] = useState(initialBusinesses);
-  const [setupKey, setSetupKey] = useState(initialSetupKey || "");
-  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  
-  // Delete modal state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [businessToDelete, setBusinessToDelete] = useState<BusinessWithUsers | null>(null);
+  const [businessToDelete, setBusinessToDelete] =
+    useState<BusinessWithUsers | null>(null);
   const [confirmNameInput, setConfirmNameInput] = useState("");
 
-  const handleToggleActive = async (b: BusinessWithUsers) => {
-    if (!setupKey) {
-      setStatusMsg({ type: "error", text: "Por favor, ingresá la Clave de Setup al inicio del panel." });
-      return;
-    }
-    setPendingId(b.id + "-toggle");
+  const handleToggleActive = async (business: BusinessWithUsers) => {
+    setPendingId(`${business.id}-toggle`);
     setStatusMsg(null);
     try {
-      const res = await toggleBusinessActiveAction(b.id, setupKey);
-      if (res.success) {
-        setBusinesses(prev => prev.map(item => item.id === b.id ? { ...item, active: res.active! } : item));
-        setStatusMsg({ type: "success", text: `Comercio "${b.name}" ${res.active ? "activado" : "desactivado"} con éxito.` });
-      }
-    } catch (err: any) {
-      setStatusMsg({ type: "error", text: err.message || "Error al cambiar estado del comercio." });
-    } finally {
-      setPendingId(null);
-    }
-  };
-
-  const handleCleanDuplicates = async (b: BusinessWithUsers) => {
-    if (!setupKey) {
-      setStatusMsg({ type: "error", text: "Por favor, ingresá la Clave de Setup al inicio del panel." });
-      return;
-    }
-    setPendingId(b.id + "-clean");
-    setStatusMsg(null);
-    try {
-      const res = await cleanDuplicateCategoriesAction(b.id, setupKey);
-      if (res.success) {
-        setStatusMsg({ 
-          type: "success", 
-          text: `Categorías limpiadas con éxito en "${b.name}". Se eliminaron ${res.cleanedCount} duplicadas.` 
+      const result = await toggleBusinessActiveAction(business.id);
+      if (result.success) {
+        setBusinesses((current) =>
+          current.map((item) =>
+            item.id === business.id ? { ...item, active: result.active } : item
+          )
+        );
+        setStatusMsg({
+          type: "success",
+          text: `Comercio "${business.name}" ${
+            result.active ? "activado" : "desactivado"
+          } con exito.`
         });
       }
-    } catch (err: any) {
-      setStatusMsg({ type: "error", text: err.message || "Error al limpiar duplicados." });
+    } catch (error) {
+      setStatusMsg({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Error al cambiar estado del comercio."
+      });
     } finally {
       setPendingId(null);
     }
   };
 
-  const openDeleteModal = (b: BusinessWithUsers) => {
-    if (!setupKey) {
-      setStatusMsg({ type: "error", text: "Por favor, ingresá la Clave de Setup al inicio del panel." });
-      return;
-    }
+  const handleCleanDuplicates = async (business: BusinessWithUsers) => {
+    setPendingId(`${business.id}-clean`);
     setStatusMsg(null);
-    setBusinessToDelete(b);
+    try {
+      const result = await cleanDuplicateCategoriesAction(business.id);
+      if (result.success) {
+        setStatusMsg({
+          type: "success",
+          text: `Categorias limpiadas con exito en "${business.name}". Se eliminaron ${result.cleanedCount} duplicadas.`
+        });
+      }
+    } catch (error) {
+      setStatusMsg({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Error al limpiar duplicados."
+      });
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const openDeleteModal = (business: BusinessWithUsers) => {
+    setStatusMsg(null);
+    setBusinessToDelete(business);
     setConfirmNameInput("");
     setDeleteConfirmOpen(true);
   };
 
   const handleDeleteBusiness = async () => {
-    if (!businessToDelete) return;
+    if (!businessToDelete) {
+      return;
+    }
+
     if (confirmNameInput.trim() !== businessToDelete.name.trim()) {
-      setStatusMsg({ type: "error", text: "El nombre de confirmación no coincide." });
+      setStatusMsg({
+        type: "error",
+        text: "El nombre de confirmacion no coincide."
+      });
       setDeleteConfirmOpen(false);
       return;
     }
-    
-    setPendingId(businessToDelete.id + "-delete");
+
+    setPendingId(`${businessToDelete.id}-delete`);
     setStatusMsg(null);
     setDeleteConfirmOpen(false);
     try {
-      const res = await deleteBusinessAction(businessToDelete.id, setupKey, confirmNameInput);
-      if (res.success) {
-        setBusinesses(prev => prev.filter(item => item.id !== businessToDelete.id));
-        setStatusMsg({ type: "success", text: `Comercio "${businessToDelete.name}" eliminado definitivamente.` });
+      const result = await deleteBusinessAction(
+        businessToDelete.id,
+        confirmNameInput
+      );
+      if (result.success) {
+        setBusinesses((current) =>
+          current.filter((item) => item.id !== businessToDelete.id)
+        );
+        setStatusMsg({
+          type: "success",
+          text: `Comercio "${businessToDelete.name}" eliminado definitivamente.`
+        });
       }
-    } catch (err: any) {
-      setStatusMsg({ type: "error", text: err.message || "Error al eliminar el comercio." });
+    } catch (error) {
+      setStatusMsg({
+        type: "error",
+        text:
+          error instanceof Error ? error.message : "Error al eliminar el comercio."
+      });
     } finally {
       setPendingId(null);
       setBusinessToDelete(null);
@@ -117,119 +144,119 @@ export function BusinessList({ businesses: initialBusinesses, setupKey: initialS
 
   return (
     <div className="space-y-6">
-      {/* Setup Key Input panel */}
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#273342] dark:bg-[#1a242f]">
-        <label htmlFor="panelSetupKey" className="block text-sm font-medium text-gray-700 dark:text-[#A9B6C2] mb-1">
-          Clave de Setup/Admin (Requerida para realizar acciones sobre comercios)
-        </label>
-        <Input
-          id="panelSetupKey"
-          type="password"
-          value={setupKey}
-          onChange={(e) => setSetupKey(e.target.value)}
-          placeholder="Ingresá la clave de setup para habilitar acciones"
-          className="max-w-md"
-        />
-      </div>
-
-      {statusMsg && (
-        <div 
+      {statusMsg ? (
+        <div
           className={`rounded-md border p-3 text-sm ${
-            statusMsg.type === "success" 
-              ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-200" 
+            statusMsg.type === "success"
+              ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-200"
               : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
           }`}
         >
           {statusMsg.text}
         </div>
-      )}
+      ) : null}
 
-      <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2">
+      <div className="max-h-[700px] space-y-4 overflow-y-auto pr-2">
         {businesses.length === 0 ? (
-          <p className="text-sm text-gray-500">No hay comercios registrados aún.</p>
+          <p className="text-sm text-gray-500">No hay comercios registrados aun.</p>
         ) : (
-          businesses.map((b, index) => {
-            const isFirst = index === businesses.length - 1; // Since it's ordered by desc, the first created is the last one in the array
+          businesses.map((business, index) => {
+            const isInitialBusiness = index === businesses.length - 1;
             return (
               <div
-                key={b.id}
-                className="rounded-lg border border-gray-100 bg-gray-50 p-5 dark:border-[#273342] dark:bg-[#1f2c39] space-y-4"
+                key={business.id}
+                className="space-y-4 rounded-lg border border-gray-100 bg-gray-50 p-5 dark:border-[#273342] dark:bg-[#1f2c39]"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      {b.name}
-                      {isFirst && (
-                        <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-normal">
+                    <h3 className="flex items-center gap-2 text-lg font-semibold">
+                      {business.name}
+                      {isInitialBusiness ? (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-normal text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                           Inicial
                         </span>
-                      )}
+                      ) : null}
                     </h3>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 mt-1">
-                      <p>ID: <span className="font-mono">{b.id}</span></p>
-                      <p>Creado: {new Date(b.createdAt).toLocaleString("es-AR")}</p>
+                    <div className="mt-1 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                      <p>
+                        ID: <span className="font-mono">{business.id}</span>
+                      </p>
+                      <p>Creado: {business.createdAtLabel}</p>
                     </div>
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      b.active
+                      business.active
                         ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                         : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                     }`}
                   >
-                    {b.active ? "Activo" : "Inactivo"}
+                    {business.active ? "Activo" : "Inactivo"}
                   </span>
                 </div>
 
                 <div className="border-t border-gray-200 pt-3 dark:border-[#273342]">
-                  <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">
-                    Usuarios ({b.users.length}):
+                  <h4 className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                    Usuarios ({business.users.length}):
                   </h4>
-                  <ul className="text-xs space-y-1.5 text-gray-600 dark:text-gray-400">
-                    {b.users.map((u) => (
-                      <li key={u.email} className="flex justify-between items-center bg-white dark:bg-[#18212B] p-1.5 rounded border border-gray-100 dark:border-transparent">
-                        <span>{u.name} <span className="text-gray-400">({u.email})</span></span>
-                        <span className="font-mono text-[9px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded uppercase font-bold text-gray-500 dark:text-gray-300">
-                          {u.role}
+                  <ul className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                    {business.users.map((user) => (
+                      <li
+                        key={user.email}
+                        className="flex items-center justify-between rounded border border-gray-100 bg-white p-1.5 dark:border-transparent dark:bg-[#18212B]"
+                      >
+                        <span>
+                          {user.name}{" "}
+                          <span className="text-gray-400">({user.email})</span>
+                        </span>
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                          {user.role}
                         </span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex flex-wrap gap-2.5 pt-2 border-t border-gray-100 dark:border-[#273342]">
+                <div className="flex flex-wrap gap-2.5 border-t border-gray-100 pt-2 dark:border-[#273342]">
                   <Button
                     size="sm"
-                    variant={b.active ? "outline" : "primary"}
+                    variant={business.active ? "outline" : "primary"}
                     disabled={pendingId !== null}
-                    onClick={() => handleToggleActive(b)}
+                    onClick={() => handleToggleActive(business)}
                     className="text-xs"
                   >
-                    {pendingId === b.id + "-toggle" ? "Procesando..." : b.active ? "Desactivar" : "Activar"}
+                    {pendingId === `${business.id}-toggle`
+                      ? "Procesando..."
+                      : business.active
+                        ? "Desactivar"
+                        : "Activar"}
                   </Button>
-                  
+
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={pendingId !== null}
-                    onClick={() => handleCleanDuplicates(b)}
+                    onClick={() => handleCleanDuplicates(business)}
                     className="text-xs"
                   >
-                    {pendingId === b.id + "-clean" ? "Limpiando..." : "Limpiar Categorías Duplicadas"}
+                    {pendingId === `${business.id}-clean`
+                      ? "Limpiando..."
+                      : "Limpiar categorias duplicadas"}
                   </Button>
-                  
-                  {!isFirst && (
+
+                  {!isInitialBusiness ? (
                     <Button
                       size="sm"
                       variant="destructive"
                       disabled={pendingId !== null}
-                      onClick={() => openDeleteModal(b)}
+                      onClick={() => openDeleteModal(business)}
                       className="text-xs"
                     >
-                      {pendingId === b.id + "-delete" ? "Eliminando..." : "Eliminar Comercio"}
+                      {pendingId === `${business.id}-delete`
+                        ? "Eliminando..."
+                        : "Eliminar comercio"}
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );
@@ -237,31 +264,31 @@ export function BusinessList({ businesses: initialBusinesses, setupKey: initialS
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmOpen && businessToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#18212B] rounded-lg border border-gray-200 dark:border-[#273342] p-6 max-w-md w-full shadow-xl space-y-4">
+      {deleteConfirmOpen && businessToDelete ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-[#273342] dark:bg-[#18212B]">
             <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
-              ¿Eliminar comercio definitivamente?
+              Eliminar comercio definitivamente
             </h3>
-            
-            <div className="text-sm space-y-2 text-gray-600 dark:text-[#A9B6C2]">
+
+            <div className="space-y-2 text-sm text-gray-600 dark:text-[#A9B6C2]">
               <p>
-                Esta acción eliminará permanentemente el comercio <strong>{businessToDelete.name}</strong> y TODOS sus datos asociados:
+                Esta accion eliminara permanentemente el comercio{" "}
+                <strong>{businessToDelete.name}</strong> y todos sus datos asociados.
               </p>
-              <ul className="list-disc pl-5 text-xs space-y-1 text-red-500 dark:text-red-400">
-                <li>Usuarios, productos y categorías.</li>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-red-500 dark:text-red-400">
+                <li>Usuarios, productos y categorias.</li>
                 <li>Historial completo de cajas y movimientos.</li>
                 <li>Ventas, compras, proveedores e intentos de pago.</li>
                 <li>Cuentas Mercado Pago vinculadas.</li>
               </ul>
               <p className="font-semibold text-red-600 dark:text-red-400">
-                ¡Esta acción no se puede deshacer!
+                Esta accion no se puede deshacer.
               </p>
               <p className="pt-2">
-                Para confirmar la eliminación, por favor escribí el nombre exacto del comercio:
+                Para confirmar, escribi el nombre exacto del comercio:
               </p>
-              <p className="bg-gray-100 dark:bg-gray-800 p-2 rounded text-center font-mono font-bold select-all">
+              <p className="select-all rounded bg-gray-100 p-2 text-center font-mono font-bold dark:bg-gray-800">
                 {businessToDelete.name}
               </p>
             </div>
@@ -269,12 +296,12 @@ export function BusinessList({ businesses: initialBusinesses, setupKey: initialS
             <Input
               type="text"
               value={confirmNameInput}
-              onChange={(e) => setConfirmNameInput(e.target.value)}
+              onChange={(event) => setConfirmNameInput(event.target.value)}
               placeholder="Nombre del comercio"
               className="w-full text-center font-bold"
             />
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex justify-end gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -289,12 +316,12 @@ export function BusinessList({ businesses: initialBusinesses, setupKey: initialS
                 disabled={confirmNameInput.trim() !== businessToDelete.name.trim()}
                 onClick={handleDeleteBusiness}
               >
-                Eliminar Definitivamente
+                Eliminar definitivamente
               </Button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

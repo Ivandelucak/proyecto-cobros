@@ -1,39 +1,93 @@
 "use server";
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { hashPassword } from "@/lib/auth";
 import { createEmptyBusiness } from "@/lib/business-setup";
 import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { slugify } from "@/lib/business-category-templates";
-import { CustomerAccountMovementType } from "@prisma/client";
+
+export type SetupAccessState = {
+  error?: string;
+};
 
 export type CreateBusinessState = {
   success?: boolean;
   error?: string;
 };
 
-const SETUP_SECRET = process.env.SETUP_ADMIN_KEY || "development-only-change-me";
 const ENABLE_SETUP_PAGE = process.env.ENABLE_SETUP_PAGE !== "false";
+const SETUP_ACCESS_COOKIE = "foxpoint_setup_access";
+const SETUP_ACCESS_MAX_AGE_SECONDS = 30 * 60;
+
+export async function validateSetupAccessAction(
+  _prevState: SetupAccessState,
+  formData: FormData
+): Promise<SetupAccessState> {
+  if (!ENABLE_SETUP_PAGE) {
+    return { error: "El setup de comercios esta deshabilitado." };
+  }
+
+  const submittedKey = String(formData.get("setupKey") ?? "");
+  if (!isValidSetupKey(submittedKey)) {
+    return { error: "Clave de Setup/Admin incorrecta." };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(SETUP_ACCESS_COOKIE, createSetupAccessToken(), {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/setup/business",
+    maxAge: SETUP_ACCESS_MAX_AGE_SECONDS
+  });
+
+  redirect("/setup/business");
+}
+
+export async function clearSetupAccessAction() {
+  const cookieStore = await cookies();
+  cookieStore.set(SETUP_ACCESS_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/setup/business",
+    maxAge: 0
+  });
+
+  redirect("/setup/business");
+}
+
+export async function hasValidSetupAccess() {
+  if (!ENABLE_SETUP_PAGE) {
+    return false;
+  }
+
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SETUP_ACCESS_COOKIE)?.value;
+  return isValidSetupAccessToken(token);
+}
 
 export async function createBusinessAction(
   _prevState: CreateBusinessState,
   formData: FormData
 ): Promise<CreateBusinessState> {
   if (!ENABLE_SETUP_PAGE) {
-    return { error: "El setup de comercios está deshabilitado." };
+    return { error: "El setup de comercios esta deshabilitado." };
   }
 
-  const setupKey = String(formData.get("setupKey") ?? "");
+  if (!(await hasValidSetupAccess())) {
+    return { error: "La autorizacion de setup expiro. Ingresa la clave nuevamente." };
+  }
+
   const businessName = String(formData.get("businessName") ?? "").trim();
   const ownerName = String(formData.get("ownerName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const rubro = String(formData.get("rubro") ?? "OTRO");
   const preloadCategories = formData.get("preloadCategoriesActive") === "true";
-
-  if (setupKey !== SETUP_SECRET) {
-    return { error: "Clave de Setup/Admin incorrecta." };
-  }
 
   if (!businessName || !ownerName || !ownerEmail || !password) {
     return { error: "Todos los campos son requeridos." };
@@ -65,12 +119,12 @@ export async function createBusinessAction(
   }
 }
 
-export async function toggleBusinessActiveAction(businessId: string, setupKey: string) {
+export async function toggleBusinessActiveAction(businessId: string) {
   if (!ENABLE_SETUP_PAGE) {
-    throw new Error("El setup de comercios está deshabilitado.");
+    throw new Error("El setup de comercios esta deshabilitado.");
   }
-  if (setupKey !== SETUP_SECRET) {
-    throw new Error("Clave de Setup/Admin incorrecta.");
+  if (!(await hasValidSetupAccess())) {
+    throw new Error("La autorizacion de setup expiro. Ingresa la clave nuevamente.");
   }
 
   const business = await prisma.business.findUnique({ where: { id: businessId } });
@@ -87,12 +141,12 @@ export async function toggleBusinessActiveAction(businessId: string, setupKey: s
   return { success: true, active: !business.active };
 }
 
-export async function cleanDuplicateCategoriesAction(businessId: string, setupKey: string) {
+export async function cleanDuplicateCategoriesAction(businessId: string) {
   if (!ENABLE_SETUP_PAGE) {
-    throw new Error("El setup de comercios está deshabilitado.");
+    throw new Error("El setup de comercios esta deshabilitado.");
   }
-  if (setupKey !== SETUP_SECRET) {
-    throw new Error("Clave de Setup/Admin incorrecta.");
+  if (!(await hasValidSetupAccess())) {
+    throw new Error("La autorizacion de setup expiro. Ingresa la clave nuevamente.");
   }
 
   const categories = await prisma.category.findMany({
@@ -142,12 +196,12 @@ export async function cleanDuplicateCategoriesAction(businessId: string, setupKe
   return { success: true, cleanedCount };
 }
 
-export async function deleteBusinessAction(businessId: string, setupKey: string, confirmName: string) {
+export async function deleteBusinessAction(businessId: string, confirmName: string) {
   if (!ENABLE_SETUP_PAGE) {
-    throw new Error("El setup de comercios está deshabilitado.");
+    throw new Error("El setup de comercios esta deshabilitado.");
   }
-  if (setupKey !== SETUP_SECRET) {
-    throw new Error("Clave de Setup/Admin incorrecta.");
+  if (!(await hasValidSetupAccess())) {
+    throw new Error("La autorizacion de setup expiro. Ingresa la clave nuevamente.");
   }
 
   const business = await prisma.business.findUnique({
@@ -160,7 +214,7 @@ export async function deleteBusinessAction(businessId: string, setupKey: string,
   }
 
   if (business.name.trim() !== confirmName.trim()) {
-    throw new Error("El nombre de confirmación no coincide con el comercio a eliminar.");
+    throw new Error("El nombre de confirmacion no coincide con el comercio a eliminar.");
   }
 
   // Double safety: don't allow deleting a business if it looks like the initial main business.
@@ -170,7 +224,7 @@ export async function deleteBusinessAction(businessId: string, setupKey: string,
   });
 
   if (allBusinesses.length > 0 && allBusinesses[0].id === businessId) {
-    throw new Error("No está permitido eliminar el comercio principal/inicial del sistema.");
+    throw new Error("No esta permitido eliminar el comercio principal/inicial del sistema.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -351,4 +405,64 @@ export async function deleteBusinessAction(businessId: string, setupKey: string,
 
   revalidatePath("/setup/business");
   return { success: true };
+}
+
+function getSetupSecret() {
+  return (
+    process.env.SETUP_ADMIN_KEY ||
+    (process.env.NODE_ENV === "production" ? "" : "development-only-change-me")
+  );
+}
+
+function isValidSetupKey(submittedKey: string) {
+  const setupSecret = getSetupSecret();
+  if (!setupSecret || !submittedKey) {
+    return false;
+  }
+
+  return safeEqual(submittedKey, setupSecret);
+}
+
+function createSetupAccessToken() {
+  const expiresAt = Date.now() + SETUP_ACCESS_MAX_AGE_SECONDS * 1000;
+  return `${expiresAt}.${signSetupAccess(String(expiresAt))}`;
+}
+
+function isValidSetupAccessToken(token: string | undefined) {
+  if (!token) {
+    return false;
+  }
+
+  const [expiresAt, signature] = token.split(".");
+  const expiresAtNumber = Number(expiresAt);
+  if (!expiresAt || !signature || !Number.isFinite(expiresAtNumber)) {
+    return false;
+  }
+
+  if (expiresAtNumber <= Date.now()) {
+    return false;
+  }
+
+  return safeEqual(signature, signSetupAccess(expiresAt));
+}
+
+function signSetupAccess(expiresAt: string) {
+  const setupSecret = getSetupSecret();
+  if (!setupSecret) {
+    return "";
+  }
+
+  return createHmac("sha256", setupSecret)
+    .update(`foxpoint:setup-business:${expiresAt}`)
+    .digest("hex");
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }

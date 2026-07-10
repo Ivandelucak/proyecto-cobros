@@ -7,7 +7,7 @@ import { Input, Select } from "@/components/ui/input";
 
 const initialState: CreateBusinessState = {};
 
-export function BusinessForm({ setupKey }: { setupKey: string }) {
+export function BusinessForm() {
   const [state, formAction, pending] = useActionState(createBusinessAction, initialState);
   const [rubro, setRubro] = useState("OTRO");
   const [preloadCategories, setPreloadCategories] = useState(false);
@@ -24,20 +24,6 @@ export function BusinessForm({ setupKey }: { setupKey: string }) {
 
   return (
     <form action={formAction} className="space-y-4">
-      <div className="space-y-2">
-        <label htmlFor="setupKey" className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
-          Clave de Setup / Admin
-        </label>
-        <Input
-          id="setupKey"
-          name="setupKey"
-          type="password"
-          required
-          defaultValue={setupKey}
-          placeholder="Clave de seguridad del sistema"
-        />
-      </div>
-
       <div className="space-y-2">
         <label htmlFor="businessName" className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
           Nombre del Comercio
