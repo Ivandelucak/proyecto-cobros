@@ -2012,11 +2012,11 @@ export function CashRegister({
 
   return (
     <section
-      className="cash-register-screen grid min-h-[calc(100vh-11rem)] gap-3 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]"
+      className="cash-register-screen grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]"
       onKeyDown={handlePanelKeyDown}
     >
-      <div className="cash-main-column min-w-0 space-y-2.5 2xl:space-y-3">
-        <Card className="cash-search-card pos-accent-line p-2.5 pl-4 shadow-lg shadow-[#5B6B79]/10 ring-1 ring-white/70 dark:shadow-none dark:ring-0 2xl:p-3 2xl:pl-5">
+      <div className="cash-main-column grid min-h-0 min-w-0 gap-2.5 2xl:gap-3">
+        <Card className="cash-search-card pos-accent-line min-h-0 overflow-y-auto p-2.5 pl-4 shadow-lg shadow-[#5B6B79]/10 ring-1 ring-white/70 dark:shadow-none dark:ring-0 2xl:p-3 2xl:pl-5">
           <form
             className="input-base flex flex-col gap-2 rounded-lg p-1.5 shadow-inner shadow-[#5B6B79]/10 dark:shadow-none sm:flex-row sm:gap-2"
             onSubmit={(event) => {
@@ -2084,7 +2084,7 @@ export function CashRegister({
           )}
         </Card>
 
-        <Card className="cash-cart-card overflow-hidden shadow-lg shadow-[#5B6B79]/10 dark:shadow-none">
+        <Card className="cash-cart-card shrink-0 overflow-hidden shadow-lg shadow-[#5B6B79]/10 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="cash-cart-table w-full min-w-[620px] text-left text-sm">
               <thead className="border-b border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">

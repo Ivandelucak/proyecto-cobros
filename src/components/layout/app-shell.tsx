@@ -146,7 +146,7 @@ export function AppShell({
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 p-3 md:p-4 xl:p-5 2xl:p-6 print:p-0">
+          <main className="app-main-frame min-w-0 flex-1 p-3 md:p-4 xl:p-5 2xl:p-6 print:p-0">
             {children}
           </main>
         </div>
