@@ -21,6 +21,7 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { AppAccordion, AppModal } from "@/components/ui/overlay";
 import { PrintButton } from "@/components/ui/print-button";
+import { useOfflineSales } from "@/components/offline/offline-sales-coordinator";
 import { recordTicketPrintAction } from "@/app/(sales)/ventas/print-actions";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type {
@@ -31,7 +32,6 @@ import type {
 import { formatARS } from "@/lib/money";
 import {
   applyOfflineStockDecrease,
-  countPendingOfflineSales,
   enqueueOfflineSale,
   hasOfflineCashContext,
   isOfflineStorageAvailable,
@@ -39,7 +39,6 @@ import {
   saveOfflineCatalog
 } from "@/lib/offline-sales/offline-db";
 import { printOfflineTicket } from "@/lib/offline-sales/offline-ticket";
-import { syncOfflineCashSales } from "@/lib/offline-sales/offline-sync";
 import {
   offlineContextId,
   type OfflineCashContext,
@@ -237,9 +236,7 @@ export function CashRegister({
   const [suggestedProducts, setSuggestedProducts] = useState(initialSuggestedProducts);
   const [offlineCatalogProducts, setOfflineCatalogProducts] =
     useState<OfflineCatalogProduct[]>(offlineCatalog);
-  const [offlineConnection, setOfflineConnection] = useState<"CHECKING" | "ONLINE" | "OFFLINE">("CHECKING");
   const [offlinePrepared, setOfflinePrepared] = useState(false);
-  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const [offlineReceipt, setOfflineReceipt] = useState<OfflineCashSale | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -313,47 +310,11 @@ export function CashRegister({
   const transferVerificationSelectionLoadedRef = useRef(false);
   const mercadoPagoMatchSearchInFlightRef = useRef(false);
   const mercadoPagoLastMatchSearchAtRef = useRef(0);
-  const offlineSyncInFlightRef = useRef(false);
-
-  const refreshOfflinePendingCount = useCallback(async () => {
-    if (!offlineContext || !isOfflineStorageAvailable()) {
-      setOfflinePendingCount(0);
-      return 0;
-    }
-    const count = await countPendingOfflineSales(
-      offlineContext.businessId,
-      offlineContext.userId
-    );
-    setOfflinePendingCount(count);
-    window.dispatchEvent(
-      new CustomEvent("foxpoint:offline-sales-pending", { detail: { count } })
-    );
-    return count;
-  }, [offlineContext]);
-
-  const syncOfflineQueue = useCallback(async () => {
-    if (!offlineContext || offlineSyncInFlightRef.current) {
-      return;
-    }
-    offlineSyncInFlightRef.current = true;
-    try {
-      const summary = await syncOfflineCashSales(offlineContext);
-      await refreshOfflinePendingCount();
-      if (summary.synced > 0) {
-        showMessage(
-          summary.synced === 1
-            ? "Se sincronizo 1 venta offline."
-            : `Se sincronizaron ${summary.synced} ventas offline.`,
-          "ok"
-        );
-      }
-      if (summary.requiresLogin) {
-        showMessage("Inicia sesion nuevamente para sincronizar las ventas pendientes.", "error");
-      }
-    } finally {
-      offlineSyncInFlightRef.current = false;
-    }
-  }, [offlineContext, refreshOfflinePendingCount]);
+  const {
+    connection: offlineConnection,
+    pendingCount: offlinePendingCount,
+    refreshPendingCount: refreshOfflinePendingCount
+  } = useOfflineSales();
 
   useEffect(() => {
     if (!offlineContext || !isOfflineStorageAvailable()) {
@@ -395,61 +356,6 @@ export function CashRegister({
       active = false;
     };
   }, [offlineCatalog, offlineContext, refreshOfflinePendingCount]);
-
-  useEffect(() => {
-    let active = true;
-    let timer: number | undefined;
-    let failures = 0;
-
-    const schedule = (delay: number) => {
-      timer = window.setTimeout(checkConnection, delay);
-    };
-
-    const checkConnection = async () => {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 5_000);
-      let healthy = false;
-      try {
-        const response = await fetch("/api/health", {
-          cache: "no-store",
-          credentials: "same-origin",
-          signal: controller.signal
-        });
-        healthy = response.ok;
-      } catch {
-        healthy = false;
-      } finally {
-        window.clearTimeout(timeout);
-      }
-
-      if (!active) {
-        return;
-      }
-
-      if (healthy) {
-        failures = 0;
-        setOfflineConnection("ONLINE");
-        void syncOfflineQueue();
-        schedule(45_000);
-      } else {
-        failures += 1;
-        setOfflineConnection("OFFLINE");
-        schedule(Math.min(120_000, 15_000 * 2 ** Math.min(failures, 3)));
-      }
-    };
-
-    const onOnline = () => void checkConnection();
-    const onOffline = () => setOfflineConnection("OFFLINE");
-    void checkConnection();
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      active = false;
-      if (timer) window.clearTimeout(timer);
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, [syncOfflineQueue]);
 
   const subtotal = useMemo(
     () =>
@@ -2337,7 +2243,7 @@ export function CashRegister({
 
   return (
     <section
-      className="cash-register-screen grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]"
+      className="cash-register-screen grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,1fr)_clamp(300px,24vw,380px)]"
       onKeyDown={handlePanelKeyDown}
     >
       <div className="cash-main-column grid min-h-0 min-w-0 gap-2.5 2xl:gap-3">
@@ -2426,7 +2332,7 @@ export function CashRegister({
           )}
         </Card>
 
-        <Card className="cash-cart-card shrink-0 overflow-hidden shadow-lg shadow-[#5B6B79]/10 dark:shadow-none">
+        <Card className="cash-cart-card min-h-0 overflow-hidden shadow-lg shadow-[#5B6B79]/10 dark:shadow-none">
           <div className="overflow-x-auto">
             <table className="cash-cart-table w-full min-w-[620px] text-left text-sm">
               <thead className="border-b border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">

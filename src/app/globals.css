@@ -396,20 +396,27 @@ html.theme-transitioning *::after {
   }
 
   .cash-main-column {
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
+    overflow: hidden;
   }
 
   .cash-search-card {
+    align-self: start;
+    max-height: min(34rem, 58dvh);
     scrollbar-gutter: stable;
   }
 
   .cash-cart-card {
-    max-height: 18rem;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
   }
 
   .cash-cart-card > div {
-    max-height: inherit;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
     overflow: auto;
   }
 
@@ -435,7 +442,7 @@ html.theme-transitioning *::after {
 
     .cash-register-screen {
       height: 100%;
-      grid-template-columns: minmax(0, 1fr) clamp(310px, 29vw, 390px);
+      grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 380px);
     }
 
     .cash-sidebar {
@@ -466,11 +473,11 @@ html.theme-transitioning *::after {
       linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 72%, transparent), var(--panel-bg) 35%),
       var(--panel-bg);
     border-top: 1px solid var(--panel-border);
-    bottom: -0.75rem;
     margin-left: -0.75rem;
     margin-right: -0.75rem;
+    margin-top: 0;
     padding: 0.75rem;
-    position: static;
+    position: relative;
     z-index: 5;
   }
 
@@ -486,7 +493,7 @@ html.theme-transitioning *::after {
     scrollbar-gutter: stable;
   }
 
-  @media (max-width: 1366px), (max-height: 800px) {
+  @media (max-width: 1366px), (max-height: 900px) {
     .cash-total {
       font-size: 2.35rem;
     }
@@ -500,7 +507,7 @@ html.theme-transitioning *::after {
     }
   }
 
-  @media (max-height: 800px) and (min-width: 900px) {
+  @media (max-height: 900px) and (min-width: 1000px) {
     .pos-operational-strip {
       min-height: 3.5rem;
       padding-bottom: 0.375rem;
@@ -634,15 +641,14 @@ html.theme-transitioning *::after {
     }
 
     .cash-status-strip,
-    .cash-payment-stack,
-    .cash-actions {
+    .cash-payment-stack {
       margin-top: 0.5rem;
     }
 
     .cash-actions {
-      bottom: -0.625rem;
       margin-left: -0.5rem;
       margin-right: -0.5rem;
+      margin-top: 0;
       padding: 0.5rem;
     }
 
@@ -694,8 +700,30 @@ html.theme-transitioning *::after {
       padding-top: 0.5rem;
     }
 
-    .cash-cart-card {
-      max-height: 12.75rem;
+    .cash-search-card {
+      max-height: min(28rem, 51dvh);
+    }
+  }
+
+  @media (max-height: 780px) and (min-width: 1000px) {
+    .cash-search-card {
+      max-height: min(24rem, 45dvh);
+    }
+
+    .cash-console {
+      padding: 0.4375rem;
+    }
+
+    .cash-console-header .cash-total {
+      font-size: 2.1rem;
+    }
+
+    .cash-summary-value {
+      padding: 0.4375rem 0.5rem;
+    }
+
+    .cash-actions {
+      padding: 0.4375rem;
     }
   }
 }

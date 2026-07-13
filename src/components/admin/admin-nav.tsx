@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/ui";
@@ -48,7 +48,17 @@ const navItems = [
   cashierLabel?: string;
 }>;
 
-export function AdminNav({ role, compact = false }: { role: Role; compact?: boolean }) {
+export function AdminNav({
+  role,
+  compact = false,
+  navigationLocked = false,
+  onNavigationBlocked
+}: {
+  role: Role;
+  compact?: boolean;
+  navigationLocked?: boolean;
+  onNavigationBlocked?: () => void;
+}) {
   const pathname = usePathname();
   const visibleItems = navItems.filter((item) => role === Role.OWNER || role === Role.ADMIN || !item.adminOnly);
   const groups = Array.from(new Set(visibleItems.map((item) => item.group)));
@@ -72,6 +82,12 @@ export function AdminNav({ role, compact = false }: { role: Role; compact?: bool
               key={item.href}
               href={item.href}
               title={label}
+              onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                if (navigationLocked && item.href !== "/caja") {
+                  event.preventDefault();
+                  onNavigationBlocked?.();
+                }
+              }}
               className={cn(
                 "group relative flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
                 compact ? "px-2 py-2 text-xs xl:text-sm" : "px-2.5 py-2 text-xs lg:text-sm 2xl:px-3",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/app/auth-actions";
 import { AdminNav } from "@/components/admin/admin-nav";
@@ -10,11 +10,11 @@ import { BusinessHeaderIdentity } from "@/components/brand/BusinessHeaderIdentit
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/overlay";
-import { APP_NAME } from "@/lib/branding";
 import {
-  countPendingOfflineSales,
-  isOfflineStorageAvailable
-} from "@/lib/offline-sales/offline-db";
+  OfflineSalesCoordinator,
+  useOfflineSales
+} from "@/components/offline/offline-sales-coordinator";
+import { APP_NAME } from "@/lib/branding";
 import { cn } from "@/lib/ui";
 
 import { Role } from "@prisma/client";
@@ -43,11 +43,32 @@ export function AppShell({
   defaultSidebarOpen = true,
   businessProfile
 }: AppShellProps) {
+  return (
+    <OfflineSalesCoordinator businessId={user.businessId} userId={user.id}>
+      <AppShellContent
+        user={user}
+        defaultSidebarOpen={defaultSidebarOpen}
+        businessProfile={businessProfile}
+      >
+        {children}
+      </AppShellContent>
+    </OfflineSalesCoordinator>
+  );
+}
+
+function AppShellContent({
+  user,
+  children,
+  defaultSidebarOpen = true,
+  businessProfile
+}: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
-  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const [logoutWarningOpen, setLogoutWarningOpen] = useState(false);
+  const [offlineNavigationWarningOpen, setOfflineNavigationWarningOpen] = useState(false);
+  const { connection: offlineConnection, pendingCount: offlinePendingCount } = useOfflineSales();
   const businessName = businessProfile?.name ?? APP_NAME;
   const businessImageUrl = businessProfile?.headerImageUrl ?? businessProfile?.logoUrl ?? null;
+  const navigationLocked = offlineConnection === "OFFLINE";
 
   const roleChipLabel =
     user.role === Role.OWNER
@@ -57,35 +78,6 @@ export function AppShell({
       : user.role === Role.VIEWER
       ? "Visualizador"
       : "Admin operativo";
-
-  useEffect(() => {
-    if (!user.businessId || !isOfflineStorageAvailable()) {
-      return;
-    }
-
-    let active = true;
-    const refresh = async () => {
-      const count = await countPendingOfflineSales(user.businessId!, user.id);
-      if (active) {
-        setOfflinePendingCount(count);
-      }
-    };
-    const onPendingChange = (event: Event) => {
-      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
-      if (typeof count === "number") {
-        setOfflinePendingCount(count);
-      } else {
-        void refresh();
-      }
-    };
-
-    void refresh();
-    window.addEventListener("foxpoint:offline-sales-pending", onPendingChange);
-    return () => {
-      active = false;
-      window.removeEventListener("foxpoint:offline-sales-pending", onPendingChange);
-    };
-  }, [user.businessId, user.id]);
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden transition-colors duration-200">
@@ -113,6 +105,13 @@ export function AppShell({
               href={user.role === "ADMIN" ? "/admin" : "/caja"}
               title={user.role === "ADMIN" ? "Panel administrativo" : "Caja"}
               className="block rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              onClick={(event) => {
+                const target = user.role === "ADMIN" ? "/admin" : "/caja";
+                if (navigationLocked && target !== "/caja") {
+                  event.preventDefault();
+                  setOfflineNavigationWarningOpen(true);
+                }
+              }}
             >
               <BusinessBrand
                 logoUrl={businessProfile?.logoUrl}
@@ -128,7 +127,11 @@ export function AppShell({
                 {user.role === "CASHIER" ? "Listo para cobrar" : "Gestion comercial"}
               </p>
             </div>
-            <AdminNav role={user.role} />
+            <AdminNav
+              role={user.role}
+              navigationLocked={navigationLocked}
+              onNavigationBlocked={() => setOfflineNavigationWarningOpen(true)}
+            />
           </aside>
         ) : null}
 
@@ -218,6 +221,24 @@ export function AppShell({
       >
         <p className="badge-warning rounded-lg px-3 py-2 text-sm font-semibold">
           Ventas pendientes de sincronizacion: {offlinePendingCount}.
+        </p>
+      </AppModal>
+      <AppModal
+        open={offlineNavigationWarningOpen}
+        onClose={() => setOfflineNavigationWarningOpen(false)}
+        title="Sin conexion"
+        description="Sin conexión. Permanecé en Caja hasta recuperar Internet."
+        panelClassName="max-w-md"
+        footer={
+          <div className="flex justify-end">
+            <Button type="button" variant="primary" onClick={() => setOfflineNavigationWarningOpen(false)}>
+              Entendido
+            </Button>
+          </div>
+        }
+      >
+        <p className="badge-warning rounded-lg px-3 py-2 text-sm font-semibold">
+          La cola local queda protegida y se sincronizara automaticamente cuando vuelva la conexion.
         </p>
       </AppModal>
     </div>
