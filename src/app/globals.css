@@ -733,6 +733,30 @@ html.theme-transitioning *::after {
   scrollbar-color: rgba(91, 107, 121, 0.45) transparent;
 }
 
+/* The mobile workspace has its own readable, touch-first density without affecting desktop. */
+.mobile-app {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.mobile-app .text-\[10px\],
+.mobile-app .text-\[11px\] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.mobile-app .text-xs {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.mobile-app input,
+.mobile-app select,
+.mobile-app button,
+.mobile-app a {
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
