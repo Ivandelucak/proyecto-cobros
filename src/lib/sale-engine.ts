@@ -6,12 +6,16 @@ import {
   Prisma,
   Role,
   SaleStatus,
-  StockMovementType
+  StockMovementType,
+  UnitType
 } from "@prisma/client";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
 import { createCustomerAccountMovement } from "@/lib/customer-account";
 import { applyFiscalDecisionToSale } from "@/lib/fiscal/fiscal-engine";
-import { determineFiscalRequirementForSale } from "@/lib/fiscal/fiscal-policy";
+import {
+  determineFiscalRequirementForSale,
+  type FiscalRequirementDecision
+} from "@/lib/fiscal/fiscal-policy";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import {
   getActiveCreditInstallmentPlans,
@@ -26,6 +30,8 @@ type SaleItemInput = {
   isManual?: boolean;
   name?: string;
   unitPrice?: Prisma.Decimal.Value;
+  unitTypeSnapshot?: UnitType;
+  allowsDecimalQuantity?: boolean;
 };
 
 type PaymentInput = {
@@ -46,7 +52,25 @@ export type ConfirmSaleInput = {
   items: SaleItemInput[];
   payments: PaymentInput[];
   fiscalInvoiceRequested?: boolean | null;
+  offline?: {
+    clientOperationId: string;
+    businessId: string;
+    userId: string;
+    cashSessionId: string;
+    occurredAt: Date;
+  };
 };
+
+export class OfflineSaleSyncError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly retryable = true
+  ) {
+    super(message);
+    this.name = "OfflineSaleSyncError";
+  }
+}
 
 type ActiveCreditInstallmentPlan = {
   installments: number;
@@ -69,35 +93,114 @@ export async function confirmSale(input: ConfirmSaleInput) {
     throw new Error("La venta no tiene pagos.");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const cashSetting = await getCashRegisterSetting(user.businessId ?? undefined, tx);
-    const cashSession = await tx.cashSession.findFirst({
-      where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
-      select: { id: true }
-    });
+  const offline = input.offline;
+  if (offline) {
+    validateOfflineInput(offline, user);
+    if (
+      input.payments.length !== 1 ||
+      input.payments[0]?.method !== PaymentMethod.CASH
+    ) {
+      throw new OfflineSaleSyncError(
+        "Las ventas offline solo admiten un pago en efectivo.",
+        "OFFLINE_CASH_ONLY",
+        false
+      );
+    }
 
-    if (cashSetting.requireOpenSession && !cashSession) {
+    const existingSale = await prisma.sale.findFirst({
+      where: {
+        businessId: user.businessId!,
+        clientOperationId: offline.clientOperationId
+      },
+      include: { items: true, payments: true, user: true }
+    });
+    if (existingSale) {
+      return { ...existingSale, offlineSyncLate: false };
+    }
+  }
+
+  try {
+  return await prisma.$transaction(async (tx) => {
+    const cashSetting = await getCashRegisterSetting(user.businessId ?? undefined, tx);
+    const cashSession = offline
+      ? await tx.cashSession.findFirst({
+          where: { id: offline.cashSessionId, businessId: user.businessId! },
+          select: {
+            id: true,
+            status: true,
+            openedAt: true,
+            closedAt: true,
+            openingAmount: true,
+            expectedCashAmount: true,
+            countedCashAmount: true
+          }
+        })
+      : await tx.cashSession.findFirst({
+          where: { status: CashSessionStatus.OPEN, businessId: user.businessId! },
+          select: {
+            id: true,
+            status: true,
+            openedAt: true,
+            closedAt: true,
+            openingAmount: true,
+            expectedCashAmount: true,
+            countedCashAmount: true
+          }
+        });
+
+    if (!offline && cashSetting.requireOpenSession && !cashSession) {
       throw new Error("No hay caja abierta para registrar la venta.");
     }
+
+    const lateCashSession = offline
+      ? validateOfflineCashSession(cashSession, offline.occurredAt)
+      : false;
 
     const catalogItems = input.items.filter((item) => !item.isManual);
     const manualItems = input.items.filter((item) => item.isManual);
 
-    const productIds = [...new Set(catalogItems.map((item) => item.productId as string))];
+    const productIds = [
+      ...new Set(catalogItems.map((item) => item.productId).filter(Boolean))
+    ] as string[];
+    if (productIds.length !== catalogItems.length) {
+      throw new Error("Producto invalido.");
+    }
     const products = await tx.product.findMany({
       where: {
         id: { in: productIds },
-        active: true,
-        deletedAt: null
+        businessId: user.businessId!,
+        ...(offline ? {} : { active: true, deletedAt: null })
       }
     });
     const productsById = new Map(products.map((product) => [product.id, product]));
 
     if (productsById.size !== productIds.length) {
+      if (offline) {
+        throw new OfflineSaleSyncError(
+          "Uno de los productos de la venta offline ya no existe en este comercio.",
+          "OFFLINE_PRODUCT_NOT_FOUND"
+        );
+      }
       throw new Error("Uno o más productos no están disponibles.");
     }
 
-    const groupedCatalogItems = groupSaleItems(catalogItems);
+    const groupedCatalogItems: Array<{
+      productId: string;
+      quantity: Prisma.Decimal;
+      name?: string;
+      unitPrice?: Prisma.Decimal.Value;
+      unitTypeSnapshot?: UnitType;
+      allowsDecimalQuantity?: boolean;
+    }> = offline
+      ? catalogItems.map((item) => ({
+          productId: item.productId!,
+          quantity: new Prisma.Decimal(item.quantity),
+          name: item.name,
+          unitPrice: item.unitPrice,
+          unitTypeSnapshot: item.unitTypeSnapshot,
+          allowsDecimalQuantity: item.allowsDecimalQuantity
+        }))
+      : groupSaleItems(catalogItems);
     let subtotal = new Prisma.Decimal(0);
 
     const catalogSaleItems = groupedCatalogItems.map((item) => {
@@ -110,15 +213,24 @@ export async function confirmSale(input: ConfirmSaleInput) {
         throw new Error(`La cantidad de ${product.name} debe ser mayor a cero.`);
       }
 
-      if (!product.allowsDecimalQuantity && !item.quantity.mod(1).equals(0)) {
+      const allowsDecimalQuantity = offline
+        ? Boolean(item.allowsDecimalQuantity)
+        : product.allowsDecimalQuantity;
+      if (!allowsDecimalQuantity && !item.quantity.mod(1).equals(0)) {
         throw new Error(`${product.name} no permite cantidades decimales.`);
       }
 
-      if (!cashSetting.allowNegativeStock && product.stock.lt(item.quantity)) {
+      if (!offline && !cashSetting.allowNegativeStock && product.stock.lt(item.quantity)) {
         throw new Error(`Stock insuficiente para ${product.name}.`);
       }
 
-      const itemSubtotal = product.salePrice.mul(item.quantity).toDecimalPlaces(2);
+      const unitPrice = offline
+        ? new Prisma.Decimal(item.unitPrice ?? 0).toDecimalPlaces(2)
+        : product.salePrice;
+      if (unitPrice.lte(0)) {
+        throw new Error(`El precio de ${product.name} debe ser mayor a cero.`);
+      }
+      const itemSubtotal = unitPrice.mul(item.quantity).toDecimalPlaces(2);
       subtotal = subtotal.plus(itemSubtotal);
 
       return {
@@ -127,11 +239,11 @@ export async function confirmSale(input: ConfirmSaleInput) {
         isManual: false,
         data: {
           productId: product.id,
-          productNameSnapshot: product.name,
-          unitPrice: product.salePrice,
+          productNameSnapshot: offline ? item.name?.trim() || product.name : product.name,
+          unitPrice,
           quantity: item.quantity,
           subtotal: itemSubtotal,
-          unitTypeSnapshot: product.unitType,
+          unitTypeSnapshot: offline ? item.unitTypeSnapshot ?? product.unitType : product.unitType,
           isManual: false
         }
       };
@@ -189,6 +301,14 @@ export async function confirmSale(input: ConfirmSaleInput) {
     );
 
     const validatedPayments = input.payments.map((payment) => {
+      if (offline) {
+        return {
+          ...payment,
+          externalId: undefined,
+          externalReference: undefined,
+          providerStatus: "OFFLINE_CASH"
+        };
+      }
       if (!enabledMethodCodes.has(payment.method)) {
         throw new Error("El medio de pago seleccionado no esta habilitado.");
       }
@@ -224,11 +344,18 @@ export async function confirmSale(input: ConfirmSaleInput) {
       activeCreditPlans,
       approvedAttemptsById
     );
-    const fiscalDecision = determineFiscalRequirementForSale({
-      payments: paymentRecords.map((payment) => ({ method: payment.method })),
-      setting: fiscalSetting,
-      cashierRequestedInvoice: input.fiscalInvoiceRequested ?? null
-    });
+    const fiscalDecision: FiscalRequirementDecision = offline
+      ? {
+          requiresFiscalInvoice: false,
+          fiscalStatus: "NOT_REQUESTED",
+          fiscalRequestedAt: null,
+          decisionSource: "CASH"
+        }
+      : determineFiscalRequirementForSale({
+          payments: paymentRecords.map((payment) => ({ method: payment.method })),
+          setting: fiscalSetting,
+          cashierRequestedInvoice: input.fiscalInvoiceRequested ?? null
+        });
     const total = subtotal.plus(surchargeTotal).minus(discountTotal).toDecimalPlaces(2);
     const currentAccountTotal = paymentRecords
       .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
@@ -273,6 +400,9 @@ export async function confirmSale(input: ConfirmSaleInput) {
         status: SaleStatus.PAID,
         customerId,
         cashSessionId: cashSession?.id ?? null,
+        clientOperationId: offline?.clientOperationId ?? null,
+        occurredAt: offline?.occurredAt,
+        offlineSyncedAt: offline ? new Date() : null,
         items: {
           create: saleItems.map((item) => item.data)
         },
@@ -310,6 +440,24 @@ export async function confirmSale(input: ConfirmSaleInput) {
           referenceId: sale.id,
           userId: user.id,
           reason: `Venta #${sale.saleNumber}`
+        }
+      });
+    }
+
+    if (
+      offline &&
+      lateCashSession &&
+      cashSession &&
+      cashSession.countedCashAmount !== null
+    ) {
+      const expectedBefore =
+        cashSession.expectedCashAmount ?? cashSession.openingAmount;
+      const expectedAfter = expectedBefore.plus(total).toDecimalPlaces(2);
+      await tx.cashSession.update({
+        where: { id: cashSession.id },
+        data: {
+          expectedCashAmount: expectedAfter,
+          differenceAmount: cashSession.countedCashAmount.minus(expectedAfter).toDecimalPlaces(2)
         }
       });
     }
@@ -355,7 +503,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
 
     await applyFiscalDecisionToSale(tx, sale.id, fiscalDecision, user.id);
 
-    return tx.sale.findUniqueOrThrow({
+    const confirmedSale = await tx.sale.findUniqueOrThrow({
       where: { id: sale.id },
       include: {
         items: true,
@@ -363,7 +511,100 @@ export async function confirmSale(input: ConfirmSaleInput) {
         user: true
       }
     });
+
+    return { ...confirmedSale, offlineSyncLate: lateCashSession };
   });
+  } catch (error) {
+    if (offline && isUniqueClientOperationError(error)) {
+      const existingSale = await prisma.sale.findFirst({
+        where: {
+          businessId: user.businessId!,
+          clientOperationId: offline.clientOperationId
+        },
+        include: { items: true, payments: true, user: true }
+      });
+      if (existingSale) {
+        return { ...existingSale, offlineSyncLate: false };
+      }
+    }
+    throw error;
+  }
+}
+
+function validateOfflineInput(
+  offline: NonNullable<ConfirmSaleInput["offline"]>,
+  user: { id: string; businessId: string | null }
+) {
+  if (!user.businessId || offline.businessId !== user.businessId || offline.userId !== user.id) {
+    throw new OfflineSaleSyncError(
+      "La venta offline no corresponde a la sesion autenticada.",
+      "OFFLINE_CONTEXT_MISMATCH",
+      false
+    );
+  }
+
+  if (!offline.clientOperationId || offline.clientOperationId.length > 191) {
+    throw new OfflineSaleSyncError(
+      "La operacion offline no tiene un identificador valido.",
+      "OFFLINE_OPERATION_INVALID",
+      false
+    );
+  }
+
+  if (
+    Number.isNaN(offline.occurredAt.getTime()) ||
+    offline.occurredAt.getTime() > Date.now() + 5 * 60 * 1000
+  ) {
+    throw new OfflineSaleSyncError(
+      "La fecha de la venta offline no es valida.",
+      "OFFLINE_OCCURRED_AT_INVALID",
+      false
+    );
+  }
+}
+
+function validateOfflineCashSession(
+  cashSession: {
+    id: string;
+    status: CashSessionStatus;
+    openedAt: Date;
+    closedAt: Date | null;
+  } | null,
+  occurredAt: Date
+) {
+  if (!cashSession) {
+    throw new OfflineSaleSyncError(
+      "La caja original de esta venta no existe o no pertenece al comercio actual.",
+      "OFFLINE_CASH_SESSION_NOT_FOUND"
+    );
+  }
+
+  if (occurredAt < cashSession.openedAt) {
+    throw new OfflineSaleSyncError(
+      "La venta ocurrio antes de la apertura de la caja original.",
+      "OFFLINE_CASH_SESSION_WINDOW_INVALID"
+    );
+  }
+
+  if (cashSession.status === CashSessionStatus.OPEN) {
+    return false;
+  }
+
+  if (cashSession.closedAt && occurredAt <= cashSession.closedAt) {
+    return true;
+  }
+
+  throw new OfflineSaleSyncError(
+    "La venta no corresponde al periodo de la caja original. Quedo pendiente para revision.",
+    "OFFLINE_CASH_SESSION_WINDOW_INVALID"
+  );
+}
+
+function isUniqueClientOperationError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
 }
 
 function buildPaymentRecords(

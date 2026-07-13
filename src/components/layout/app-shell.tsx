@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/app/auth-actions";
 import { AdminNav } from "@/components/admin/admin-nav";
@@ -9,16 +9,23 @@ import { BusinessBrand } from "@/components/brand/BusinessBrand";
 import { BusinessHeaderIdentity } from "@/components/brand/BusinessHeaderIdentity";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { AppModal } from "@/components/ui/overlay";
 import { APP_NAME } from "@/lib/branding";
+import {
+  countPendingOfflineSales,
+  isOfflineStorageAvailable
+} from "@/lib/offline-sales/offline-db";
 import { cn } from "@/lib/ui";
 
 import { Role } from "@prisma/client";
 
 type AppShellProps = {
   user: {
+    id: string;
     name: string;
     email: string;
     role: Role;
+    businessId: string | null;
   };
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
@@ -37,6 +44,8 @@ export function AppShell({
   businessProfile
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [logoutWarningOpen, setLogoutWarningOpen] = useState(false);
   const businessName = businessProfile?.name ?? APP_NAME;
   const businessImageUrl = businessProfile?.headerImageUrl ?? businessProfile?.logoUrl ?? null;
 
@@ -48,6 +57,35 @@ export function AppShell({
       : user.role === Role.VIEWER
       ? "Visualizador"
       : "Admin operativo";
+
+  useEffect(() => {
+    if (!user.businessId || !isOfflineStorageAvailable()) {
+      return;
+    }
+
+    let active = true;
+    const refresh = async () => {
+      const count = await countPendingOfflineSales(user.businessId!, user.id);
+      if (active) {
+        setOfflinePendingCount(count);
+      }
+    };
+    const onPendingChange = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
+      if (typeof count === "number") {
+        setOfflinePendingCount(count);
+      } else {
+        void refresh();
+      }
+    };
+
+    void refresh();
+    window.addEventListener("foxpoint:offline-sales-pending", onPendingChange);
+    return () => {
+      active = false;
+      window.removeEventListener("foxpoint:offline-sales-pending", onPendingChange);
+    };
+  }, [user.businessId, user.id]);
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden transition-colors duration-200">
@@ -140,7 +178,15 @@ export function AppShell({
 
             <div className="col-start-2 flex shrink-0 items-center gap-2 justify-self-end md:col-start-3 xl:gap-3">
               <ThemeToggle />
-              <form action={logoutAction}>
+              <form
+                action={logoutAction}
+                onSubmit={(event) => {
+                  if (offlinePendingCount > 0) {
+                    event.preventDefault();
+                    setLogoutWarningOpen(true);
+                  }
+                }}
+              >
                 <Button type="submit">Cerrar sesion</Button>
               </form>
             </div>
@@ -151,6 +197,29 @@ export function AppShell({
           </main>
         </div>
       </div>
+      <AppModal
+        open={logoutWarningOpen}
+        onClose={() => setLogoutWarningOpen(false)}
+        title="Hay ventas offline pendientes"
+        description="Las ventas quedan guardadas en este equipo y se sincronizaran al volver a iniciar sesion. No se eliminara ninguna operacion."
+        panelClassName="max-w-md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setLogoutWarningOpen(false)}>
+              Volver a caja
+            </Button>
+            <form action={logoutAction}>
+              <Button type="submit" variant="danger">
+                Cerrar sesion de todos modos
+              </Button>
+            </form>
+          </div>
+        }
+      >
+        <p className="badge-warning rounded-lg px-3 py-2 text-sm font-semibold">
+          Ventas pendientes de sincronizacion: {offlinePendingCount}.
+        </p>
+      </AppModal>
     </div>
   );
 }

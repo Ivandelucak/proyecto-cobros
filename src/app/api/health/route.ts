@@ -12,7 +12,10 @@ export async function GET() {
       status: "ok",
       timestamp: new Date().toISOString(),
       database: "up"
-    }, { status: 200 });
+    }, {
+      status: 200,
+      headers: { "Cache-Control": "no-store, max-age=0" }
+    });
   } catch (error) {
     console.error("Healthcheck database connectivity error:", error);
     
@@ -20,6 +23,9 @@ export async function GET() {
       status: "error",
       timestamp: new Date().toISOString(),
       database: "down"
-    }, { status: 500 });
+    }, {
+      status: 500,
+      headers: { "Cache-Control": "no-store, max-age=0" }
+    });
   }
 }

@@ -755,6 +755,9 @@ model Sale {
   fiscalCustomerDocNumber    String?
   fiscalCustomerCondition    FiscalCustomerCondition?
   fiscalNotes                String?
+  clientOperationId          String?
+  occurredAt                 DateTime                    @default(now())
+  offlineSyncedAt            DateTime?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   items                      SaleItem[]
@@ -772,7 +775,9 @@ model Sale {
   @@index([cancelledById])
   @@index([fiscalStatus])
   @@index([requiresFiscalInvoice])
+  @@index([occurredAt])
   @@index([businessId])
+  @@unique([businessId, clientOperationId])
 }
 
 model CustomerAccountMovement {

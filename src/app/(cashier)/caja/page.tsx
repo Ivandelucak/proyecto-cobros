@@ -1,7 +1,7 @@
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { CashRegister } from "./cash-register";
-import { getSuggestedCashProductsAction } from "./actions";
+import { getOfflineCashCatalogAction, getSuggestedCashProductsAction } from "./actions";
 import { CashSessionPanel } from "./cash-session-panel";
 import { getCurrentUser } from "@/lib/auth";
 import { getCashRegisterSetting } from "@/lib/cash-register-settings";
@@ -23,6 +23,7 @@ export default async function CajaPage() {
   const [
     cashSession,
     suggestedProducts,
+    offlineCatalog,
     paymentMethods,
     creditPlans,
     printSetting,
@@ -32,6 +33,7 @@ export default async function CajaPage() {
   ] = await Promise.all([
     getOpenCashSessionSnapshot(user.businessId),
     getSuggestedCashProductsAction(),
+    getOfflineCashCatalogAction(),
     getEnabledPaymentMethodSettings(user.businessId),
     getActiveCreditInstallmentPlans(),
     getPrintSetting(user.businessId),
@@ -45,6 +47,16 @@ export default async function CajaPage() {
       {cashSession || !cashSetting.requireOpenSession ? (
         <CashRegister
           initialSuggestedProducts={suggestedProducts}
+          offlineCatalog={offlineCatalog}
+          offlineContext={
+            cashSession
+              ? {
+                  businessId: user.businessId,
+                  userId: user.id,
+                  cashSessionId: cashSession.id
+                }
+              : null
+          }
           paymentMethods={paymentMethods}
           creditPlans={creditPlans}
           printSetting={printSetting}
@@ -59,6 +71,14 @@ export default async function CajaPage() {
           cashSession={cashSession}
           requireOpenSession={cashSetting.requireOpenSession}
           showExpectedCash={cashSetting.showExpectedCashToCashier}
+          offlineContext={
+            cashSession
+              ? {
+                  businessId: user.businessId,
+                  userId: user.id
+                }
+              : null
+          }
         />
       </div>
     </section>

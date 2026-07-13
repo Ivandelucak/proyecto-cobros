@@ -29,6 +29,23 @@ import type {
   MercadoPagoMovementView
 } from "@/lib/mercadopago/mercado-pago-types";
 import { formatARS } from "@/lib/money";
+import {
+  applyOfflineStockDecrease,
+  countPendingOfflineSales,
+  enqueueOfflineSale,
+  hasOfflineCashContext,
+  isOfflineStorageAvailable,
+  saveOfflineCashContext,
+  saveOfflineCatalog
+} from "@/lib/offline-sales/offline-db";
+import { printOfflineTicket } from "@/lib/offline-sales/offline-ticket";
+import { syncOfflineCashSales } from "@/lib/offline-sales/offline-sync";
+import {
+  offlineContextId,
+  type OfflineCashContext,
+  type OfflineCashSale,
+  type OfflineCatalogProduct
+} from "@/lib/offline-sales/types";
 import { providerStatusLabel } from "@/lib/payment-display";
 import type {
   CreditInstallmentPlanView,
@@ -122,6 +139,8 @@ type MercadoPagoApplyDialogState = {
 
 type CashRegisterProps = {
   initialSuggestedProducts: CashProductResult[];
+  offlineCatalog: OfflineCatalogProduct[];
+  offlineContext: Omit<OfflineCashContext, "id" | "preparedAt"> | null;
   paymentMethods: PaymentMethodSettingView[];
   creditPlans: CreditInstallmentPlanView[];
   printSetting: PrintSettingView;
@@ -173,6 +192,8 @@ const fiscalStatusLabels: Record<string, string> = {
 
 export function CashRegister({
   initialSuggestedProducts,
+  offlineCatalog,
+  offlineContext,
   paymentMethods,
   creditPlans,
   printSetting,
@@ -214,6 +235,12 @@ export function CashRegister({
   const [results, setResults] = useState<CashProductResult[]>([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const [suggestedProducts, setSuggestedProducts] = useState(initialSuggestedProducts);
+  const [offlineCatalogProducts, setOfflineCatalogProducts] =
+    useState<OfflineCatalogProduct[]>(offlineCatalog);
+  const [offlineConnection, setOfflineConnection] = useState<"CHECKING" | "ONLINE" | "OFFLINE">("CHECKING");
+  const [offlinePrepared, setOfflinePrepared] = useState(false);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [offlineReceipt, setOfflineReceipt] = useState<OfflineCashSale | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualItemName, setManualItemName] = useState("");
@@ -286,6 +313,143 @@ export function CashRegister({
   const transferVerificationSelectionLoadedRef = useRef(false);
   const mercadoPagoMatchSearchInFlightRef = useRef(false);
   const mercadoPagoLastMatchSearchAtRef = useRef(0);
+  const offlineSyncInFlightRef = useRef(false);
+
+  const refreshOfflinePendingCount = useCallback(async () => {
+    if (!offlineContext || !isOfflineStorageAvailable()) {
+      setOfflinePendingCount(0);
+      return 0;
+    }
+    const count = await countPendingOfflineSales(
+      offlineContext.businessId,
+      offlineContext.userId
+    );
+    setOfflinePendingCount(count);
+    window.dispatchEvent(
+      new CustomEvent("foxpoint:offline-sales-pending", { detail: { count } })
+    );
+    return count;
+  }, [offlineContext]);
+
+  const syncOfflineQueue = useCallback(async () => {
+    if (!offlineContext || offlineSyncInFlightRef.current) {
+      return;
+    }
+    offlineSyncInFlightRef.current = true;
+    try {
+      const summary = await syncOfflineCashSales(offlineContext);
+      await refreshOfflinePendingCount();
+      if (summary.synced > 0) {
+        showMessage(
+          summary.synced === 1
+            ? "Se sincronizo 1 venta offline."
+            : `Se sincronizaron ${summary.synced} ventas offline.`,
+          "ok"
+        );
+      }
+      if (summary.requiresLogin) {
+        showMessage("Inicia sesion nuevamente para sincronizar las ventas pendientes.", "error");
+      }
+    } finally {
+      offlineSyncInFlightRef.current = false;
+    }
+  }, [offlineContext, refreshOfflinePendingCount]);
+
+  useEffect(() => {
+    if (!offlineContext || !isOfflineStorageAvailable()) {
+      return;
+    }
+
+    let active = true;
+    const context: OfflineCashContext = {
+      ...offlineContext,
+      id: offlineContextId(
+        offlineContext.businessId,
+        offlineContext.userId,
+        offlineContext.cashSessionId
+      ),
+      preparedAt: new Date().toISOString()
+    };
+
+    void Promise.all([
+      saveOfflineCatalog(offlineContext.businessId, offlineCatalog),
+      saveOfflineCashContext(context)
+    ])
+      .then(async () => {
+        const [prepared] = await Promise.all([
+          hasOfflineCashContext(context.id),
+          refreshOfflinePendingCount()
+        ]);
+        if (active) {
+          setOfflinePrepared(prepared && offlineCatalog.length > 0);
+          setOfflineCatalogProducts(offlineCatalog);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setOfflinePrepared(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [offlineCatalog, offlineContext, refreshOfflinePendingCount]);
+
+  useEffect(() => {
+    let active = true;
+    let timer: number | undefined;
+    let failures = 0;
+
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(checkConnection, delay);
+    };
+
+    const checkConnection = async () => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 5_000);
+      let healthy = false;
+      try {
+        const response = await fetch("/api/health", {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: controller.signal
+        });
+        healthy = response.ok;
+      } catch {
+        healthy = false;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      if (!active) {
+        return;
+      }
+
+      if (healthy) {
+        failures = 0;
+        setOfflineConnection("ONLINE");
+        void syncOfflineQueue();
+        schedule(45_000);
+      } else {
+        failures += 1;
+        setOfflineConnection("OFFLINE");
+        schedule(Math.min(120_000, 15_000 * 2 ** Math.min(failures, 3)));
+      }
+    };
+
+    const onOnline = () => void checkConnection();
+    const onOffline = () => setOfflineConnection("OFFLINE");
+    void checkConnection();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [syncOfflineQueue]);
 
   const subtotal = useMemo(
     () =>
@@ -320,8 +484,12 @@ export function CashRegister({
   const displayRemaining = saleSuccess ? 0 : remaining;
   const displayOverpaid = saleSuccess ? 0 : overpaid;
   const paymentsMatch = cart.length > 0 && Math.abs(balance) < 0.01;
+  const isOfflineCashMode = offlineConnection === "OFFLINE";
+  const canOperateOffline =
+    isOfflineCashMode && offlinePrepared && Boolean(offlineContext);
+  const effectiveAllowNegativeStock = allowNegativeStock || canOperateOffline;
   const hasInvalidCart = cart.some((item) =>
-    !isValidQuantity(item.quantity, item, allowNegativeStock)
+    !isValidQuantity(item.quantity, item, effectiveAllowNegativeStock)
   );
   const canFinish =
     cart.length > 0 && !hasInvalidCart && !isPending && !pendingFiscalPayments;
@@ -344,6 +512,7 @@ export function CashRegister({
   const selectedPaymentSetting = paymentSettingsByMethod[paymentMethod];
   const isMercadoPagoApiMode =
     paymentMethod === "MERCADOPAGO" &&
+    !isOfflineCashMode &&
     selectedPaymentSetting?.mercadoPagoMode === "API_QR";
   const selectedMercadoPagoAccount =
     activeMercadoPagoAccounts.find((account) => account.id === mercadoPagoAccountId) ??
@@ -355,7 +524,7 @@ export function CashRegister({
     ) ??
     activeMercadoPagoAccounts.find((account) => account.id === defaultMercadoPagoAccountId) ??
     null;
-  const isTransferPaymentMethod = paymentMethod === "TRANSFER";
+  const isTransferPaymentMethod = paymentMethod === "TRANSFER" && !isOfflineCashMode;
   const movementModalAccount =
     movementModalContext === "TRANSFER"
       ? selectedTransferVerificationAccount
@@ -917,6 +1086,30 @@ export function CashRegister({
       return;
     }
 
+    if (isOfflineCashMode) {
+      const normalizedSearch = search.toLowerCase();
+      const offlineResults = offlineCatalogProducts.filter((product) =>
+        [product.name, product.barcode, product.sku, product.categoryName]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(normalizedSearch))
+      );
+      const exactProduct = offlineResults.find(
+        (product) =>
+          product.barcode?.toLowerCase() === normalizedSearch ||
+          product.sku?.toLowerCase() === normalizedSearch
+      );
+      if (exactProduct) {
+        addProduct(exactProduct);
+        return;
+      }
+      setResults(offlineResults);
+      setSelectedResultIndex(0);
+      if (offlineResults.length === 0) {
+        showMessage("No se encontraron productos en el catalogo local.", "error");
+      }
+      return;
+    }
+
     startTransition(async () => {
       const result = await searchCashProductsAction(search);
       const exactProduct = result.exactProductId
@@ -991,6 +1184,25 @@ export function CashRegister({
 
   function handleBarcodeScan(code: string) {
     setSaleSuccess(null);
+    if (isOfflineCashMode) {
+      const product = offlineCatalogProducts.find(
+        (candidate) =>
+          candidate.barcode?.toLowerCase() === code.trim().toLowerCase() ||
+          candidate.sku?.toLowerCase() === code.trim().toLowerCase()
+      );
+      if (product && addProduct(product)) {
+        setBarcodeMessage({
+          code,
+          message: `Producto encontrado en catalogo local: ${product.name}.`,
+          tone: "ok"
+        });
+      } else {
+        const message = "No se encontro producto en el catalogo local.";
+        setBarcodeMessage({ code, message, tone: "error" });
+        showMessage(message, "error");
+      }
+      return;
+    }
     startTransition(async () => {
       const result = await findCashProductByBarcodeAction(code);
 
@@ -1029,7 +1241,7 @@ export function CashRegister({
     const existing = cart.find((item) => item.id === product.id);
     if (existing) {
       const nextQuantity = increaseQuantity(existing.quantity, product);
-      if (!allowNegativeStock && safeNumber(nextQuantity) > safeNumber(product.stock)) {
+      if (!effectiveAllowNegativeStock && safeNumber(nextQuantity) > safeNumber(product.stock)) {
         showMessage(`Stock insuficiente para ${product.name}.`, "error");
         return false;
       }
@@ -1068,7 +1280,7 @@ export function CashRegister({
       return;
     }
 
-    if (!allowNegativeStock && nextQuantity > safeNumber(item.stock)) {
+    if (!effectiveAllowNegativeStock && nextQuantity > safeNumber(item.stock)) {
       showMessage(`Stock insuficiente para ${item.name}.`, "error");
       return;
     }
@@ -1120,6 +1332,11 @@ export function CashRegister({
 
   function addPayment() {
     setSaleSuccess(null);
+
+    if (isOfflineCashMode) {
+      showMessage("Sin conexion solo se permite finalizar una venta completa en efectivo.", "error");
+      return;
+    }
 
     if (cart.length === 0) {
       showMessage("Agrega productos antes de cargar pagos.", "error");
@@ -1674,7 +1891,7 @@ export function CashRegister({
     setSelectedResultIndex(0);
   }
 
-  function finishSale() {
+  async function finishSale() {
     if (cart.length === 0) {
       showMessage("Agrega productos antes de finalizar.", "error");
       return;
@@ -1687,6 +1904,11 @@ export function CashRegister({
 
     if (overpaid > 0) {
       showMessage("Los pagos superan el total de la venta.", "error");
+      return;
+    }
+
+    if (isOfflineCashMode) {
+      await saveOfflineCashSale();
       return;
     }
 
@@ -1712,6 +1934,109 @@ export function CashRegister({
     }
 
     submitSale(finalPayments.payments, null);
+  }
+
+  async function saveOfflineCashSale() {
+    if (!canOperateOffline || !offlineContext) {
+      showMessage(
+        "No es posible operar sin conexion porque la sesion no fue preparada previamente.",
+        "error"
+      );
+      return;
+    }
+
+    if (paymentMethod !== "CASH" || payments.length > 0) {
+      showMessage(
+        "Sin conexion solo se permiten ventas nuevas cobradas integramente en efectivo.",
+        "error"
+      );
+      return;
+    }
+
+    const received = roundMoney(safeNumber(cashReceived));
+    if (received < total) {
+      showMessage("Ingresa el efectivo recibido para completar la venta offline.", "error");
+      return;
+    }
+
+    const occurredAt = new Date().toISOString();
+    const operationId = createOfflineOperationId();
+    const offlineSale: OfflineCashSale = {
+      clientOperationId: operationId,
+      businessId: offlineContext.businessId,
+      userId: offlineContext.userId,
+      cashSessionId: offlineContext.cashSessionId,
+      occurredAt,
+      total: roundMoney(total).toFixed(2),
+      cashReceived: received.toFixed(2),
+      changeAmount: roundMoney(received - total).toFixed(2),
+      items: cart.map((item) => {
+        const quantity = safeNumber(item.quantity);
+        const unitPrice = safeNumber(item.salePrice);
+        return {
+          productId: item.isManual ? null : item.id,
+          isManual: Boolean(item.isManual),
+          nameSnapshot: item.name,
+          unitPriceSnapshot: roundMoney(unitPrice).toFixed(2),
+          quantity: String(roundQuantity(quantity)),
+          subtotal: roundMoney(unitPrice * quantity).toFixed(2),
+          unitTypeSnapshot: item.unitType,
+          allowsDecimalQuantity: item.allowsDecimalQuantity
+        };
+      }),
+      status: "PENDING",
+      retryCount: 0,
+      lastError: null,
+      lastAttemptAt: null,
+      syncedSaleId: null,
+      syncedSaleNumber: null,
+      offlineNumber: `OFF-${operationId.slice(-6).toUpperCase()}`
+    };
+
+    try {
+      await enqueueOfflineSale(offlineSale);
+      await Promise.all(
+        offlineSale.items
+          .filter((item): item is typeof item & { productId: string } => Boolean(item.productId))
+          .map((item) =>
+            applyOfflineStockDecrease(
+              offlineContext.businessId,
+              item.productId,
+              item.quantity
+            )
+          )
+      );
+      setOfflineCatalogProducts((products) =>
+        products.map((product) => {
+          const item = offlineSale.items.find((candidate) => candidate.productId === product.id);
+          return item
+            ? { ...product, stock: String(roundQuantity(safeNumber(product.stock) - safeNumber(item.quantity))) }
+            : product;
+        })
+      );
+      setSuggestedProducts((products) =>
+        products.map((product) => {
+          const item = offlineSale.items.find((candidate) => candidate.productId === product.id);
+          return item
+            ? { ...product, stock: String(roundQuantity(safeNumber(product.stock) - safeNumber(item.quantity))) }
+            : product;
+        })
+      );
+      setOfflineReceipt(offlineSale);
+      setCart([]);
+      setPayments([]);
+      setCashReceived("");
+      setPaymentAmount("");
+      setMessage({
+        text: "Venta guardada en este equipo. Se sincronizara automaticamente.",
+        tone: "ok"
+      });
+      await refreshOfflinePendingCount();
+      clearSearch();
+      inputRef.current?.focus();
+    } catch {
+      showMessage("No se pudo guardar la venta en este equipo. No se confirmo la venta.", "error");
+    }
   }
 
   function submitSale(
@@ -2058,6 +2383,21 @@ export function CashRegister({
             <Badge tone="neutral">Esc Limpiar</Badge>
           </div>
 
+          {isOfflineCashMode ? (
+            <div className="badge-warning mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs">
+              <span className="font-bold">
+                Sin conexion. Solo estan habilitadas las ventas en efectivo.
+              </span>
+              <span>
+                Ventas pendientes: {offlinePendingCount}. No cierres ni actualices Fox Point.
+              </span>
+            </div>
+          ) : offlinePendingCount > 0 ? (
+            <div className="badge-info mt-2 rounded-lg px-3 py-2 text-xs font-semibold">
+              Ventas pendientes de sincronizacion: {offlinePendingCount}.
+            </div>
+          ) : null}
+
           <div className="mt-2">
             <BarcodeFeedback
               code={barcodeMessage?.code ?? null}
@@ -2071,6 +2411,7 @@ export function CashRegister({
               title="Resultados"
               products={results}
               compact={compactProducts}
+              offlineStock={isOfflineCashMode}
               selectedIndex={selectedResultIndex}
               onAddProduct={addProduct}
             />
@@ -2079,6 +2420,7 @@ export function CashRegister({
               title="Productos rapidos"
               products={suggestedProducts}
               compact={compactProducts}
+              offlineStock={isOfflineCashMode}
               onAddProduct={addProduct}
             />
           )}
@@ -2110,10 +2452,10 @@ export function CashRegister({
                     const invalid = !isValidQuantity(
                       item.quantity,
                       item,
-                      allowNegativeStock
+                      effectiveAllowNegativeStock
                     );
                     const stockExceeded =
-                      !allowNegativeStock && quantity > safeNumber(item.stock);
+                      !effectiveAllowNegativeStock && quantity > safeNumber(item.stock);
 
                     return (
                       <tr
@@ -2130,7 +2472,7 @@ export function CashRegister({
                                 Artículo manual
                               </span>
                             ) : (
-                              `${item.categoryName} - ${formatStock(item.stock, item.unitType)}`
+                              `${item.categoryName} - ${formatStock(item.stock, item.unitType)}${isOfflineCashMode ? " (estimado)" : ""}`
                             )}
                           </div>
                         </td>
@@ -2307,7 +2649,11 @@ export function CashRegister({
                 }}
               >
                 {paymentMethods.map((method) => (
-                  <option key={method.method} value={method.method}>
+                  <option
+                    key={method.method}
+                    value={method.method}
+                    disabled={isOfflineCashMode && method.method !== "CASH"}
+                  >
                     {method.label}
                   </option>
                 ))}
@@ -2729,6 +3075,56 @@ export function CashRegister({
           ) : null}
         </Card>
       </aside>
+      <AppModal
+        open={Boolean(offlineReceipt)}
+        onClose={() => setOfflineReceipt(null)}
+        title="Venta offline guardada"
+        description="Quedo registrada en este equipo y se sincronizara automaticamente al recuperar la conexion."
+        panelClassName="max-w-md"
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setOfflineReceipt(null)}>
+              Cerrar
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                if (!offlineReceipt) return;
+                try {
+                  printOfflineTicket(offlineReceipt);
+                } catch (error) {
+                  showMessage(
+                    error instanceof Error ? error.message : "No se pudo abrir el comprobante provisional.",
+                    "error"
+                  );
+                }
+              }}
+            >
+              Imprimir comprobante provisional
+            </Button>
+          </div>
+        }
+      >
+        {offlineReceipt ? (
+          <div className="space-y-3 text-sm">
+            <div className="app-panel-elevated rounded-lg p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                Operacion local
+              </p>
+              <p className="mt-1 text-xl font-black text-[var(--text-primary)]">
+                {offlineReceipt.offlineNumber}
+              </p>
+              <p className="mt-1 text-[var(--text-secondary)]">
+                Total {formatARS(offlineReceipt.total)} - Efectivo {formatARS(offlineReceipt.cashReceived)}
+              </p>
+            </div>
+            <div className="badge-warning rounded-lg px-3 py-2 text-xs font-semibold">
+              COMPROBANTE INTERNO. VENTA PENDIENTE DE SINCRONIZACION. NO VALIDO COMO COMPROBANTE FISCAL.
+            </div>
+          </div>
+        ) : null}
+      </AppModal>
       <MercadoPagoQrModal
         open={mercadoPagoQrModalOpen}
         attempt={mercadoPagoAttempt}
@@ -4294,12 +4690,14 @@ function ProductGrid({
   title,
   products,
   compact,
+  offlineStock = false,
   selectedIndex,
   onAddProduct
 }: {
   title: string;
   products: CashProductResult[];
   compact: boolean;
+  offlineStock?: boolean;
   selectedIndex?: number;
   onAddProduct: (product: CashProductResult) => void;
 }) {
@@ -4350,6 +4748,7 @@ function ProductGrid({
             </span>
             <span className={cn("mt-0.5 block truncate text-[var(--text-secondary)]", compact ? "text-[10px]" : "text-xs")}>
               {product.categoryName} - {formatStock(product.stock, product.unitType)}
+              {offlineStock ? " (estimado)" : ""}
             </span>
           </button>
         ))}
@@ -4849,4 +5248,8 @@ function isFiscalQueueStatus(status: string | undefined) {
 
 function createPaymentId() {
   return globalThis.crypto?.randomUUID() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function createOfflineOperationId() {
+  return globalThis.crypto?.randomUUID() ?? `offline_${Date.now()}_${Math.random()}`;
 }

@@ -28,6 +28,7 @@ import {
   searchRecentMercadoPagoPayments
 } from "@/lib/mercadopago/mercado-pago-search";
 import { parseLocalizedDecimal } from "@/lib/money";
+import type { OfflineCatalogProduct } from "@/lib/offline-sales/types";
 import { prisma } from "@/lib/prisma";
 import { confirmSale, type ConfirmSaleInput } from "@/lib/sale-engine";
 
@@ -332,6 +333,28 @@ export async function getSuggestedCashProductsAction() {
   });
 
   return products.map(mapCashProduct);
+}
+
+export async function getOfflineCashCatalogAction(): Promise<OfflineCatalogProduct[]> {
+  const user = await requireCashierUser();
+  const products = await prisma.product.findMany({
+    where: {
+      businessId: user.businessId!,
+      active: true,
+      deletedAt: null
+    },
+    include: {
+      category: {
+        select: { name: true }
+      }
+    },
+    orderBy: { name: "asc" }
+  });
+
+  return products.map((product) => ({
+    ...mapCashProduct(product),
+    active: true
+  }));
 }
 
 export async function searchCashProductsAction(query: string): Promise<ProductSearchResult> {

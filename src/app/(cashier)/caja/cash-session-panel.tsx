@@ -9,6 +9,10 @@ import { Input, Select } from "@/components/ui/input";
 import { formatDateTimeStable, formatTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import {
+  countPendingOfflineSales,
+  isOfflineStorageAvailable
+} from "@/lib/offline-sales/offline-db";
+import {
   addCashMovementAction,
   closeCashSessionAction,
   openCashSessionAction,
@@ -22,6 +26,7 @@ type CashSessionPanelProps = {
   cashSession: CashSessionSnapshot | null;
   requireOpenSession: boolean;
   showExpectedCash: boolean;
+  offlineContext: { businessId: string; userId: string } | null;
 };
 
 type CashSessionSnapshot = {
@@ -61,10 +66,12 @@ const initialState: CashSessionFormState = {};
 export function CashSessionPanel({
   cashSession,
   requireOpenSession,
-  showExpectedCash
+  showExpectedCash,
+  offlineContext
 }: CashSessionPanelProps) {
   const [mode, setMode] = useState<PanelMode>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
+  const [offlineCloseWarning, setOfflineCloseWarning] = useState<string | null>(null);
   const [openState, openAction, opening] = useActionState(
     openCashSessionAction,
     initialState
@@ -85,6 +92,24 @@ export function CashSessionPanel({
       }
       return !current;
     });
+  }
+
+  async function closeWithOfflineGuard(formData: FormData) {
+    if (offlineContext && isOfflineStorageAvailable()) {
+      const pending = await countPendingOfflineSales(
+        offlineContext.businessId,
+        offlineContext.userId
+      );
+      if (pending > 0) {
+        setOfflineCloseWarning(
+          `No se puede cerrar la caja: hay ${pending} venta${pending === 1 ? "" : "s"} offline pendiente${pending === 1 ? "" : "s"} de sincronizacion.`
+        );
+        return;
+      }
+    }
+
+    setOfflineCloseWarning(null);
+    closeAction(formData);
   }
 
   if (!cashSession) {
@@ -246,7 +271,7 @@ export function CashSessionPanel({
 
           {mode === "close" ? (
             <form
-              action={closeAction}
+              action={closeWithOfflineGuard}
               className="mt-2 grid gap-2 rounded-lg border p-2.5 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)_auto] badge-danger"
             >
               <Input
@@ -260,6 +285,11 @@ export function CashSessionPanel({
                 {closing ? "Cerrando..." : "Confirmar cierre"}
               </Button>
             </form>
+          ) : null}
+          {mode === "close" && offlineCloseWarning ? (
+            <p className="badge-warning mt-2 rounded-md px-3 py-2 text-sm">
+              {offlineCloseWarning}
+            </p>
           ) : null}
           {mode === "close" ? <StateMessage state={closeState} /> : null}
         </div>
