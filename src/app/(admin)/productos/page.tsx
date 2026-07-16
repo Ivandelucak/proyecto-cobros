@@ -1,4 +1,4 @@
-import { UnitType } from "@prisma/client";
+import { Prisma, Role, UnitType } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,12 +8,39 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireOperationalUser } from "@/lib/admin-auth";
+import {
+  calculateProductUtility,
+  formatUtilityPercentage
+} from "@/lib/product-utility";
 import { prisma } from "@/lib/prisma";
 import { formatStock, shouldUseDecimalQuantity } from "@/lib/stock-format";
 import { setProductActiveAction } from "./actions";
 import { ProductsBarcodeFilter } from "./products-barcode-filter";
 
 export const dynamic = "force-dynamic";
+
+const productListSelect = {
+  id: true,
+  name: true,
+  barcode: true,
+  sku: true,
+  category: {
+    select: { name: true }
+  },
+  salePrice: true,
+  stock: true,
+  minStock: true,
+  unitType: true,
+  allowsDecimalQuantity: true,
+  quickAccess: true,
+  active: true
+} satisfies Prisma.ProductSelect;
+
+type ProductListItem = Prisma.ProductGetPayload<{
+  select: typeof productListSelect;
+}> & {
+  cost?: Prisma.Decimal | null;
+};
 
 type ProductsPageProps = {
   searchParams: Promise<{
@@ -29,6 +56,7 @@ type ProductsPageProps = {
 export default async function ProductosPage({ searchParams }: ProductsPageProps) {
   const user = await requireOperationalUser();
   const businessId = user.businessId!;
+  const canViewCosts = user.role === Role.OWNER || user.role === Role.ADMIN;
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -38,42 +66,47 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   const stockFilter = params.stock ?? "all";
   const barcode = params.barcode?.trim() ?? "";
 
+  const productWhere = {
+    businessId,
+    deletedAt: null,
+    ...(status === "active" ? { active: true } : {}),
+    ...(status === "inactive" ? { active: false } : {}),
+    ...(quickAccess === "yes" ? { quickAccess: true } : {}),
+    ...(quickAccess === "no" ? { quickAccess: false } : {}),
+    ...(categoryId ? { categoryId } : {}),
+    ...(barcode
+      ? { barcode }
+      : q
+        ? {
+            OR: [
+              { name: { contains: q } },
+              { barcode: { contains: q } },
+              { sku: { contains: q } }
+            ]
+          }
+        : {})
+  };
+
   const [categories, products] = await Promise.all([
     prisma.category.findMany({
       where: { businessId },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }),
-    prisma.product.findMany({
-      where: {
-        businessId,
-        deletedAt: null,
-        ...(status === "active" ? { active: true } : {}),
-        ...(status === "inactive" ? { active: false } : {}),
-        ...(quickAccess === "yes" ? { quickAccess: true } : {}),
-        ...(quickAccess === "no" ? { quickAccess: false } : {}),
-        ...(categoryId ? { categoryId } : {}),
-        ...(barcode
-          ? { barcode }
-          : q
-            ? {
-                OR: [
-                  { name: { contains: q } },
-                  { barcode: { contains: q } },
-                  { sku: { contains: q } }
-                ]
-              }
-            : {})
-      },
-      include: {
-        category: {
-          select: { name: true }
-        }
-      },
-      orderBy: [{ active: "desc" }, { updatedAt: "desc" }]
-    })
+    canViewCosts
+      ? prisma.product.findMany({
+          where: productWhere,
+          select: { ...productListSelect, cost: true },
+          orderBy: [{ active: "desc" }, { updatedAt: "desc" }]
+        })
+      : prisma.product.findMany({
+          where: productWhere,
+          select: productListSelect,
+          orderBy: [{ active: "desc" }, { updatedAt: "desc" }]
+        })
   ]);
-  const visibleProducts = products.filter((product) => {
+  const productList = products as ProductListItem[];
+  const visibleProducts = productList.filter((product) => {
     if (stockFilter === "low") {
       return product.stock.lte(product.minStock);
     }
@@ -159,12 +192,13 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-left text-sm">
+            <table className="w-full min-w-[1080px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:border-[#273342] dark:bg-[#121922] dark:text-[#7F8D9A]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Producto</th>
                   <th className="px-4 py-3 font-medium">Categoria</th>
                   <th className="px-4 py-3 font-medium">Precio</th>
+                  {canViewCosts ? <th className="px-4 py-3 font-medium">Utilidad</th> : null}
                   <th className="px-4 py-3 font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Unidad</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
@@ -177,6 +211,9 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                   const stockOut = product.stock.lte(0);
                   const isWeighted =
                     product.allowsDecimalQuantity || shouldUseDecimalQuantity(product.unitType);
+                  const utility = canViewCosts
+                    ? calculateProductUtility(product.salePrice, product.cost)
+                    : null;
 
                   return (
                     <tr
@@ -205,6 +242,11 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
                       <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         <CurrencyText value={product.salePrice} />
                       </td>
+                      {canViewCosts && utility ? (
+                        <td className="px-4 py-3">
+                          <ProductUtilityValue utility={utility} />
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="text-gray-800 dark:text-[#F3F7FA]">
@@ -256,6 +298,36 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
         </Card>
       )}
     </section>
+  );
+}
+
+function ProductUtilityValue({ utility }: { utility: ReturnType<typeof calculateProductUtility> }) {
+  if (utility.state === "missing_cost") {
+    return <span className="whitespace-nowrap text-[var(--text-muted)]">Sin costo</span>;
+  }
+
+  if (utility.state === "zero_cost") {
+    return (
+      <span
+        className="whitespace-nowrap text-[var(--text-secondary)]"
+        title="No se puede calcular el porcentaje porque el costo es cero."
+      >
+        <CurrencyText value={utility.amount} /> (—)
+      </span>
+    );
+  }
+
+  const colorClass =
+    utility.state === "positive"
+      ? "text-[var(--success)]"
+      : utility.state === "negative"
+        ? "text-[var(--danger)]"
+        : "text-[var(--text-secondary)]";
+
+  return (
+    <span className={`whitespace-nowrap font-medium ${colorClass}`}>
+      <CurrencyText value={utility.amount} /> ({formatUtilityPercentage(utility.percentage!)}%)
+    </span>
   );
 }
 
