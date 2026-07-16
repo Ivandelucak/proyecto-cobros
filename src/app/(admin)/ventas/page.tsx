@@ -13,6 +13,7 @@ import { formatARS } from "@/lib/money";
 import { fallbackPaymentLabels, providerStatusLabel } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber, parseInternalSaleNumber } from "@/lib/sale-numbering";
 import { buildReturnToHref, buildSaleDetailHref, buildTicketHref } from "@/lib/return-to";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +102,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
         <form className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_170px_220px_auto]">
           <Input
             name="q"
-            placeholder="Buscar por numero, cajero, producto o referencia"
+            placeholder="Buscar 2026-07-0001, cajero, producto o referencia"
             defaultValue={q}
           />
           <Input name="from" type="date" defaultValue={from} />
@@ -155,7 +156,7 @@ export default async function VentasPage({ searchParams }: VentasPageProps) {
                     className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60"
                   >
                     <td className="px-3 py-2 font-medium text-gray-950 dark:text-[#F3F7FA]">
-                      #{sale.saleNumber}
+                      #{formatInternalSaleNumber(sale)}
                     </td>
                     <td className="px-3 py-2 text-gray-700 dark:text-[#A9B6C2]">
                       {formatDateTimeStable(sale.createdAt)}
@@ -288,7 +289,7 @@ function buildSaleWhere({
   }
 
   if (q) {
-    const numberQuery = Number(q.replace("#", ""));
+    const internalSaleNumber = parseInternalSaleNumber(q);
     const searchFilters: Prisma.SaleWhereInput[] = [
       { user: { name: { contains: q } } },
       { user: { email: { contains: q } } },
@@ -298,8 +299,8 @@ function buildSaleWhere({
       { payments: { some: { providerStatus: { contains: q } } } }
     ];
 
-    if (Number.isInteger(numberQuery) && numberQuery > 0) {
-      searchFilters.unshift({ saleNumber: numberQuery });
+    if (internalSaleNumber) {
+      searchFilters.unshift(internalSaleNumber);
     }
 
     filters.push({ OR: searchFilters });

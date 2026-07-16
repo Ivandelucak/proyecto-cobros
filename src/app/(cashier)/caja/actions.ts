@@ -31,6 +31,7 @@ import { parseLocalizedDecimal } from "@/lib/money";
 import type { OfflineCatalogProduct } from "@/lib/offline-sales/types";
 import { prisma } from "@/lib/prisma";
 import { confirmSale, type ConfirmSaleInput } from "@/lib/sale-engine";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 export type CashProductResult = {
   id: string;
@@ -93,7 +94,7 @@ export type RegisterSaleResult = {
   ok: boolean;
   error?: string;
   saleId?: string;
-  saleNumber?: number;
+  internalSaleNumber?: string;
   fiscalStatus?: FiscalStatus;
   requiresFiscalInvoice?: boolean;
   suggestedProducts?: CashProductResult[];
@@ -527,7 +528,7 @@ export async function confirmRegisterSaleAction(
       action: "CREATE",
       entity: "Sale",
       entityId: sale.id,
-      description: `Registro venta #${sale.saleNumber}.`,
+      description: `Registro venta #${formatInternalSaleNumber(sale)}.`,
       metadata: { total: sale.total.toString() }
     });
 
@@ -541,7 +542,7 @@ export async function confirmRegisterSaleAction(
     return {
       ok: true,
       saleId: sale.id,
-      saleNumber: sale.saleNumber,
+      internalSaleNumber: formatInternalSaleNumber(sale),
       fiscalStatus: sale.fiscalStatus,
       requiresFiscalInvoice: sale.requiresFiscalInvoice,
       suggestedProducts: await getSuggestedCashProductsAction()

@@ -9,6 +9,7 @@ import {
 import { fallbackPaymentLabels } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 export type ReportFilters = {
   from: string;
@@ -125,7 +126,7 @@ export type CashierReportItem = {
 
 export type RecentSaleItem = {
   id: string;
-  saleNumber: number;
+  internalSaleNumber: string;
   total: Prisma.Decimal;
   status: SaleStatus;
   createdAt: Date;
@@ -157,7 +158,7 @@ export type SupplierReportItem = {
 export type MercadoPagoReportItem = {
   id: string;
   saleId: string | null;
-  saleNumber: number | null;
+  internalSaleNumber: string | null;
   accountName: string;
   environment: string;
   amount: Prisma.Decimal;
@@ -344,7 +345,8 @@ export async function getReportDashboardData(
         sale: {
           select: {
             id: true,
-            saleNumber: true
+            internalNumber: true,
+            internalPeriod: true
           }
         }
       },
@@ -395,7 +397,7 @@ export async function getReportDashboardData(
   const suppliers = buildSupplierReports(purchases);
   const recentSaleItems = recentSales.map((sale) => ({
     id: sale.id,
-    saleNumber: sale.saleNumber,
+    internalSaleNumber: formatInternalSaleNumber(sale),
     total: sale.total,
     status: sale.status,
     createdAt: sale.createdAt,
@@ -404,7 +406,7 @@ export async function getReportDashboardData(
   }));
   const recentCancelledSales = cancelledSales.map((sale) => ({
     id: sale.id,
-    saleNumber: sale.saleNumber,
+    internalSaleNumber: formatInternalSaleNumber(sale),
     total: sale.total,
     status: sale.status,
     createdAt: sale.createdAt,
@@ -479,7 +481,7 @@ export async function getReportDashboardData(
     mercadoPagoAttempts: mercadoPagoAttempts.map((attempt) => ({
       id: attempt.id,
       saleId: attempt.sale?.id ?? null,
-      saleNumber: attempt.sale?.saleNumber ?? null,
+      internalSaleNumber: attempt.sale ? formatInternalSaleNumber(attempt.sale) : null,
       accountName: attempt.mercadoPagoAccount.name,
       environment: attempt.mercadoPagoAccount.environment,
       amount: attempt.amount,

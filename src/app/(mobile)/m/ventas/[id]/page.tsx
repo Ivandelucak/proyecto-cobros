@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
 import { formatARS } from "@/lib/money";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { SaleStatus } from "@prisma/client";
 
@@ -36,7 +37,7 @@ export default async function MobileVentaDetallePage({ params }: MobileVentaDeta
       {/* Back button and title */}
       <MobilePageHeader
         title="Detalle de Venta"
-        subtitle={`Venta #${sale.saleNumber}`}
+      subtitle={`Venta #${formatInternalSaleNumber(sale)}`}
         fallbackUrl="/m/ventas"
       />
 

@@ -770,7 +770,7 @@ function ConfirmEmissionModal({
         <div className="mt-4 space-y-2.5 text-sm text-gray-700 dark:text-[#A9B6C2]">
           <div className="flex justify-between border-b border-gray-100 pb-1.5 dark:border-neutral-800">
             <span className="font-medium">Venta:</span>
-            <span className="font-semibold text-gray-950 dark:text-[#F3F7FA]">#{details.saleNumber}</span>
+            <span className="font-semibold text-gray-950 dark:text-[#F3F7FA]">#{details.internalSaleNumber}</span>
           </div>
           <div className="flex justify-between border-b border-gray-100 pb-1.5 dark:border-neutral-800">
             <span className="font-medium">Cliente/Receptor:</span>

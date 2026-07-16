@@ -10,6 +10,7 @@ import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { getPrintSetting } from "@/lib/print-settings";
 import { buildSaleDetailHref, getSafeInternalReturnTo, isSafeInternalReturnTo } from "@/lib/return-to";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { getTicketSetting } from "@/lib/ticket-settings";
 import { cn } from "@/lib/ui";
 import { TicketAutoPrint } from "./ticket-auto-print";
@@ -198,7 +199,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
         <Divider />
 
         <section className="ticket-section space-y-1">
-          <Line label="Venta" value={`#${sale.saleNumber}`} />
+          <Line label="Venta" value={`#${formatInternalSaleNumber(sale)}`} />
           <Line label="Fecha" value={dateTime(sale.createdAt)} />
           {ticketSetting.showSeller ? <Line label="Cajero" value={sale.user.name} /> : null}
           {ticketSetting.showCustomer && sale.customer ? (
@@ -504,4 +505,3 @@ function getPaymentMethodLabel(method: PaymentMethod, fallbackLabel: string, pro
   if (method === PaymentMethod.CURRENT_ACCOUNT) return "Cuenta corriente";
   return fallbackLabel || method;
 }
-

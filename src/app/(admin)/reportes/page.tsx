@@ -197,8 +197,8 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
           emptyText="Sin operaciones Mercado Pago API en el periodo."
           items={data.mercadoPagoAttempts.map((attempt) => ({
             id: attempt.id,
-            title: attempt.saleNumber
-              ? `Venta #${attempt.saleNumber}`
+            title: attempt.internalSaleNumber
+              ? `Venta #${attempt.internalSaleNumber}`
               : `Intento ${attempt.id.slice(-6)}`,
             description: `${attempt.accountName} (${attempt.environment}) - ${paymentAttemptOriginLabel(
               attempt.origin
@@ -420,7 +420,7 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
 
 function saleListItem(sale: {
   id: string;
-  saleNumber: number;
+  internalSaleNumber: string;
   total: Prisma.Decimal;
   status: SaleStatus;
   createdAt: Date;
@@ -431,7 +431,7 @@ function saleListItem(sale: {
 
   return {
     id: sale.id,
-    title: `Venta #${sale.saleNumber}`,
+    title: `Venta #${sale.internalSaleNumber}`,
     description: `${sale.customerName} - ${sale.userName} - ${formatDateTimeStable(
       sale.createdAt
     )}`,

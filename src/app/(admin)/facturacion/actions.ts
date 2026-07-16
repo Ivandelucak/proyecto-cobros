@@ -207,7 +207,7 @@ export async function emitFiscalDocumentAction(
 }
 
 export type SaleConfirmationDetails = {
-  saleNumber: number;
+  internalSaleNumber: string;
   total: number;
   customerName: string;
   environment: FiscalEnvironment;
@@ -219,6 +219,7 @@ export type SaleConfirmationDetails = {
 
 import { FiscalEnvironment, FiscalDocumentStatus } from "@prisma/client";
 import { determineFiscalDocumentTypeAndLetter, resolveReceiverVatConditionId } from "@/lib/fiscal/fiscal-documents";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 export async function getSaleForConfirmationModalAction(saleId: string): Promise<SaleConfirmationDetails | null> {
   const user = await requireAdminPage();
@@ -227,7 +228,8 @@ export async function getSaleForConfirmationModalAction(saleId: string): Promise
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, businessId: user.businessId! },
       select: {
-        saleNumber: true,
+        internalNumber: true,
+        internalPeriod: true,
         total: true,
         customer: { select: { name: true, businessName: true, fiscalCondition: true } },
         fiscalCustomerNameSnapshot: true,
@@ -265,7 +267,7 @@ export async function getSaleForConfirmationModalAction(saleId: string): Promise
     const condicionIVAReceptorLabel = `${labelsMap[condicionIVAReceptorId] ?? "Otro"} (${condicionIVAReceptorId})`;
 
     return {
-      saleNumber: sale.saleNumber,
+      internalSaleNumber: formatInternalSaleNumber(sale),
       total: Number(sale.total),
       customerName: sale.fiscalCustomerNameSnapshot ?? sale.customer?.businessName ?? sale.customer?.name ?? "Consumidor final",
       environment: setting.environment,

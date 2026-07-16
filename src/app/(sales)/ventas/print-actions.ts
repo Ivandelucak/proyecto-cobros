@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 export async function recordTicketPrintAction(input: {
   saleId: string;
@@ -20,7 +21,8 @@ export async function recordTicketPrintAction(input: {
       where: { id: input.saleId },
       select: {
         id: true,
-        saleNumber: true,
+      internalNumber: true,
+      internalPeriod: true,
         userId: true
       }
     });
@@ -39,8 +41,8 @@ export async function recordTicketPrintAction(input: {
       entity: "Sale",
       entityId: sale.id,
       description: input.ok
-        ? `Imprimio ticket de venta #${sale.saleNumber}.`
-        : `Fallo la impresion del ticket de venta #${sale.saleNumber}.`,
+      ? `Imprimio ticket de venta #${formatInternalSaleNumber(sale)}.`
+      : `Fallo la impresion del ticket de venta #${formatInternalSaleNumber(sale)}.`,
       metadata: input.error ? { error: input.error } : undefined
     });
   } catch {

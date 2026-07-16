@@ -11,6 +11,7 @@ import {
 } from "@/lib/fiscal/fiscal-documents";
 import { calculateFiscalAmountsForSale } from "@/lib/fiscal/fiscal-amounts";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import type { FiscalRequirementDecision } from "@/lib/fiscal/fiscal-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -267,7 +268,7 @@ export async function prepareFiscalDocumentDraft(
       requestJson: {
         preparedOnly: true,
         saleId: sale.id,
-        saleNumber: sale.saleNumber,
+        internalSaleNumber: formatInternalSaleNumber(sale),
         paymentMethods: sale.payments.map((payment) => payment.method),
         fiscalAmountWarnings: fiscalAmounts.warnings,
         note: "Borrador interno. No enviado a ARCA."

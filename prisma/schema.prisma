@@ -229,6 +229,7 @@ model Business {
   customers             Customer[]
   suppliers             Supplier[]
   sales                 Sale[]
+  saleNumberSequences   SaleNumberSequence[]
   paymentAttempts       PaymentAttempt[]
   cashSessions          CashSession[]
   businessProfile       BusinessProfile?
@@ -727,6 +728,8 @@ model Sale {
   businessId                 String
   business                   Business                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
   saleNumber                 Int                         @unique @default(autoincrement())
+  internalNumber             Int
+  internalPeriod             String                      @db.VarChar(7)
   total                      Decimal                     @db.Decimal(12, 2)
   subtotal                   Decimal                     @db.Decimal(12, 2)
   discountTotal              Decimal                     @default(0) @db.Decimal(12, 2)
@@ -777,7 +780,22 @@ model Sale {
   @@index([requiresFiscalInvoice])
   @@index([occurredAt])
   @@index([businessId])
+  @@index([businessId, internalPeriod])
+  @@unique([businessId, internalPeriod, internalNumber])
   @@unique([businessId, clientOperationId])
+}
+
+model SaleNumberSequence {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  period      String   @db.VarChar(7)
+  lastNumber  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([businessId, period])
+  @@index([businessId])
 }
 
 model CustomerAccountMovement {

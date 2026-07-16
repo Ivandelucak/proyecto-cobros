@@ -66,7 +66,7 @@ export type MercadoPagoMovementView = {
   operationType: string | null;
   rawSummary: Record<string, unknown>;
   alreadyUsed: boolean;
-  usedSaleNumber: number | null;
+  usedSaleNumber: string | null;
 };
 
 export type MercadoPagoAttemptView = {

@@ -82,7 +82,7 @@ export async function syncOfflineCashSales(
       await updateOfflineSale(sale.clientOperationId, {
         status: "SYNCED",
         syncedSaleId: result.saleId,
-        syncedSaleNumber: result.saleNumber,
+        syncedSaleNumber: result.internalSaleNumber,
         lastError: null,
         lastAttemptAt: new Date().toISOString()
       });

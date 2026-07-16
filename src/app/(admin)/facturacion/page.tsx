@@ -15,6 +15,7 @@ import {
 } from "@/lib/fiscal/fiscal-status";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber, parseInternalSaleNumber } from "@/lib/sale-numbering";
 import { FiscalSaleActions } from "./fiscal-sale-actions";
 import styles from "./facturacion-responsive.module.css";
 
@@ -61,8 +62,8 @@ export default async function FacturacionPage({
           OR: [
             { customer: { name: { contains: query } } },
             { fiscalCustomerNameSnapshot: { contains: query } },
-            ...(Number.isFinite(Number(query))
-              ? [{ saleNumber: Number(query) }]
+            ...(parseInternalSaleNumber(query)
+              ? [parseInternalSaleNumber(query)!]
               : [])
           ]
         }
@@ -127,7 +128,7 @@ export default async function FacturacionPage({
 
       <Card className="p-4">
         <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_160px_150px_150px_minmax(150px,auto)_auto]">
-          <Input name="q" placeholder="Cliente o venta #" defaultValue={query} />
+          <Input name="q" placeholder="Cliente o venta 2026-07-0001" defaultValue={query} />
           <Select name="status" defaultValue={statusFilter}>
             {filterLabels.map((filter) => (
               <option key={filter.value} value={filter.value}>
@@ -177,7 +178,7 @@ export default async function FacturacionPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-                      #{sale.saleNumber} · {paymentLabel || "Sin pago"}
+                      #{formatInternalSaleNumber(sale)} · {paymentLabel || "Sin pago"}
                     </p>
                     <p className="mt-1 truncate text-xs text-gray-500 dark:text-[#7F8D9A]">
                       {customer} · {formatDateTimeStable(sale.createdAt)}
@@ -265,7 +266,7 @@ export default async function FacturacionPage({
                       className="transition-colors duration-150 hover:bg-slate-50/80 dark:hover:bg-neutral-800/50"
                     >
                       <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
-                        #{sale.saleNumber}
+                        #{formatInternalSaleNumber(sale)}
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {formatDateTimeStable(sale.createdAt)}

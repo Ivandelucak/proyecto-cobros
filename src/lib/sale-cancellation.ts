@@ -16,6 +16,7 @@ import {
 } from "@/lib/fiscal/fiscal-engine";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { assertRole } from "@/lib/permissions";
 
 type CancelSaleResult =
@@ -121,7 +122,7 @@ export async function cancelSale(input: {
           quantity: new Prisma.Decimal(item.quantity),
           previousStock,
           newStock,
-          reason: `Anulacion venta #${sale.saleNumber}`,
+          reason: `Anulacion venta #${formatInternalSaleNumber(sale)}`,
           referenceId: sale.id,
           userId: user.id
         }
@@ -139,7 +140,7 @@ export async function cancelSale(input: {
         saleId: sale.id,
         type: CustomerAccountMovementType.SALE_CANCELLED,
         amount: currentAccountAmount,
-        reason: `Anulacion venta #${sale.saleNumber}`,
+        reason: `Anulacion venta #${formatInternalSaleNumber(sale)}`,
         paymentMethod: PaymentMethod.CURRENT_ACCOUNT,
         userId: user.id
       });

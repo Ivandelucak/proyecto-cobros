@@ -48,7 +48,7 @@ export type OfflineCashSale = {
   lastError: string | null;
   lastAttemptAt: string | null;
   syncedSaleId: string | null;
-  syncedSaleNumber: number | null;
+  syncedSaleNumber: string | null;
   offlineNumber: string;
 };
 
@@ -69,7 +69,7 @@ export type OfflineSaleSyncResponse =
   | {
       ok: true;
       saleId: string;
-      saleNumber: number;
+      internalSaleNumber: string;
       alreadySynced: boolean;
       lateCashSession: boolean;
     }

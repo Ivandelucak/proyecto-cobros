@@ -2,6 +2,7 @@ import { PaymentMethod, SaleStatus } from "@prisma/client";
 import { getCustomerBalanceMap } from "@/lib/customer-account";
 import { writeProductsExportBuffer } from "@/lib/excel/products-export";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { formatStock } from "@/lib/stock-format";
 
 type CsvColumn<T> = {
@@ -44,7 +45,7 @@ export async function buildSalesCsv(from: Date, to: Date) {
   });
 
   return buildCsv(sales, [
-    { header: "numero", value: (sale) => sale.saleNumber },
+    { header: "numero", value: (sale) => formatInternalSaleNumber(sale) },
     { header: "fecha", value: (sale) => sale.createdAt.toISOString() },
     { header: "estado", value: (sale) => sale.status },
     { header: "usuario", value: (sale) => sale.user.name },

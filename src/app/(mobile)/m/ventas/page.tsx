@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { formatARS } from "@/lib/money";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { prisma } from "@/lib/prisma";
 import { formatDateTimeStable } from "@/lib/date-format";
 
@@ -83,7 +84,7 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
               <Card className="p-4 bg-[#121922] border-[#273342] hover:border-[#4C7FA3]/50 active:bg-[#1D3140]/10 transition-all flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-bold text-sm text-[#F3F7FA]">Venta #{sale.saleNumber}</h4>
+                  <h4 className="font-bold text-sm text-[#F3F7FA]">Venta #{formatInternalSaleNumber(sale)}</h4>
                     <p className="text-[11px] text-[#A9B6C2] mt-0.5">{formatDateTimeStable(sale.createdAt)}</p>
                   </div>
                   <div className="text-right">

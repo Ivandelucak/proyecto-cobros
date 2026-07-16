@@ -23,6 +23,7 @@ import {
 } from "@/lib/payment-settings";
 import { assertRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { allocateNextSaleNumber, formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 type SaleItemInput = {
   productId?: string | null;
@@ -389,10 +390,19 @@ export async function confirmSale(input: ConfirmSaleInput) {
       throw new Error("La suma de pagos debe coincidir con el total de la venta.");
     }
 
+    const occurredAt = offline?.occurredAt ?? new Date();
+    const internalSaleNumber = await allocateNextSaleNumber(
+      tx,
+      user.businessId!,
+      occurredAt
+    );
+
     const sale = await tx.sale.create({
       data: {
         businessId: user.businessId!,
         userId: user.id,
+        internalNumber: internalSaleNumber.internalNumber,
+        internalPeriod: internalSaleNumber.internalPeriod,
         subtotal,
         total,
         discountTotal,
@@ -401,7 +411,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
         customerId,
         cashSessionId: cashSession?.id ?? null,
         clientOperationId: offline?.clientOperationId ?? null,
-        occurredAt: offline?.occurredAt,
+        occurredAt,
         offlineSyncedAt: offline ? new Date() : null,
         items: {
           create: saleItems.map((item) => item.data)
@@ -439,7 +449,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
           newStock,
           referenceId: sale.id,
           userId: user.id,
-          reason: `Venta #${sale.saleNumber}`
+          reason: `Venta #${formatInternalSaleNumber(sale)}`
         }
       });
     }
@@ -468,7 +478,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
         saleId: sale.id,
         type: CustomerAccountMovementType.DEBIT,
         amount: currentAccountTotal,
-        reason: `Venta #${sale.saleNumber} a cuenta corriente`,
+        reason: `Venta #${formatInternalSaleNumber(sale)} a cuenta corriente`,
         paymentMethod: PaymentMethod.CURRENT_ACCOUNT,
         userId: user.id
       });

@@ -15,6 +15,7 @@ import { calculateFiscalAmountsForSale } from "@/lib/fiscal/fiscal-amounts";
 import { fiscalTaxTreatmentLabel } from "@/lib/fiscal/fiscal-tax";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import { resolveReceiverVatConditionId } from "@/lib/fiscal/fiscal-documents";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 const ARCA_SERVICE = "WSFEv1";
 const FUTURE_OPERATION = "FECAESolicitar";
@@ -35,7 +36,7 @@ export type ArcaInvoiceRequestPreview = {
     futureOperation: typeof FUTURE_OPERATION;
     generatedAt: string;
     saleId: string;
-    saleNumber: number;
+    internalSaleNumber: string;
     fiscalDocumentId: string;
   };
   issuer: {
@@ -119,7 +120,8 @@ export type ArcaInvoiceRequestPreview = {
 
 type ArcaPreEmissionSale = {
   id: string;
-  saleNumber: number;
+  internalNumber: number;
+  internalPeriod: string;
   total: Prisma.Decimal;
   subtotal: Prisma.Decimal;
   status: SaleStatus;
@@ -338,7 +340,7 @@ export function buildArcaInvoiceRequest(
       futureOperation: FUTURE_OPERATION,
       generatedAt: new Date().toISOString(),
       saleId: sale.id,
-      saleNumber: sale.saleNumber,
+      internalSaleNumber: formatInternalSaleNumber(sale),
       fiscalDocumentId: fiscalDocument.id
     },
     issuer: {

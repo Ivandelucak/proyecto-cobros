@@ -7,6 +7,7 @@ import { MobileQuickAccessCard } from "@/components/mobile/MobileQuickAccessCard
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { getOpenCashSessionSnapshot } from "@/lib/cash-session";
 import { formatARS } from "@/lib/money";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +85,7 @@ export default async function MobileDashboardPage() {
             latestSales.map((sale) => (
               <Link key={sale.id} href={`/m/ventas/${sale.id}`} className="flex min-h-[64px] items-center justify-between gap-3 py-3 transition-colors hover:bg-[#1D3140]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]">
                 <div className="min-w-0">
-                  <p className="truncate text-[15px] font-bold text-[#F3F7FA]">Venta #{sale.saleNumber}</p>
+              <p className="truncate text-[15px] font-bold text-[#F3F7FA]">Venta #{formatInternalSaleNumber(sale)}</p>
                   <p className="mt-0.5 truncate text-xs text-[#A9B6C2]">{sale.user.name}</p>
                 </div>
                 <div className="shrink-0 text-right">

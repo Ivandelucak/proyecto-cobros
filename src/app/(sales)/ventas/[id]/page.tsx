@@ -23,6 +23,7 @@ import {
   isSafeInternalReturnTo
 } from "@/lib/return-to";
 import { getAccessibleSaleOrRedirect } from "@/lib/sale-access";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { cn } from "@/lib/ui";
 import { CancelSaleForm } from "./cancel-sale-form";
 
@@ -90,7 +91,7 @@ export default async function VentaDetallePage({
             </div>
             <div className="mt-1 flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-gray-950 dark:text-[#F3F7FA]">
-                Venta #{sale.saleNumber}
+                Venta #{formatInternalSaleNumber(sale)}
               </h1>
               <Badge tone={sale.status === SaleStatus.PAID ? "green" : "red"}>
                 {sale.status === SaleStatus.PAID ? "Pagada" : "Anulada"}

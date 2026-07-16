@@ -9,6 +9,7 @@ import { getCustomerBalance } from "@/lib/customer-account";
 import { formatDateTimeStable } from "@/lib/date-format";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { buildReturnToHref, buildSaleDetailHref } from "@/lib/return-to";
 import { CustomerAdjustmentForm, CustomerPaymentForm } from "./account-forms";
 
@@ -44,7 +45,10 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
     },
     include: {
       accountMovements: {
-        include: { user: { select: { name: true } }, sale: { select: { saleNumber: true } } },
+        include: {
+          user: { select: { name: true } },
+          sale: { select: { internalNumber: true, internalPeriod: true } }
+        },
         orderBy: { createdAt: "desc" },
         take: 50
       },
@@ -145,7 +149,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
                       </td>
                       <td className="px-4 py-3 text-gray-700 dark:text-[#A9B6C2]">
                         {movement.reason}
-                        {movement.sale ? ` (#${movement.sale.saleNumber})` : ""}
+                        {movement.sale ? ` (#${formatInternalSaleNumber(movement.sale)})` : ""}
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-950 dark:text-[#F3F7FA]">
                         {formatARS(movement.amount)}
@@ -176,7 +180,7 @@ export default async function ClienteDetallePage({ params }: ClienteDetallePageP
                   <div key={sale.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                     <div>
                       <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
-                        Venta #{sale.saleNumber}
+                        Venta #{formatInternalSaleNumber(sale)}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                         {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}

@@ -110,7 +110,7 @@ type AutomaticPaymentResult =
 
 type SaleSuccess = {
   saleId: string;
-  saleNumber: number;
+  internalSaleNumber: string;
   totalAmount: number;
   paymentLabel: string;
   fiscalStatus?: string;
@@ -1984,13 +1984,13 @@ export function CashRegister({
 
       const confirmedSale = {
         saleId: result.saleId ?? "",
-        saleNumber: result.saleNumber ?? 0,
+        internalSaleNumber: result.internalSaleNumber ?? "",
         fiscalStatus: result.fiscalStatus,
         requiresFiscalInvoice: result.requiresFiscalInvoice
       };
       setSaleSuccess({
         saleId: confirmedSale.saleId,
-        saleNumber: confirmedSale.saleNumber,
+        internalSaleNumber: confirmedSale.internalSaleNumber,
         totalAmount: roundMoney(
           finalPayments.reduce((sum, payment) => sum + safeNumber(payment.amount), 0)
         ),
@@ -2489,7 +2489,7 @@ export function CashRegister({
             )}
           >
             {saleSuccess
-              ? `Venta #${saleSuccess.saleNumber} lista`
+              ? `Venta #${saleSuccess.internalSaleNumber} lista`
               : paymentsDisabled
               ? "Agrega productos para cargar pagos."
               : overpaid > 0
@@ -4308,7 +4308,7 @@ function SaleConfirmedPanel({
   return (
     <div className="badge-success mt-3 rounded-lg px-3 py-3 text-sm shadow-sm dark:shadow-none">
       <p className="text-lg font-black leading-tight text-[var(--text-primary)]">
-        Venta #{saleSuccess.saleNumber} confirmada
+        Venta #{saleSuccess.internalSaleNumber} confirmada
       </p>
 
       <div className="mt-3 grid gap-2">

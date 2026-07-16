@@ -6,6 +6,7 @@ import {
   Prisma
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { mercadoPagoRequest } from "./mercado-pago-client";
 import { getMercadoPagoAccountWithToken } from "./mercado-pago-accounts";
 import {
@@ -57,7 +58,7 @@ export async function searchRecentMercadoPagoPayments(input: {
   const rawPayments = data.results ?? [];
   const usedPayments =
     input.excludeAlreadyLinked === false
-      ? new Map<string, number | null>()
+      ? new Map<string, string | null>()
       : await getUsedProviderPayments(
           account.id,
           rawPayments.map((payment) => String(payment.id ?? "")).filter(Boolean)
@@ -282,7 +283,7 @@ export async function associateMercadoPagoRecentPayment(input: {
 
 async function getUsedProviderPayments(accountId: string, ids: string[]) {
   if (ids.length === 0) {
-    return new Map<string, number | null>();
+    return new Map<string, string | null>();
   }
 
   const attempts = await prisma.paymentAttempt.findMany({
@@ -296,7 +297,7 @@ async function getUsedProviderPayments(accountId: string, ids: string[]) {
       payment: {
         select: {
           sale: {
-            select: { saleNumber: true }
+            select: { internalNumber: true, internalPeriod: true }
           }
         }
       }
@@ -308,7 +309,7 @@ async function getUsedProviderPayments(accountId: string, ids: string[]) {
       .filter((attempt) => attempt.providerPaymentId)
       .map((attempt) => [
         attempt.providerPaymentId as string,
-        attempt.payment?.sale.saleNumber ?? null
+        attempt.payment?.sale ? formatInternalSaleNumber(attempt.payment.sale) : null
       ])
   );
 }
@@ -324,7 +325,7 @@ async function getUsedProviderPayment(providerPaymentId: string) {
       payment: {
         select: {
           sale: {
-            select: { saleNumber: true }
+            select: { internalNumber: true, internalPeriod: true }
           }
         }
       }
@@ -332,7 +333,11 @@ async function getUsedProviderPayment(providerPaymentId: string) {
   });
 
   return attempt
-    ? { saleNumber: attempt.payment?.sale.saleNumber ?? null }
+    ? {
+        saleNumber: attempt.payment?.sale
+          ? formatInternalSaleNumber(attempt.payment.sale)
+          : null
+      }
     : null;
 }
 
@@ -341,7 +346,7 @@ function mapPaymentToMovement(
   options: {
     accountName: string;
     alreadyUsed: boolean;
-    usedSaleNumber: number | null;
+    usedSaleNumber: string | null;
   }
 ): MercadoPagoMovementView {
   const payerLabelSafe = buildSafePayerLabel(payment);

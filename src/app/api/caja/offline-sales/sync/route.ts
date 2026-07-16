@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { confirmSale, OfflineSaleSyncError } from "@/lib/sale-engine";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import type {
   OfflineSaleSyncPayload,
   OfflineSaleSyncResponse
@@ -39,13 +40,13 @@ export async function POST(request: Request) {
         businessId: user.businessId,
         clientOperationId: payload.clientOperationId
       },
-      select: { id: true, saleNumber: true }
+      select: { id: true, internalNumber: true, internalPeriod: true }
     });
     if (existingSale) {
       return response({
         ok: true,
         saleId: existingSale.id,
-        saleNumber: existingSale.saleNumber,
+        internalSaleNumber: formatInternalSaleNumber(existingSale),
         alreadySynced: true,
         lateCashSession: false
       });
@@ -86,8 +87,8 @@ export async function POST(request: Request) {
       entity: "Sale",
       entityId: sale.id,
       description: sale.offlineSyncLate
-        ? `Sincronizo tardÃ­amente la venta offline #${sale.saleNumber}.`
-        : `Sincronizo la venta offline #${sale.saleNumber}.`,
+        ? `Sincronizo tardÃ­amente la venta offline #${formatInternalSaleNumber(sale)}.`
+        : `Sincronizo la venta offline #${formatInternalSaleNumber(sale)}.`,
       metadata: {
         clientOperationId: payload.clientOperationId,
         cashSessionId: payload.cashSessionId,
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     return response({
       ok: true,
       saleId: sale.id,
-      saleNumber: sale.saleNumber,
+      internalSaleNumber: formatInternalSaleNumber(sale),
       alreadySynced: false,
       lateCashSession: sale.offlineSyncLate
     });

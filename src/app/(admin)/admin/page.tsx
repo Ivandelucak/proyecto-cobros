@@ -8,6 +8,7 @@ import { getOpenCashSessionSnapshot } from "@/lib/cash-session";
 import { getCustomerBalanceMap } from "@/lib/customer-account";
 import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -140,7 +141,7 @@ export default async function AdminPage() {
               <div key={sale.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <div>
                   <p className="font-medium text-gray-950 dark:text-[#F3F7FA]">
-                    Venta #{sale.saleNumber}
+                    Venta #{formatInternalSaleNumber(sale)}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-[#7F8D9A]">
                     {sale.user.name}

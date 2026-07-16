@@ -34,6 +34,7 @@ import {
 } from "@/lib/fiscal/fiscal-status";
 import { getFiscalSettingOrDefault } from "@/lib/fiscal/fiscal-settings";
 import { formatARS } from "@/lib/money";
+import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 import { buildReturnToHref, buildSaleDetailHref, buildTicketHref } from "@/lib/return-to";
@@ -124,7 +125,7 @@ export default async function FacturacionDetallePage({
   return (
     <section className="space-y-5">
       <PageHeader
-        title={`Detalle fiscal venta #${sale.saleNumber}`}
+        title={`Detalle fiscal venta #${formatInternalSaleNumber(sale)}`}
         description="Preview interno del comprobante preparado. No emite ni consulta ARCA."
         actions={
           <>
@@ -142,7 +143,7 @@ export default async function FacturacionDetallePage({
               Resumen de venta
             </h2>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-              <Info label="Venta" value={`#${sale.saleNumber}`} />
+              <Info label="Venta" value={`#${formatInternalSaleNumber(sale)}`} />
               <Info label="Fecha" value={formatDateTimeStable(sale.createdAt)} />
               <Info label="Cajero" value={sale.user.name} />
               <Info
