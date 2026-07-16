@@ -2446,7 +2446,7 @@ export function CashRegister({
       </div>
 
       <aside className="cash-sidebar min-w-0 space-y-2.5 xl:sticky xl:top-3 xl:self-start 2xl:space-y-3">
-        <Card className="cash-console border-t-4 border-t-[color:var(--primary)] p-3 shadow-xl shadow-[#5B6B79]/14 ring-1 ring-white/80 dark:shadow-none dark:ring-0 2xl:p-4">
+        <Card className="cash-console border-t-4 border-t-[color:var(--primary)] p-3 2xl:p-4">
           <div className="cash-console-header flex-none">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-secondary)]">
