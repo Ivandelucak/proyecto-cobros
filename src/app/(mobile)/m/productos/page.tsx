@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { requireMobileAuth } from "@/lib/admin-auth";
-import { formatARS } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
 import { MobileProductsFilters } from "@/components/mobile/MobileProductsFilters";
+import { MobileProductCard } from "@/components/mobile/MobileProductEditors";
 
 export const dynamic = "force-dynamic";
 
@@ -74,21 +73,21 @@ export default async function MobileProductosPage({ searchParams }: ProductosMob
             <p className="text-xs text-[#A9B6C2]">No se encontraron productos.</p>
           </Card>
         ) : (
-          products.map((p) => (
-            <Link key={p.id} href={`/m/productos/${p.id}`} className="block">
-              <Card className="p-3.5 bg-[#121922] border-[#273342] hover:border-[#4C7FA3]/50 flex justify-between items-center transition-all">
-                <div className="min-w-0">
-                  <h4 className="font-bold text-sm text-[#F3F7FA] truncate">{p.name}</h4>
-                  <p className="text-[10px] text-[#7F8D9A] mt-0.5">
-                    Categoría: {p.category?.name || "Sin categoría"}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="block font-black text-sm text-[#4C7FA3]">{formatARS(p.salePrice)}</span>
-                  <span className="text-[10px] font-bold text-[#A9B6C2]">Stock: {p.stock.toString()}</span>
-                </div>
-              </Card>
-            </Link>
+          products.map((product) => (
+            <MobileProductCard
+              key={product.id}
+              product={{
+                id: product.id,
+                name: product.name,
+                stock: product.stock.toString(),
+                minStock: product.minStock.toString(),
+                salePrice: product.salePrice.toString(),
+                cost: product.cost?.toString() ?? null,
+                unitType: product.unitType,
+                allowsDecimalQuantity: product.allowsDecimalQuantity,
+                categoryName: product.category?.name
+              }}
+            />
           ))
         )}
       </div>

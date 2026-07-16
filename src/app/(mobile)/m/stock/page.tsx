@@ -1,9 +1,9 @@
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
 import { MobileStockFilters } from "@/components/mobile/MobileStockFilters";
+import { MobileStockList } from "@/components/mobile/MobileStockList";
 
 export const dynamic = "force-dynamic";
 
@@ -81,27 +81,19 @@ export default async function MobileStockPage({ searchParams }: StockMobilePageP
             <p className="text-xs text-[#A9B6C2]">No hay productos para el filtro seleccionado.</p>
           </Card>
         ) : (
-          visibleProducts.map((p) => {
-            const isLow = p.stock.lt(p.minStock);
-            const out = p.stock.lte(0);
-
-            return (
-              <Card key={p.id} className="p-3.5 bg-[#121922] border-[#273342] flex justify-between items-center">
-                <div className="min-w-0">
-                  <h4 className="font-bold text-sm text-[#F3F7FA] truncate">{p.name}</h4>
-                  <p className="text-[10px] text-[#7F8D9A] mt-0.5">
-                    Mínimo: {p.minStock.toString()} · Cat: {p.category?.name || "Sin cat"}
-                  </p>
-                </div>
-                <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                  <Badge tone={out ? "red" : isLow ? "amber" : "green"}>
-                    {out ? "Sin Stock" : isLow ? "Bajo" : "OK"}
-                  </Badge>
-                  <span className="text-xs font-bold text-[#F3F7FA]">Stock: {p.stock.toString()}</span>
-                </div>
-              </Card>
-            );
-          })
+          <MobileStockList
+            products={visibleProducts.map((product) => ({
+              id: product.id,
+              name: product.name,
+              stock: product.stock.toString(),
+              minStock: product.minStock.toString(),
+              salePrice: product.salePrice.toString(),
+              cost: product.cost?.toString() ?? null,
+              unitType: product.unitType,
+              allowsDecimalQuantity: product.allowsDecimalQuantity,
+              categoryName: product.category?.name
+            }))}
+          />
         )}
       </div>
     </div>
