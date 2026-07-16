@@ -3,7 +3,7 @@ import { requireMobileAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
 import { MobileProductsFilters } from "@/components/mobile/MobileProductsFilters";
-import { MobileProductCard } from "@/components/mobile/MobileProductEditors";
+import { MobileProductsList } from "@/components/mobile/MobileProductsList";
 
 export const dynamic = "force-dynamic";
 
@@ -67,30 +67,25 @@ export default async function MobileProductosPage({ searchParams }: ProductosMob
       />
 
       {/* List */}
-      <div className="space-y-2.5">
-        {products.length === 0 ? (
-          <Card className="p-8 text-center bg-[#121922] border-[#273342]">
-            <p className="text-xs text-[#A9B6C2]">No se encontraron productos.</p>
-          </Card>
-        ) : (
-          products.map((product) => (
-            <MobileProductCard
-              key={product.id}
-              product={{
-                id: product.id,
-                name: product.name,
-                stock: product.stock.toString(),
-                minStock: product.minStock.toString(),
-                salePrice: product.salePrice.toString(),
-                cost: product.cost?.toString() ?? null,
-                unitType: product.unitType,
-                allowsDecimalQuantity: product.allowsDecimalQuantity,
-                categoryName: product.category?.name
-              }}
-            />
-          ))
-        )}
-      </div>
+      {products.length === 0 ? (
+        <Card className="border-[#273342] bg-[#121922] p-8 text-center">
+          <p className="text-xs text-[#A9B6C2]">No se encontraron productos.</p>
+        </Card>
+      ) : (
+        <MobileProductsList
+          products={products.map((product) => ({
+            id: product.id,
+            name: product.name,
+            stock: product.stock.toString(),
+            minStock: product.minStock.toString(),
+            salePrice: product.salePrice.toString(),
+            cost: product.cost?.toString() ?? null,
+            unitType: product.unitType,
+            allowsDecimalQuantity: product.allowsDecimalQuantity,
+            categoryName: product.category?.name
+          }))}
+        />
+      )}
     </div>
   );
 }

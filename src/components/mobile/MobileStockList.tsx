@@ -20,20 +20,20 @@ export function MobileStockList({ products }: { products: MobileEditableProduct[
           const low = stock < minimum;
 
           return (
-            <article key={product.id} className="rounded-xl border border-[#273342] bg-[#121922] p-3.5 shadow-sm">
+            <article key={product.id} className="rounded-xl border border-[#273342] bg-[#121922] p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h4 className="truncate text-sm font-bold text-[#F3F7FA]">{product.name}</h4>
-                  <p className="mt-0.5 text-[10px] text-[#7F8D9A]">Minimo: {product.minStock} · Cat: {product.categoryName || "Sin cat"}</p>
+                  <h4 className="truncate text-[15px] font-bold text-[#F3F7FA]">{product.name}</h4>
+                  <p className="mt-0.5 text-xs text-[#7F8D9A]">Minimo: {product.minStock} · Cat: {product.categoryName || "Sin cat"}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <Badge tone={out ? "red" : low ? "amber" : "green"}>{out ? "Sin stock" : low ? "Bajo" : "OK"}</Badge>
-                  <span className="text-xs font-bold text-[#F3F7FA]">Stock: {product.stock}</span>
+                  <span className="text-sm font-bold text-[#F3F7FA]">Stock: {product.stock}</span>
                   <button
                     type="button"
                     aria-label={`Ajustar stock de ${product.name}`}
                     onClick={() => setSelectedProduct(product)}
-                    className="min-h-10 rounded-lg border border-[#344657] bg-[#1D3140] px-3 text-xs font-bold text-[#D6E4EE] transition-colors hover:bg-[#263C4F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]"
+                    className="min-h-10 rounded-lg border border-[#344657] bg-[#1D3140] px-4 text-sm font-bold text-[#D6E4EE] transition-colors hover:bg-[#263C4F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]"
                   >
                     Ajustar
                   </button>

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { adjustMobileProductStockAction, updateMobileProductPricingAction } from "@/app/(mobile)/m/productos/actions";
 import { Button } from "@/components/ui/button";
 import { formatARS } from "@/lib/money";
@@ -38,17 +37,19 @@ export function MobileStockAdjustmentDialog({
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startTransition] = useTransition();
+  const productId = product?.id;
+  const productStock = product?.stock ?? "";
 
   useEffect(() => {
-    if (!open || !product) return;
+    if (!open || !productId) return;
     const timer = window.setTimeout(() => {
-      setStock(product.stock);
+      setStock(productStock);
       setReason("");
       setError(null);
       inputRef.current?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [open, product]);
+  }, [open, productId, productStock]);
 
   const close = () => {
     if (isSaving) return;
@@ -65,6 +66,7 @@ export function MobileStockAdjustmentDialog({
       title="Ajustar stock"
       description={product?.name}
       onClose={close}
+      focusCloseOnOpen={false}
     >
       <div className="space-y-4">
         <div className="rounded-lg border border-[#273342] bg-[#0B1015] p-3">
@@ -72,12 +74,14 @@ export function MobileStockAdjustmentDialog({
           <p className="mt-1 text-xl font-black text-[#F3F7FA]">{product?.stock ?? "-"}</p>
         </div>
         <label className="block">
-          <span className="text-xs font-bold text-[#D6E4EE]">Nuevo stock</span>
+          <span className="text-sm font-bold text-[#D6E4EE]">Nuevo stock</span>
           <input
             ref={inputRef}
             value={stock}
             onChange={(event) => setStock(event.target.value)}
-            inputMode="decimal"
+            type="text"
+            inputMode={product?.allowsDecimalQuantity ? "decimal" : "numeric"}
+            pattern={product?.allowsDecimalQuantity ? "[0-9.,-]*" : "[0-9-]*"}
             className="mt-1.5 min-h-12 w-full rounded-lg border border-[#344657] bg-[#0B1015] px-3 text-base font-bold text-[#F3F7FA] outline-none placeholder:text-[#7F8D9A] focus:border-[#4C7FA3] focus:ring-2 focus:ring-[#4C7FA3]/25"
           />
         </label>
@@ -88,7 +92,7 @@ export function MobileStockAdjustmentDialog({
           </strong>
         </div>
         <label className="block">
-          <span className="text-xs font-bold text-[#D6E4EE]">Motivo u observacion <span className="font-normal text-[#7F8D9A]">(opcional)</span></span>
+          <span className="text-sm font-bold text-[#D6E4EE]">Motivo u observacion <span className="font-normal text-[#7F8D9A]">(opcional)</span></span>
           <input
             value={reason}
             onChange={(event) => setReason(event.target.value)}
@@ -97,7 +101,7 @@ export function MobileStockAdjustmentDialog({
           />
         </label>
         {error ? <p role="alert" className="rounded-lg border border-[#E16060]/50 bg-[#4A171B]/50 px-3 py-2 text-sm text-[#FFD7D7]">{error}</p> : null}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-[#273342] bg-[#121922] pt-3">
           <Button type="button" variant="outline" onClick={close} disabled={isSaving}>Cancelar</Button>
           <Button
             type="button"
@@ -144,18 +148,21 @@ export function MobileProductPricingDialog({
   const [increase, setIncrease] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startTransition] = useTransition();
+  const productId = product?.id;
+  const productCost = product?.cost ?? "";
+  const productSalePrice = product?.salePrice ?? "";
 
   useEffect(() => {
-    if (!open || !product) return;
+    if (!open || !productId) return;
     const timer = window.setTimeout(() => {
-      setCost(product.cost ?? "");
-      setSalePrice(product.salePrice);
+      setCost(productCost);
+      setSalePrice(productSalePrice);
       setIncrease("");
       setError(null);
       priceRef.current?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [open, product]);
+  }, [open, productCost, productId, productSalePrice]);
 
   const close = () => {
     if (isSaving) return;
@@ -169,7 +176,7 @@ export function MobileProductPricingDialog({
     : null;
 
   return (
-    <MobileBottomSheet open={open && Boolean(product)} title="Editar precio y costo" description={product?.name} onClose={close}>
+    <MobileBottomSheet open={open && Boolean(product)} title="Editar precio y costo" description={product?.name} onClose={close} focusCloseOnOpen={false}>
       <div className="space-y-4">
         <label className="block">
           <span className="text-xs font-bold text-[#D6E4EE]">Costo</span>
@@ -245,88 +252,64 @@ export function MobileProductPricingDialog({
   );
 }
 
-export function MobileProductActionsMenu({ product }: { product: MobileEditableProduct }) {
-  const router = useRouter();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [stockOpen, setStockOpen] = useState(false);
-  const [pricingOpen, setPricingOpen] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-
-  const saved = (message: string) => {
-    setFeedback(message);
-    router.refresh();
-  };
-
+export function MobileProductCard({ product, onOpenActions }: { product: MobileEditableProduct; onOpenActions: (product: MobileEditableProduct) => void }) {
   return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label="Acciones del producto"
-        aria-expanded={menuOpen}
-        onClick={(event) => { event.preventDefault(); event.stopPropagation(); setMenuOpen(true); }}
-        className="grid h-10 w-10 place-items-center rounded-lg border border-[#344657] bg-[#0F151D] text-[#A9B6C2] transition-colors hover:bg-[#1D3140] hover:text-[#F3F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]"
-      >
-        <MobileIcon name="more" className="h-5 w-5" />
-      </button>
-      <MobileBottomSheet open={menuOpen} title="Acciones del producto" description={product.name} onClose={() => setMenuOpen(false)} compact>
-        <div className="grid gap-2">
-          <Button type="button" variant="outline" className="justify-start" onClick={() => { setMenuOpen(false); setStockOpen(true); }}>
-            Actualizar stock
-          </Button>
-          <Button type="button" variant="outline" className="justify-start" onClick={() => { setMenuOpen(false); setPricingOpen(true); }}>
-            Editar precio y costo
-          </Button>
-        </div>
-      </MobileBottomSheet>
-      <MobileStockAdjustmentDialog product={product} open={stockOpen} onClose={() => setStockOpen(false)} onSaved={saved} restoreFocusRef={triggerRef} />
-      <MobileProductPricingDialog product={product} open={pricingOpen} onClose={() => setPricingOpen(false)} onSaved={saved} restoreFocusRef={triggerRef} />
-      {feedback ? <p role="status" className="sr-only">{feedback}</p> : null}
-    </>
-  );
-}
-
-export function MobileProductCard({ product }: { product: MobileEditableProduct }) {
-  return (
-    <article className="rounded-xl border border-[#273342] bg-[#121922] p-3.5 shadow-sm">
+    <article className="rounded-xl border border-[#273342] bg-[#121922] p-4 shadow-sm">
       <div className="flex items-start gap-3">
         <Link href={`/m/productos/${product.id}`} className="min-w-0 flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]">
-          <h4 className="truncate text-sm font-bold text-[#F3F7FA]">{product.name}</h4>
-          <p className="mt-0.5 text-[10px] text-[#7F8D9A]">Categoria: {product.categoryName || "Sin categoria"}</p>
-          <div className="mt-2 flex items-end justify-between gap-2">
-            <span className="text-sm font-black text-[#4C7FA3]">{formatARS(product.salePrice)}</span>
-            <span className="text-[10px] font-bold text-[#A9B6C2]">Stock: {product.stock}</span>
+          <h4 className="truncate text-[15px] font-bold text-[#F3F7FA]">{product.name}</h4>
+          <p className="mt-0.5 text-xs text-[#7F8D9A]">Categoria: {product.categoryName || "Sin categoria"}</p>
+          <div className="mt-2.5 flex items-end justify-between gap-2">
+            <span className="text-[15px] font-black text-[#4C7FA3]">{formatARS(product.salePrice)}</span>
+            <span className="text-xs font-bold text-[#A9B6C2]">Stock: {product.stock}</span>
           </div>
         </Link>
-        <MobileProductActionsMenu product={product} />
+        <button
+          type="button"
+          aria-label="Acciones del producto"
+          onClick={() => onOpenActions(product)}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[#344657] bg-[#0F151D] text-[#A9B6C2] transition-colors hover:bg-[#1D3140] hover:text-[#F3F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]"
+        >
+          <MobileIcon name="more" className="h-5 w-5" />
+        </button>
       </div>
     </article>
   );
 }
 
-function MobileBottomSheet({ open, title, description, onClose, children, compact = false }: {
+export function MobileBottomSheet({ open, title, description, onClose, children, compact = false, focusCloseOnOpen = true }: {
   open: boolean;
   title: string;
   description?: string;
   onClose: () => void;
   children: React.ReactNode;
   compact?: boolean;
+  focusCloseOnOpen?: boolean;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
-    window.setTimeout(() => closeRef.current?.focus(), 0);
+    const frame = focusCloseOnOpen
+      ? window.requestAnimationFrame(() => closeRef.current?.focus())
+      : null;
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
-  }, [onClose, open]);
+  }, [focusCloseOnOpen, open]);
 
   if (!open) return null;
   return (
@@ -336,8 +319,8 @@ function MobileBottomSheet({ open, title, description, onClose, children, compac
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[#4A5968]" aria-hidden="true" />
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-base font-extrabold text-[#F3F7FA]">{title}</h2>
-            {description ? <p className="mt-0.5 truncate text-sm text-[#A9B6C2]">{description}</p> : null}
+            <h2 className="text-[19px] font-extrabold leading-tight text-[#F3F7FA]">{title}</h2>
+            {description ? <p className="mt-1 truncate text-sm text-[#A9B6C2]">{description}</p> : null}
           </div>
           <button ref={closeRef} type="button" aria-label="Cerrar" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[#344657] text-lg font-bold text-[#A9B6C2] hover:bg-[#1D3140] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]">×</button>
         </div>

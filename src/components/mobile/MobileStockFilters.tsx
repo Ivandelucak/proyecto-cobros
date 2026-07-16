@@ -25,7 +25,7 @@ export function MobileStockFilters({ initialQ, initialFilter }: { initialQ: stri
       </div>
       <label className="flex items-center gap-2">
         <span className="shrink-0 text-xs font-bold uppercase tracking-wider text-[#A9B6C2]">Filtro</span>
-        <select value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); applyFilters(q, value); }} className="min-h-10 min-w-0 flex-1 rounded-lg border border-[#273342] bg-[#0B1015] px-3 text-sm text-[#F3F7FA] focus:border-[#4C7FA3] focus:outline-none">
+        <select value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); applyFilters(q, value); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-[#273342] bg-[#0B1015] px-3 text-sm text-[#F3F7FA] focus:border-[#4C7FA3] focus:outline-none">
           <option value="all">Todos</option>
           <option value="low">Stock bajo</option>
           <option value="out">Sin stock</option>
