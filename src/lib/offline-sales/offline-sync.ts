@@ -116,6 +116,8 @@ function toPayload(sale: OfflineCashSale): OfflineSaleSyncPayload {
     cashSessionId: sale.cashSessionId,
     occurredAt: sale.occurredAt,
     total: sale.total,
+    subtotalBeforeSurcharge: sale.subtotalBeforeSurcharge,
+    surcharge: sale.surcharge,
     cashReceived: sale.cashReceived,
     changeAmount: sale.changeAmount,
     items: sale.items

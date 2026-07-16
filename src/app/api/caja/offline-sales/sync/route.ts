@@ -5,6 +5,7 @@ import { createAuditLog } from "@/lib/audit-log";
 import { getCurrentUser } from "@/lib/auth";
 import { parseLocalizedDecimal } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { isSaleSurchargeType } from "@/lib/sale-surcharge";
 import { confirmSale, OfflineSaleSyncError } from "@/lib/sale-engine";
 import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import type {
@@ -70,6 +71,12 @@ export async function POST(request: Request) {
           receivedAmount: parseLocalizedDecimal(payload.cashReceived)
         }
       ],
+      surcharge: payload.surcharge
+        ? {
+            type: payload.surcharge.type,
+            value: parseLocalizedDecimal(payload.surcharge.value)
+          }
+        : null,
       fiscalInvoiceRequested: false,
       offline: {
         clientOperationId: payload.clientOperationId,
@@ -162,6 +169,10 @@ function parsePayload(value: unknown): OfflineSaleSyncPayload {
   }
 
   const items = payload.items.map(parseItem);
+  const subtotalBeforeSurcharge = payload.subtotalBeforeSurcharge === undefined
+    ? undefined
+    : parseMoney(payload.subtotalBeforeSurcharge, "subtotalBeforeSurcharge");
+  const surcharge = parseSurcharge(payload.surcharge);
   const productIds = items
     .map((item) => item.productId)
     .filter((productId): productId is string => Boolean(productId));
@@ -180,9 +191,38 @@ function parsePayload(value: unknown): OfflineSaleSyncPayload {
     cashSessionId: requiredText(payload.cashSessionId, "cashSessionId", 191),
     occurredAt,
     total: total.toDecimalPlaces(2).toString(),
+    subtotalBeforeSurcharge: subtotalBeforeSurcharge?.toDecimalPlaces(2).toString(),
+    surcharge,
     cashReceived: cashReceived.toDecimalPlaces(2).toString(),
     changeAmount: changeAmount.toDecimalPlaces(2).toString(),
     items
+  };
+}
+
+function parseSurcharge(value: unknown): OfflineSaleSyncPayload["surcharge"] {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    throw new OfflineSaleSyncError("El recargo offline es invalido.", "OFFLINE_SURCHARGE_INVALID", false);
+  }
+
+  const surcharge = value as Record<string, unknown>;
+  const type = requiredText(surcharge.type, "surcharge.type", 16);
+  if (!isSaleSurchargeType(type)) {
+    throw new OfflineSaleSyncError("El tipo de recargo offline es invalido.", "OFFLINE_SURCHARGE_INVALID", false);
+  }
+
+  const amount = parseMoney(surcharge.amount, "surcharge.amount");
+  const rawValue = parseMoney(surcharge.value, "surcharge.value");
+  if (amount.lte(0) || rawValue.lte(0) || (type === "PERCENTAGE" && rawValue.gt(1000))) {
+    throw new OfflineSaleSyncError("El valor de recargo offline es invalido.", "OFFLINE_SURCHARGE_INVALID", false);
+  }
+
+  return {
+    type,
+    value: rawValue.toDecimalPlaces(type === "PERCENTAGE" ? 4 : 2).toString(),
+    amount: amount.toDecimalPlaces(2).toString()
   };
 }
 

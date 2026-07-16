@@ -53,6 +53,11 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     formatMoney(value as string, business.currency, business.locale);
   const dateTime = (value: Date) =>
     formatDateTimeConfigured(value, business.locale, business.timezone);
+  const generalSurchargeAmount = Number(sale.generalSurchargeAmount);
+  const financingSurchargeAmount = Math.max(
+    Number(sale.surchargeTotal) - generalSurchargeAmount,
+    0
+  );
   const isTicket58 = printSetting.paperSize === "TICKET_58";
   const isA4 = printSetting.paperSize === "A4";
   const printSheetPosition = isA4
@@ -248,8 +253,18 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
           {hasAmount(sale.discountTotal) ? (
             <Line label="Descuento" value={money(sale.discountTotal)} />
           ) : null}
-          {hasAmount(sale.surchargeTotal) ? (
-            <Line label="Recargo" value={money(sale.surchargeTotal)} />
+          {generalSurchargeAmount > 0 ? (
+            <Line
+              label={
+                sale.generalSurchargeType === "PERCENTAGE"
+                  ? `Recargo ${sale.generalSurchargeValue?.toString() ?? ""}%`
+                  : "Recargo"
+              }
+              value={money(sale.generalSurchargeAmount)}
+            />
+          ) : null}
+          {financingSurchargeAmount > 0 ? (
+            <Line label="Recargo financiero" value={money(financingSurchargeAmount)} />
           ) : null}
           <div className="ticket-total mt-2 flex justify-between gap-3 border-y border-gray-900 py-1 text-base font-bold">
             <span>Total</span>

@@ -734,6 +734,9 @@ model Sale {
   subtotal                   Decimal                     @db.Decimal(12, 2)
   discountTotal              Decimal                     @default(0) @db.Decimal(12, 2)
   surchargeTotal             Decimal                     @default(0) @db.Decimal(12, 2)
+  generalSurchargeType       String?                     @db.VarChar(16)
+  generalSurchargeValue      Decimal?                    @db.Decimal(12, 4)
+  generalSurchargeAmount     Decimal                     @default(0) @db.Decimal(12, 2)
   status                     SaleStatus                  @default(PAID)
   userId                     String
   user                       User                        @relation("SaleUser", fields: [userId], references: [id], onDelete: Restrict)

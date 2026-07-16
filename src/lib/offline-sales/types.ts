@@ -40,6 +40,12 @@ export type OfflineCashSale = {
   cashSessionId: string;
   occurredAt: string;
   total: string;
+  subtotalBeforeSurcharge?: string;
+  surcharge?: {
+    type: "PERCENTAGE" | "FIXED";
+    value: string;
+    amount: string;
+  } | null;
   cashReceived: string;
   changeAmount: string;
   items: OfflineSaleItem[];
@@ -60,6 +66,8 @@ export type OfflineSaleSyncPayload = Pick<
   | "cashSessionId"
   | "occurredAt"
   | "total"
+  | "subtotalBeforeSurcharge"
+  | "surcharge"
   | "cashReceived"
   | "changeAmount"
   | "items"

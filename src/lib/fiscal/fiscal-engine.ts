@@ -2,8 +2,8 @@ import {
   FiscalDocumentIdentityType,
   FiscalDocumentStatus,
   FiscalStatus,
+  Prisma,
   SaleStatus,
-  type Prisma
 } from "@prisma/client";
 import {
   determineFiscalDocumentTypeAndLetter,
@@ -224,8 +224,7 @@ export async function prepareFiscalDocumentDraft(
       setting,
       customerCondition: customerSnapshot.condition
     });
-    const fiscalAmounts = calculateFiscalAmountsForSale({
-      items: sale.items.map((item) => ({
+    const fiscalSourceItems: Parameters<typeof calculateFiscalAmountsForSale>[0]["items"] = sale.items.map((item) => ({
         id: item.id,
         description: item.productNameSnapshot,
         quantity: item.quantity,
@@ -233,7 +232,23 @@ export async function prepareFiscalDocumentDraft(
         subtotal: item.subtotal,
         unitType: item.unitTypeSnapshot,
         product: item.product
-      })),
+      }));
+    if (sale.surchargeTotal.gt(0)) {
+      fiscalSourceItems.push({
+        id: "sale-surcharge",
+        description: sale.generalSurchargeType === "PERCENTAGE"
+          ? `Recargo ${sale.generalSurchargeValue?.toString() ?? ""}%`
+          : "Recargo",
+        quantity: new Prisma.Decimal(1),
+        unitPrice: sale.surchargeTotal,
+        subtotal: sale.surchargeTotal,
+        unitType: null,
+        product: null
+      });
+    }
+
+    const fiscalAmounts = calculateFiscalAmountsForSale({
+      items: fiscalSourceItems,
       setting,
       documentLetter: documentShape.letter
     });
@@ -242,9 +257,10 @@ export async function prepareFiscalDocumentDraft(
       throw new Error(fiscalAmounts.errors.join(" "));
     }
 
-    const fiscalAmountItemsById = new Map(
-      fiscalAmounts.items.map((item) => [item.id, item])
-    );
+    if (!fiscalAmounts.totals.impTotal.equals(sale.total)) {
+      throw new Error("El total fiscal no coincide con el total confirmado de la venta.");
+    }
+
     const documentData = {
       saleId: sale.id,
       type: documentShape.type,
@@ -298,21 +314,15 @@ export async function prepareFiscalDocumentDraft(
       where: { fiscalDocumentId: fiscalDocument.id }
     });
 
-    if (sale.items.length > 0) {
+    if (fiscalAmounts.items.length > 0) {
       await tx.fiscalDocumentItem.createMany({
-        data: sale.items.map((item) => {
-          const fiscalAmountItem = fiscalAmountItemsById.get(item.id);
-
-          if (!fiscalAmountItem) {
-            throw new Error(`No se pudo calcular IVA para "${item.productNameSnapshot}".`);
-          }
-
+        data: fiscalAmounts.items.map((fiscalAmountItem) => {
           return {
             fiscalDocumentId: fiscalDocument.id,
-            description: item.productNameSnapshot,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            subtotal: item.subtotal,
+            description: fiscalAmountItem.description,
+            quantity: fiscalAmountItem.quantity,
+            unitPrice: fiscalAmountItem.unitPrice,
+            subtotal: fiscalAmountItem.grossAmount,
             vatRate: fiscalAmountItem.vatRate,
             taxCode:
               fiscalAmountItem.vatArcaCode === null

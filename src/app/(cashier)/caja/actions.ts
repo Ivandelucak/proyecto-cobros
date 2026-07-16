@@ -30,6 +30,7 @@ import {
 import { parseLocalizedDecimal } from "@/lib/money";
 import type { OfflineCatalogProduct } from "@/lib/offline-sales/types";
 import { prisma } from "@/lib/prisma";
+import { isSaleSurchargeType } from "@/lib/sale-surcharge";
 import { confirmSale, type ConfirmSaleInput } from "@/lib/sale-engine";
 import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 
@@ -86,6 +87,10 @@ export type RegisterSaleInput = {
     unitPrice?: string;
   }>;
   payments: RegisterPaymentInput[];
+  surcharge?: {
+    type: string;
+    value: string;
+  } | null;
   customerId?: string | null;
   fiscalInvoiceRequested?: boolean | null;
 };
@@ -97,6 +102,13 @@ export type RegisterSaleResult = {
   internalSaleNumber?: string;
   fiscalStatus?: FiscalStatus;
   requiresFiscalInvoice?: boolean;
+  totalAmount?: string;
+  cashChangeAmount?: string;
+  subtotalAmount?: string;
+  generalSurchargeType?: string | null;
+  generalSurchargeValue?: string | null;
+  generalSurchargeAmount?: string;
+  financingSurchargeAmount?: string;
   suggestedProducts?: CashProductResult[];
 };
 
@@ -515,11 +527,13 @@ export async function confirmRegisterSaleAction(
       unitPrice: item.unitPrice ? parseLocalizedDecimal(item.unitPrice) : undefined
     }));
     const payments = buildPayments(input.payments);
+    const surcharge = buildSaleSurcharge(input.surcharge);
     const sale = await confirmSale({
       userId: user.id,
       customerId: input.customerId ?? null,
       items,
       payments,
+      surcharge,
       fiscalInvoiceRequested: input.fiscalInvoiceRequested ?? null
     });
 
@@ -545,6 +559,23 @@ export async function confirmRegisterSaleAction(
       internalSaleNumber: formatInternalSaleNumber(sale),
       fiscalStatus: sale.fiscalStatus,
       requiresFiscalInvoice: sale.requiresFiscalInvoice,
+      totalAmount: sale.total.toString(),
+      cashChangeAmount: sale.payments
+        .filter((payment) => payment.method === PaymentMethod.CASH)
+        .reduce(
+          (sum, payment) => sum.plus(payment.changeAmount ?? 0),
+          new Prisma.Decimal(0)
+        )
+        .toDecimalPlaces(2)
+        .toString(),
+      subtotalAmount: sale.subtotal.toString(),
+      generalSurchargeType: sale.generalSurchargeType,
+      generalSurchargeValue: sale.generalSurchargeValue?.toString() ?? null,
+      generalSurchargeAmount: sale.generalSurchargeAmount.toString(),
+      financingSurchargeAmount: sale.surchargeTotal
+        .minus(sale.generalSurchargeAmount)
+        .toDecimalPlaces(2)
+        .toString(),
       suggestedProducts: await getSuggestedCashProductsAction()
     };
   } catch (error) {
@@ -740,6 +771,31 @@ async function requireCashierUser() {
   }
 
   return user;
+}
+
+function buildSaleSurcharge(input: RegisterSaleInput["surcharge"]): ConfirmSaleInput["surcharge"] {
+  if (!input) {
+    return null;
+  }
+
+  if (!isSaleSurchargeType(input.type)) {
+    throw new Error("El tipo de recargo es invalido.");
+  }
+
+  const value = parseLocalizedDecimal(input.value).toDecimalPlaces(
+    input.type === "PERCENTAGE" ? 4 : 2
+  );
+  if (value.lte(0)) {
+    throw new Error("El recargo debe ser mayor a cero.");
+  }
+  if (input.type === "PERCENTAGE" && value.gt(1000)) {
+    throw new Error("El porcentaje de recargo supera el limite permitido.");
+  }
+
+  return {
+    type: input.type,
+    value
+  };
 }
 
 function buildPayments(payments: RegisterPaymentInput[]): ConfirmSaleInput["payments"] {

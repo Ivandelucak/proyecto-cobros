@@ -61,6 +61,11 @@ export default async function VentaDetallePage({
   const paymentLabels = Object.fromEntries(
     paymentMethods.map((method) => [method.method, method.label])
   ) as Record<PaymentMethod, string>;
+  const generalSurchargeAmount = Number(sale.generalSurchargeAmount);
+  const financingSurchargeAmount = Math.max(
+    Number(sale.surchargeTotal) - generalSurchargeAmount,
+    0
+  );
 
   const isAdminOrOwner = user.role === Role.ADMIN || user.role === Role.OWNER;
   const canPrepare = isPreparableFiscalStatus(sale.fiscalStatus);
@@ -216,8 +221,18 @@ export default async function VentaDetallePage({
                 {Number(sale.discountTotal) > 0 ? (
                   <TotalRow label="Descuento" value={`-${formatARS(sale.discountTotal)}`} className="text-[var(--success)]" />
                 ) : null}
-                {Number(sale.surchargeTotal) > 0 ? (
-                  <TotalRow label="Recargo" value={formatARS(sale.surchargeTotal)} />
+                {generalSurchargeAmount > 0 ? (
+                  <TotalRow
+                    label={
+                      sale.generalSurchargeType === "PERCENTAGE"
+                        ? `Recargo ${sale.generalSurchargeValue?.toString() ?? ""}%`
+                        : "Recargo"
+                    }
+                    value={formatARS(sale.generalSurchargeAmount)}
+                  />
+                ) : null}
+                {financingSurchargeAmount > 0 ? (
+                  <TotalRow label="Recargo financiero" value={formatARS(financingSurchargeAmount)} />
                 ) : null}
                 <div className="flex justify-between pt-1.5 text-sm font-bold text-gray-950 dark:text-[#F3F7FA]">
                   <span>Total</span>

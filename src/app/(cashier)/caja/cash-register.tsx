@@ -54,7 +54,9 @@ import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import type { PrintSettingView } from "@/lib/print-settings";
 import { buildTicketHref } from "@/lib/return-to";
 import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
+import { saleSurchargeLabel, type SaleSurchargeInput } from "@/lib/sale-surcharge";
 import { cn } from "@/lib/ui";
+import { SaleSurchargeDialog } from "./sale-surcharge-dialog";
 import {
   associateMercadoPagoPaymentAction,
   associateMercadoPagoRecentPaymentAction,
@@ -112,6 +114,12 @@ type SaleSuccess = {
   saleId: string;
   internalSaleNumber: string;
   totalAmount: number;
+  cashChangeAmount: number;
+  subtotalAmount: number;
+  generalSurchargeType: SaleSurchargeInput["type"] | null;
+  generalSurchargeValue: string | null;
+  generalSurchargeAmount: number;
+  financingSurchargeAmount: number;
   paymentLabel: string;
   fiscalStatus?: string;
   requiresFiscalInvoice?: boolean;
@@ -240,6 +248,8 @@ export function CashRegister({
   const [offlineReceipt, setOfflineReceipt] = useState<OfflineCashSale | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isSurchargeModalOpen, setIsSurchargeModalOpen] = useState(false);
+  const [saleSurcharge, setSaleSurcharge] = useState<SaleSurchargeInput | null>(null);
   const [manualItemName, setManualItemName] = useState("");
   const [manualItemPrice, setManualItemPrice] = useState("");
   const [manualItemQuantity, setManualItemQuantity] = useState("1");
@@ -365,6 +375,10 @@ export function CashRegister({
       ),
     [cart]
   );
+  const generalSurchargeAmount = useMemo(
+    () => calculateSaleSurchargeAmount(subtotal, saleSurcharge),
+    [saleSurcharge, subtotal]
+  );
   const creditPayment = payments.find((payment) => payment.method === "CREDIT");
   const activeCreditInstallments =
     creditPayment?.installments ?? (paymentMethod === "CREDIT" ? installments : null);
@@ -376,8 +390,11 @@ export function CashRegister({
         null;
   const effectiveInstallments = selectedCreditOption?.installments ?? installments;
   const surchargeRate = safeNumber(selectedCreditOption?.surchargeRate ?? 0);
-  const surchargeAmount =
-    activeCreditInstallments === null ? 0 : roundMoney((subtotal * surchargeRate) / 100);
+  const creditSurchargeAmount =
+    activeCreditInstallments === null
+      ? 0
+      : roundMoney(((subtotal + generalSurchargeAmount) * surchargeRate) / 100);
+  const surchargeAmount = roundMoney(generalSurchargeAmount + creditSurchargeAmount);
   const total = roundMoney(subtotal + surchargeAmount);
   const totalPaid = roundMoney(
     payments.reduce((sum, payment) => sum + safeNumber(payment.amount), 0)
@@ -389,6 +406,15 @@ export function CashRegister({
   const displayTotalPaid = saleSuccess ? saleSuccess.totalAmount : totalPaid;
   const displayRemaining = saleSuccess ? 0 : remaining;
   const displayOverpaid = saleSuccess ? 0 : overpaid;
+  const displaySubtotal = saleSuccess?.subtotalAmount ?? subtotal;
+  const displayGeneralSurchargeAmount =
+    saleSuccess?.generalSurchargeAmount ?? generalSurchargeAmount;
+  const displayFinancingSurchargeAmount =
+    saleSuccess?.financingSurchargeAmount ?? creditSurchargeAmount;
+  const displayGeneralSurchargeType = saleSuccess?.generalSurchargeType ?? saleSurcharge?.type;
+  const displayGeneralSurchargeValue = saleSuccess?.generalSurchargeValue ?? saleSurcharge?.value;
+  const hasDisplayedSurcharge =
+    displayGeneralSurchargeAmount > 0 || displayFinancingSurchargeAmount > 0;
   const paymentsMatch = cart.length > 0 && Math.abs(balance) < 0.01;
   const isOfflineCashMode = offlineConnection === "OFFLINE";
   const canOperateOffline =
@@ -1197,6 +1223,9 @@ export function CashRegister({
   function removeItem(productId: string) {
     setSaleSuccess(null);
     setCart((currentCart) => currentCart.filter((item) => item.id !== productId));
+    if (cart.length === 1 && cart[0]?.id === productId) {
+      setSaleSurcharge(null);
+    }
   }
 
   function handleAddManualItem(event: any) {
@@ -1769,6 +1798,8 @@ export function CashRegister({
     setPaymentAmount("");
     setPaymentReference("");
     setCashReceived("");
+    setSaleSurcharge(null);
+    setIsSurchargeModalOpen(false);
     setInstallments(defaultInstallments);
     setPaymentMethod(defaultPaymentMethod);
     setPendingFiscalPayments(null);
@@ -1874,6 +1905,14 @@ export function CashRegister({
       cashSessionId: offlineContext.cashSessionId,
       occurredAt,
       total: roundMoney(total).toFixed(2),
+      subtotalBeforeSurcharge: roundMoney(subtotal).toFixed(2),
+      surcharge: saleSurcharge
+        ? {
+            type: saleSurcharge.type,
+            value: saleSurcharge.value,
+            amount: roundMoney(generalSurchargeAmount).toFixed(2)
+          }
+        : null,
       cashReceived: received.toFixed(2),
       changeAmount: roundMoney(received - total).toFixed(2),
       items: cart.map((item) => {
@@ -1933,6 +1972,8 @@ export function CashRegister({
       setPayments([]);
       setCashReceived("");
       setPaymentAmount("");
+      setSaleSurcharge(null);
+      setIsSurchargeModalOpen(false);
       setMessage({
         text: "Venta guardada en este equipo. Se sincronizara automaticamente.",
         tone: "ok"
@@ -1973,6 +2014,7 @@ export function CashRegister({
           providerStatus: payment.providerStatus,
           paymentAttemptId: payment.paymentAttemptId
         })),
+        surcharge: saleSurcharge,
         customerId: accountPayment?.customerId ?? null,
         fiscalInvoiceRequested: requestedFiscalInvoice
       });
@@ -1991,8 +2033,17 @@ export function CashRegister({
       setSaleSuccess({
         saleId: confirmedSale.saleId,
         internalSaleNumber: confirmedSale.internalSaleNumber,
-        totalAmount: roundMoney(
-          finalPayments.reduce((sum, payment) => sum + safeNumber(payment.amount), 0)
+        totalAmount: safeNumber(result.totalAmount ?? total),
+        cashChangeAmount: safeNumber(result.cashChangeAmount ?? 0),
+        subtotalAmount: safeNumber(result.subtotalAmount ?? subtotal),
+        generalSurchargeType:
+          result.generalSurchargeType === "PERCENTAGE" || result.generalSurchargeType === "FIXED"
+            ? result.generalSurchargeType
+            : null,
+        generalSurchargeValue: result.generalSurchargeValue ?? null,
+        generalSurchargeAmount: safeNumber(result.generalSurchargeAmount ?? generalSurchargeAmount),
+        financingSurchargeAmount: safeNumber(
+          result.financingSurchargeAmount ?? creditSurchargeAmount
         ),
         paymentLabel: formatSalePaymentSummary(finalPayments, paymentLabels),
         fiscalStatus: confirmedSale.fiscalStatus,
@@ -2003,6 +2054,8 @@ export function CashRegister({
       setPaymentAmount("");
       setPaymentReference("");
       setCashReceived("");
+      setSaleSurcharge(null);
+      setIsSurchargeModalOpen(false);
       setInstallments(defaultInstallments);
       setPaymentMethod(defaultPaymentMethod);
       setCustomerQuery("");
@@ -2249,7 +2302,7 @@ export function CashRegister({
       <div className="cash-main-column grid min-h-0 min-w-0 gap-2.5 2xl:gap-3">
         <Card className="cash-search-card pos-accent-line min-h-0 overflow-y-auto p-2.5 pl-4 shadow-lg shadow-[#5B6B79]/10 ring-1 ring-white/70 dark:shadow-none dark:ring-0 2xl:p-3 2xl:pl-5">
           <form
-            className="input-base flex flex-col gap-2 rounded-lg p-1.5 shadow-inner shadow-[#5B6B79]/10 dark:shadow-none sm:flex-row sm:gap-2"
+            className="input-base grid grid-cols-1 gap-2 rounded-lg p-1.5 shadow-inner shadow-[#5B6B79]/10 dark:shadow-none sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
             onSubmit={(event) => {
               event.preventDefault();
               handleSearchSubmit();
@@ -2279,6 +2332,19 @@ export function CashRegister({
               onClick={() => setIsManualModalOpen(true)}
             >
               Ítem manual
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={cart.length === 0}
+              className="btn-secondary h-10 shrink-0 px-4 2xl:h-11 2xl:px-5"
+              onClick={() => setIsSurchargeModalOpen(true)}
+            >
+              {saleSurcharge
+                ? saleSurcharge.type === "PERCENTAGE"
+                  ? saleSurchargeLabel(saleSurcharge.type, saleSurcharge.value)
+                  : `Recargo ${formatARS(saleSurcharge.value)}`
+                : "Recargo"}
             </Button>
           </form>
 
@@ -2458,10 +2524,21 @@ export function CashRegister({
             <p className="cash-total mt-0.5 text-[2.55rem] font-black leading-none tracking-tight text-[var(--text-primary)] 2xl:text-5xl">
               {formatARS(displayTotal)}
             </p>
-            {surchargeAmount > 0 ? (
-              <p className="mt-1.5 text-xs text-[var(--text-secondary)]">
-                Subtotal {formatARS(subtotal)} - Recargo {formatARS(surchargeAmount)}
-              </p>
+            {hasDisplayedSurcharge ? (
+              <div className="mt-1.5 space-y-0.5 text-xs text-[var(--text-secondary)]">
+                <p>Subtotal {formatARS(displaySubtotal)}</p>
+                {displayGeneralSurchargeAmount > 0 ? (
+                  <p>
+                    {displayGeneralSurchargeType === "PERCENTAGE" && displayGeneralSurchargeValue
+                      ? `Recargo ${displayGeneralSurchargeValue}%`
+                      : "Recargo"}{" "}
+                    {formatARS(displayGeneralSurchargeAmount)}
+                  </p>
+                ) : null}
+                {displayFinancingSurchargeAmount > 0 ? (
+                  <p>Recargo por cuotas {formatARS(displayFinancingSurchargeAmount)}</p>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
@@ -2473,6 +2550,15 @@ export function CashRegister({
               tone={displayOverpaid > 0 ? "error" : displayRemaining === 0 ? "ok" : "default"}
             />
           </div>
+
+          {saleSuccess && saleSuccess.cashChangeAmount > 0 ? (
+            <div className="badge-success mt-2 rounded-lg px-3 py-2 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em]">Vuelto</p>
+              <p className="mt-0.5 text-xl font-black leading-none">
+                {formatARS(saleSuccess.cashChangeAmount)}
+              </p>
+            </div>
+          ) : null}
 
           <div
             className={cn(
@@ -2687,7 +2773,7 @@ export function CashRegister({
                       Recargo
                     </span>
                     <span className="font-black text-[var(--text-primary)]">
-                      {formatARS(surchargeAmount)}
+                      {formatARS(creditSurchargeAmount)}
                     </span>
                   </div>
                   <div className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-2 py-1">
@@ -3024,6 +3110,14 @@ export function CashRegister({
               <p className="mt-1 text-[var(--text-secondary)]">
                 Total {formatARS(offlineReceipt.total)} - Efectivo {formatARS(offlineReceipt.cashReceived)}
               </p>
+              {offlineReceipt.surcharge ? (
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  {offlineReceipt.surcharge.type === "PERCENTAGE"
+                    ? `Recargo ${offlineReceipt.surcharge.value}%`
+                    : "Recargo"}{" "}
+                  {formatARS(offlineReceipt.surcharge.amount)}
+                </p>
+              ) : null}
             </div>
             <div className="badge-warning rounded-lg px-3 py-2 text-xs font-semibold">
               COMPROBANTE INTERNO. VENTA PENDIENTE DE SINCRONIZACION. NO VALIDO COMO COMPROBANTE FISCAL.
@@ -3042,6 +3136,22 @@ export function CashRegister({
         onRefresh={() => refreshMercadoPagoAttempt(true)}
         onCancel={cancelMercadoPagoQrAttempt}
         onGenerateNew={generateMercadoPagoQr}
+      />
+      <SaleSurchargeDialog
+        open={isSurchargeModalOpen}
+        subtotal={subtotal}
+        initialValue={saleSurcharge}
+        onClose={() => setIsSurchargeModalOpen(false)}
+        onApply={(surcharge) => {
+          setSaleSurcharge(surcharge);
+          setIsSurchargeModalOpen(false);
+          setMessage(null);
+        }}
+        onRemove={() => {
+          setSaleSurcharge(null);
+          setIsSurchargeModalOpen(false);
+          setMessage(null);
+        }}
       />
       <AppModal
         open={isManualModalOpen}
@@ -4312,6 +4422,22 @@ function SaleConfirmedPanel({
       </p>
 
       <div className="mt-3 grid gap-2">
+        {saleSuccess.generalSurchargeAmount > 0 ? (
+          <PaymentDataLine
+            label={
+              saleSuccess.generalSurchargeType === "PERCENTAGE" && saleSuccess.generalSurchargeValue
+                ? `Recargo ${saleSuccess.generalSurchargeValue}%`
+                : "Recargo"
+            }
+            value={formatARS(saleSuccess.generalSurchargeAmount)}
+          />
+        ) : null}
+        {saleSuccess.financingSurchargeAmount > 0 ? (
+          <PaymentDataLine
+            label="Recargo por cuotas"
+            value={formatARS(saleSuccess.financingSurchargeAmount)}
+          />
+        ) : null}
         <PaymentDataLine label="Total" value={formatARS(saleSuccess.totalAmount)} />
         <PaymentDataLine label="Pago" value={saleSuccess.paymentLabel} />
         <PaymentDataLine label="Comprobante fiscal" value={fiscalLabel} />
@@ -4828,6 +4954,24 @@ function safeNumber(value: string | number) {
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function calculateSaleSurchargeAmount(
+  subtotal: number,
+  surcharge: SaleSurchargeInput | null
+) {
+  if (!surcharge || subtotal <= 0) {
+    return 0;
+  }
+
+  const value = safeNumber(surcharge.value);
+  if (value <= 0) {
+    return 0;
+  }
+
+  return surcharge.type === "PERCENTAGE"
+    ? roundMoney((subtotal * value) / 100)
+    : roundMoney(value);
 }
 
 function roundQuantity(value: number) {

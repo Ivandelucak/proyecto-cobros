@@ -23,6 +23,7 @@ import {
 } from "@/lib/payment-settings";
 import { assertRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { isSaleSurchargeType, type SaleSurchargeType } from "@/lib/sale-surcharge";
 import { allocateNextSaleNumber, formatInternalSaleNumber } from "@/lib/sale-numbering";
 
 type SaleItemInput = {
@@ -52,6 +53,10 @@ export type ConfirmSaleInput = {
   customerId?: string | null;
   items: SaleItemInput[];
   payments: PaymentInput[];
+  surcharge?: {
+    type: SaleSurchargeType;
+    value: Prisma.Decimal.Value;
+  } | null;
   fiscalInvoiceRequested?: boolean | null;
   offline?: {
     clientOperationId: string;
@@ -287,6 +292,11 @@ export async function confirmSale(input: ConfirmSaleInput) {
 
     const saleItems = [...catalogSaleItems, ...manualSaleItems];
 
+    const generalSurcharge = calculateGeneralSurcharge(input.surcharge, subtotal);
+    const subtotalWithGeneralSurcharge = subtotal
+      .plus(generalSurcharge.amount)
+      .toDecimalPlaces(2);
+
     const [paymentMethodSettings, activeCreditPlans, fiscalSetting] = await Promise.all([
       getPaymentMethodSettings(user.businessId ?? undefined, tx),
       getActiveCreditInstallmentPlans(tx),
@@ -341,7 +351,7 @@ export async function confirmSale(input: ConfirmSaleInput) {
     );
     const { paymentRecords, surchargeTotal } = buildPaymentRecords(
       validatedPayments,
-      subtotal,
+      subtotalWithGeneralSurcharge,
       activeCreditPlans,
       approvedAttemptsById
     );
@@ -357,7 +367,8 @@ export async function confirmSale(input: ConfirmSaleInput) {
           setting: fiscalSetting,
           cashierRequestedInvoice: input.fiscalInvoiceRequested ?? null
         });
-    const total = subtotal.plus(surchargeTotal).minus(discountTotal).toDecimalPlaces(2);
+    const totalSurcharge = generalSurcharge.amount.plus(surchargeTotal).toDecimalPlaces(2);
+    const total = subtotal.plus(totalSurcharge).minus(discountTotal).toDecimalPlaces(2);
     const currentAccountTotal = paymentRecords
       .filter((payment) => payment.method === PaymentMethod.CURRENT_ACCOUNT)
       .reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0))
@@ -406,7 +417,10 @@ export async function confirmSale(input: ConfirmSaleInput) {
         subtotal,
         total,
         discountTotal,
-        surchargeTotal,
+        surchargeTotal: totalSurcharge,
+        generalSurchargeType: generalSurcharge.type,
+        generalSurchargeValue: generalSurcharge.value,
+        generalSurchargeAmount: generalSurcharge.amount,
         status: SaleStatus.PAID,
         customerId,
         cashSessionId: cashSession?.id ?? null,
@@ -615,6 +629,53 @@ function isUniqueClientOperationError(error: unknown) {
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002"
   );
+}
+
+function calculateGeneralSurcharge(
+  input: ConfirmSaleInput["surcharge"],
+  subtotal: Prisma.Decimal
+) {
+  if (!input) {
+    return {
+      type: null,
+      value: null,
+      amount: new Prisma.Decimal(0)
+    };
+  }
+
+  if (!isSaleSurchargeType(input.type)) {
+    throw new Error("El tipo de recargo es invalido.");
+  }
+
+  let value: Prisma.Decimal;
+  try {
+    value = new Prisma.Decimal(input.value);
+  } catch {
+    throw new Error("El valor del recargo es invalido.");
+  }
+
+  if (!value.isFinite() || value.lte(0)) {
+    throw new Error("El recargo debe ser mayor a cero.");
+  }
+
+  if (input.type === "PERCENTAGE" && value.gt(1000)) {
+    throw new Error("El porcentaje de recargo supera el limite permitido.");
+  }
+
+  const normalizedValue = value.toDecimalPlaces(input.type === "PERCENTAGE" ? 4 : 2);
+  const amount = input.type === "PERCENTAGE"
+    ? subtotal.mul(normalizedValue).div(100).toDecimalPlaces(2)
+    : normalizedValue.toDecimalPlaces(2);
+
+  if (amount.lte(0)) {
+    throw new Error("El recargo efectivo debe ser mayor a cero.");
+  }
+
+  return {
+    type: input.type,
+    value: normalizedValue,
+    amount
+  };
 }
 
 function buildPaymentRecords(
