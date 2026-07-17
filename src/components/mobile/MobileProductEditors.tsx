@@ -5,6 +5,11 @@ import Link from "next/link";
 import { adjustMobileProductStockAction, updateMobileProductPricingAction } from "@/app/(mobile)/m/productos/actions";
 import { Button } from "@/components/ui/button";
 import { formatARS } from "@/lib/money";
+import {
+  calculateSalePriceIncrease,
+  formatEditableMoney,
+  parseEditableDecimal
+} from "@/lib/product-price-adjustment";
 import { MobileIcon } from "./MobileIcon";
 
 export type MobileEditableProduct = {
@@ -144,6 +149,7 @@ export function MobileProductPricingDialog({
 }) {
   const priceRef = useRef<HTMLInputElement>(null);
   const [cost, setCost] = useState("");
+  const [originalSalePrice, setOriginalSalePrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [increase, setIncrease] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +162,7 @@ export function MobileProductPricingDialog({
     if (!open || !productId) return;
     const timer = window.setTimeout(() => {
       setCost(productCost);
+      setOriginalSalePrice(productSalePrice);
       setSalePrice(productSalePrice);
       setIncrease("");
       setError(null);
@@ -169,11 +176,9 @@ export function MobileProductPricingDialog({
     onClose();
     window.setTimeout(() => restoreFocusRef?.current?.focus(), 0);
   };
-  const originalPrice = product ? parseMobileNumber(product.salePrice) : null;
-  const increaseValue = parseMobileNumber(increase);
-  const calculatedPrice = originalPrice !== null && increaseValue !== null && increaseValue >= 0
-    ? roundMoney(originalPrice * (1 + increaseValue / 100))
-    : null;
+  const calculatedPrice = calculateSalePriceIncrease(originalSalePrice, increase);
+  const pricePreview = calculatedPrice ?? parseEditableDecimal(salePrice);
+  const hasInvalidIncrease = Boolean(increase.trim()) && calculatedPrice === null;
 
   return (
     <MobileBottomSheet open={open && Boolean(product)} title="Editar precio y costo" description={product?.name} onClose={close} focusCloseOnOpen={false}>
@@ -193,7 +198,10 @@ export function MobileProductPricingDialog({
           <input
             ref={priceRef}
             value={salePrice}
-            onChange={(event) => { setSalePrice(event.target.value); setIncrease(""); }}
+            onChange={(event) => {
+              setSalePrice(event.target.value);
+              setIncrease("");
+            }}
             inputMode="decimal"
             className="mt-1.5 min-h-12 w-full rounded-lg border border-[#344657] bg-[#0B1015] px-3 text-base font-bold text-[#F3F7FA] outline-none focus:border-[#4C7FA3] focus:ring-2 focus:ring-[#4C7FA3]/25"
           />
@@ -206,9 +214,18 @@ export function MobileProductPricingDialog({
               onChange={(event) => {
                 const nextIncrease = event.target.value;
                 setIncrease(nextIncrease);
-                const percent = parseMobileNumber(nextIncrease);
-                if (originalPrice !== null && percent !== null && percent >= 0) {
-                  setSalePrice(formatInputMoney(roundMoney(originalPrice * (1 + percent / 100))));
+                if (!nextIncrease.trim()) {
+                  setSalePrice(originalSalePrice);
+                  return;
+                }
+
+                const calculated = calculateSalePriceIncrease(originalSalePrice, nextIncrease);
+                if (calculated !== null) {
+                  setSalePrice(
+                    parseEditableDecimal(nextIncrease) === 0
+                      ? originalSalePrice
+                      : formatEditableMoney(calculated)
+                  );
                 }
               }}
               inputMode="decimal"
@@ -217,11 +234,15 @@ export function MobileProductPricingDialog({
             />
             <span className="grid w-11 place-items-center border-l border-[#344657] text-sm font-black text-[#A9B6C2]">%</span>
           </div>
-          <p className="mt-1.5 text-xs text-[#7F8D9A]">Se calcula sobre el precio original al abrir esta ventana.</p>
+          <p className="mt-1.5 text-xs text-[#7F8D9A]">
+            {hasInvalidIncrease
+              ? "Ingresá un porcentaje válido mayor o igual a cero."
+              : "Se calcula sobre el precio original al abrir esta ventana."}
+          </p>
         </label>
         <div className="rounded-lg border border-[#2F8B64]/45 bg-[#123025]/45 p-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-[#8CB7A0]">Nuevo precio calculado</p>
-          <p className="mt-1 text-xl font-black text-[#F3F7FA]">{calculatedPrice === null ? formatARS(salePrice || 0) : formatARS(calculatedPrice)}</p>
+          <p className="mt-1 text-xl font-black text-[#F3F7FA]">{formatARS(pricePreview ?? 0)}</p>
         </div>
         {error ? <p role="alert" className="rounded-lg border border-[#E16060]/50 bg-[#4A171B]/50 px-3 py-2 text-sm text-[#FFD7D7]">{error}</p> : null}
         <div className="grid grid-cols-2 gap-2 pt-1">
@@ -338,14 +359,6 @@ function parseMobileNumber(value: string) {
     : clean.replace(",", ".");
   const number = Number(normalized);
   return Number.isFinite(number) ? number : null;
-}
-
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function formatInputMoney(value: number) {
-  return value.toFixed(2);
 }
 
 function formatQuantity(value: number) {

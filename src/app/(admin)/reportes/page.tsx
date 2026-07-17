@@ -33,7 +33,14 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
   const user = await requireOperationalUser();
 
   const params = await searchParams;
-  const filters = buildReportFilters(params);
+  let filters;
+  let filterError: string | null = null;
+  try {
+    filters = buildReportFilters(params);
+  } catch (error) {
+    filters = buildReportFilters({});
+    filterError = error instanceof Error ? error.message : "No se pudo aplicar el filtro de fechas.";
+  }
   const data = await getReportDashboardData(filters, user.businessId!);
   const executive = data.executive;
   const paymentLabels = data.paymentLabels;
@@ -71,6 +78,14 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
             Filtrar
           </Button>
         </form>
+        {filterError ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-md border border-[color:var(--danger)] bg-[color:color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 py-2 text-sm text-[var(--danger)]"
+          >
+            {filterError} Se muestra el período predeterminado.
+          </p>
+        ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-[#7F8D9A]">
           <span>Periodo: {data.periodLabel}</span>
           <span className="hidden h-1 w-1 rounded-full bg-current sm:inline-block" />

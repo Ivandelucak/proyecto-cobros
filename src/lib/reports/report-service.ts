@@ -6,6 +6,15 @@ import {
   SaleStatus,
   type UnitType
 } from "@prisma/client";
+import {
+  addArgentinaCalendarDays,
+  countArgentinaCalendarDays,
+  formatArgentinaDateInput,
+  getArgentinaDateRange,
+  isArgentinaDateInput,
+  startOfArgentinaMonth,
+  startOfArgentinaWeek
+} from "@/lib/date-format";
 import { fallbackPaymentLabels } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
@@ -189,13 +198,15 @@ export function buildReportFilters(input: {
   to?: string;
   method?: string;
 }): ReportFilters {
-  const today = formatDateInput(new Date());
-  let from = isDateInput(input.from) ? input.from : formatDateInput(daysAgo(7));
-  let to = isDateInput(input.to) ? input.to : today;
+  const today = formatArgentinaDateInput();
+  const from = input.from ?? addArgentinaCalendarDays(today, -7);
+  const to = input.to ?? today;
 
-  if (from > to) {
-    [from, to] = [to, from];
+  if (!isArgentinaDateInput(from) || !isArgentinaDateInput(to)) {
+    throw new Error("Ingresá fechas válidas en formato AAAA-MM-DD.");
   }
+
+  getArgentinaDateRange(from, to);
 
   return {
     from,
@@ -205,11 +216,11 @@ export function buildReportFilters(input: {
 }
 
 export function buildReportQuickRanges(method: PaymentMethod | null) {
-  const today = formatDateInput(new Date());
+  const today = formatArgentinaDateInput();
   const ranges = [
     { label: "Hoy", from: today, to: today },
-    { label: "Esta semana", from: formatDateInput(startOfCurrentWeek()), to: today },
-    { label: "Este mes", from: formatDateInput(startOfCurrentMonth()), to: today }
+    { label: "Esta semana", from: startOfArgentinaWeek(today), to: today },
+    { label: "Este mes", from: startOfArgentinaMonth(today), to: today }
   ];
 
   return ranges.map((range) => ({
@@ -281,7 +292,7 @@ export async function getReportDashboardData(
         user: { select: { id: true, name: true } },
         customer: { select: { name: true, businessName: true } }
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { occurredAt: "desc" },
       take: 10
     }),
     prisma.product.findMany({
@@ -291,12 +302,12 @@ export async function getReportDashboardData(
       take: 200
     }),
     prisma.sale.findMany({
-      where: { createdAt: { gte: period.start, lt: period.end }, businessId },
+      where: saleWhere,
       include: {
         user: { select: { name: true } },
         customer: { select: { name: true, businessName: true } }
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { occurredAt: "desc" },
       take: 10
     }),
     prisma.purchase.findMany({
@@ -400,7 +411,7 @@ export async function getReportDashboardData(
     internalSaleNumber: formatInternalSaleNumber(sale),
     total: sale.total,
     status: sale.status,
-    createdAt: sale.createdAt,
+    createdAt: sale.occurredAt ?? sale.createdAt,
     userName: sale.user.name,
     customerName: sale.customer?.businessName ?? sale.customer?.name ?? "Consumidor final"
   }));
@@ -409,7 +420,7 @@ export async function getReportDashboardData(
     internalSaleNumber: formatInternalSaleNumber(sale),
     total: sale.total,
     status: sale.status,
-    createdAt: sale.createdAt,
+    createdAt: sale.occurredAt ?? sale.createdAt,
     userName: sale.user.name,
     customerName: sale.customer?.businessName ?? sale.customer?.name ?? "Consumidor final"
   }));
@@ -429,8 +440,8 @@ export async function getReportDashboardData(
   return {
     filters,
     quickRanges: buildReportQuickRanges(filters.method),
-    periodLabel: formatPeriodLabel(period.start, period.end),
-    previousPeriodLabel: formatPeriodLabel(previousPeriod.start, previousPeriod.end),
+    periodLabel: formatPeriodLabel(period.from, period.to),
+    previousPeriodLabel: formatPeriodLabel(previousPeriod.from, previousPeriod.to),
     executive: {
       netSold: metric(currentMetrics.totalSold, previousMetrics.totalSold),
       grossSold,
@@ -497,7 +508,7 @@ export async function getReportDashboardData(
 }
 
 function buildSaleWhere(
-  period: { start: Date; end: Date },
+  period: ReportPeriod,
   method: PaymentMethod | null,
   status: SaleStatus,
   businessId: string
@@ -505,7 +516,7 @@ function buildSaleWhere(
   return {
     status,
     businessId,
-    createdAt: { gte: period.start, lt: period.end },
+    occurredAt: { gte: period.start, lt: period.end },
     ...(method ? { payments: { some: { method } } } : {})
   };
 }
@@ -590,25 +601,25 @@ function buildPaymentBreakdown(
 }
 
 function buildDailySales(
-  sales: Array<{ createdAt: Date; total: Prisma.Decimal }>,
-  period: { start: Date; end: Date }
+  sales: Array<{ createdAt: Date; occurredAt: Date | null; total: Prisma.Decimal }>,
+  period: ReportPeriod
 ) {
   const days = new Map<string, DailySalesItem>();
-  const cursor = new Date(period.start);
+  let cursor = period.from;
 
-  while (cursor < period.end) {
-    const date = formatDateInput(cursor);
+  while (cursor <= period.to) {
+    const date = cursor;
     days.set(date, {
       date,
-      label: formatShortDate(cursor),
+      label: formatShortDate(date),
       total: ZERO,
       count: 0
     });
-    cursor.setDate(cursor.getDate() + 1);
+    cursor = addArgentinaCalendarDays(cursor, 1);
   }
 
   for (const sale of sales) {
-    const key = formatDateInput(sale.createdAt);
+    const key = formatArgentinaDateInput(sale.occurredAt ?? sale.createdAt);
     const current = days.get(key);
     if (!current) {
       continue;
@@ -900,20 +911,30 @@ function metric(
   };
 }
 
-function buildPeriod(filters: ReportFilters) {
-  const start = startOfDay(filters.from);
-  const end = nextDay(filters.to);
+type ReportPeriod = {
+  from: string;
+  to: string;
+  start: Date;
+  end: Date;
+};
 
-  return { start, end };
-}
-
-function buildPreviousPeriod(period: { start: Date; end: Date }) {
-  const duration = period.end.getTime() - period.start.getTime();
+function buildPeriod(filters: Pick<ReportFilters, "from" | "to">): ReportPeriod {
+  const range = getArgentinaDateRange(filters.from, filters.to);
 
   return {
-    start: new Date(period.start.getTime() - duration),
-    end: new Date(period.start)
+    from: range.from,
+    to: range.to,
+    start: range.startUtc,
+    end: range.endUtcExclusive
   };
+}
+
+function buildPreviousPeriod(period: ReportPeriod): ReportPeriod {
+  const days = countArgentinaCalendarDays(period.from, period.to);
+  const to = addArgentinaCalendarDays(period.from, -1);
+  const from = addArgentinaCalendarDays(to, -(days - 1));
+
+  return buildPeriod({ from, to });
 }
 
 function buildReportHref(filters: ReportFilters) {
@@ -965,58 +986,11 @@ function formatPlainMoney(value: Prisma.Decimal) {
   }).format(value.toNumber());
 }
 
-function formatPeriodLabel(start: Date, endExclusive: Date) {
-  const end = new Date(endExclusive);
-  end.setDate(end.getDate() - 1);
-
-  return `${formatShortDate(start)} - ${formatShortDate(end)}`;
+function formatPeriodLabel(from: string, to: string) {
+  return `${formatShortDate(from)} - ${formatShortDate(to)}`;
 }
 
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit"
-  }).format(date);
-}
-
-function isDateInput(value: string | undefined): value is string {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
-}
-
-function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
-
-function startOfCurrentWeek() {
-  const date = new Date();
-  const day = date.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  date.setDate(date.getDate() - diff);
-  return date;
-}
-
-function startOfCurrentMonth() {
-  const date = new Date();
-  date.setDate(1);
-  return date;
-}
-
-function formatDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function startOfDay(value: string) {
-  return new Date(`${value}T00:00:00`);
-}
-
-function nextDay(value: string) {
-  const date = startOfDay(value);
-  date.setDate(date.getDate() + 1);
-  return date;
+function formatShortDate(value: string) {
+  const [, month, day] = value.split("-");
+  return `${day}/${month}`;
 }

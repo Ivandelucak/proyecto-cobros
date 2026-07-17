@@ -7,6 +7,12 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
+import {
+  calculateSalePriceIncrease,
+  formatEditableMoney,
+  parseEditableDecimal
+} from "@/lib/product-price-adjustment";
+import { formatARS } from "@/lib/money";
 import { checkProductBarcodeAction, type ProductFormState } from "./actions";
 
 type CategoryOption = {
@@ -86,13 +92,42 @@ export function ProductForm({
     Boolean(initialValues?.allowsDecimalQuantity)
   );
   const [fiscalTax, setFiscalTax] = useState(productFiscalTaxValue(initialValues));
+  const [originalSalePrice] = useState(() => initialValues?.salePrice ?? "0");
+  const [salePrice, setSalePrice] = useState(() => initialValues?.salePrice ?? "0");
+  const [increasePercentage, setIncreasePercentage] = useState("");
   const isNewProduct = !initialValues;
+  const calculatedSalePrice = calculateSalePriceIncrease(originalSalePrice, increasePercentage);
+  const pricePreview = calculatedSalePrice ?? parseEditableDecimal(salePrice);
+  const hasInvalidIncrease = Boolean(increasePercentage.trim()) && calculatedSalePrice === null;
 
   function handleUnitChange(value: string) {
     setUnitType(value);
     if (decimalSuggestedUnits.has(value)) {
       setAllowsDecimal(true);
     }
+  }
+
+  function handleIncreasePercentageChange(value: string) {
+    setIncreasePercentage(value);
+
+    if (!value.trim()) {
+      setSalePrice(originalSalePrice);
+      return;
+    }
+
+    const calculated = calculateSalePriceIncrease(originalSalePrice, value);
+    if (calculated === null) {
+      return;
+    }
+
+    setSalePrice(
+      parseEditableDecimal(value) === 0 ? originalSalePrice : formatEditableMoney(calculated)
+    );
+  }
+
+  function handleSalePriceChange(value: string) {
+    setSalePrice(value);
+    setIncreasePercentage("");
   }
 
   function verifyBarcode(value: string) {
@@ -225,13 +260,43 @@ export function ProductForm({
             <Input
               name="salePrice"
               inputMode="decimal"
-              defaultValue={initialValues?.salePrice ?? "0"}
+              value={salePrice}
+              onChange={(event) => handleSalePriceChange(event.target.value)}
               required
             />
           </Field>
           <Field label="Costo">
             <Input name="cost" inputMode="decimal" defaultValue={initialValues?.cost ?? ""} />
           </Field>
+          {!isNewProduct ? (
+            <>
+              <Field label="Aumento porcentual">
+                <div className="flex overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[color:var(--primary-soft)] dark:border-[#344457] dark:bg-[#0B1015]">
+                  <Input
+                    value={increasePercentage}
+                    onChange={(event) => handleIncreasePercentageChange(event.target.value)}
+                    inputMode="decimal"
+                    aria-describedby="sale-price-increase-help"
+                    className="min-w-0 border-0 bg-transparent shadow-none focus:ring-0 dark:bg-transparent"
+                  />
+                  <span className="grid w-11 place-items-center border-l border-gray-300 text-sm font-bold text-gray-500 dark:border-[#344457] dark:text-[#A9B6C2]">
+                    %
+                  </span>
+                </div>
+                <span id="sale-price-increase-help" className="block text-xs text-gray-500 dark:text-[#7F8D9A]">
+                  {hasInvalidIncrease
+                    ? "Ingresá un porcentaje válido mayor o igual a cero."
+                    : "Se calcula sobre el precio original al abrir el formulario."}
+                </span>
+              </Field>
+              <div className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-3">
+                <p className="text-xs font-medium text-[var(--text-secondary)]">Nuevo precio calculado</p>
+                <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">
+                  {pricePreview === null ? "-" : formatARS(pricePreview)}
+                </p>
+              </div>
+            </>
+          ) : null}
           <Field label="Stock">
             <Input
               name="stock"
