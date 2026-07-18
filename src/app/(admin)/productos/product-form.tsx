@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
 import {
+  calculatePriceFromCostProfit,
   calculateSalePriceIncrease,
   formatEditableMoney,
   parseEditableDecimal
@@ -48,6 +49,8 @@ type ProductFormProps = {
 };
 
 const initialState: ProductFormState = {};
+
+type PricingMode = "manual" | "sale-price-increase" | "cost-profit";
 
 const units = [
   ["UNIT", "Unidad"],
@@ -94,11 +97,29 @@ export function ProductForm({
   const [fiscalTax, setFiscalTax] = useState(productFiscalTaxValue(initialValues));
   const [originalSalePrice] = useState(() => initialValues?.salePrice ?? "0");
   const [salePrice, setSalePrice] = useState(() => initialValues?.salePrice ?? "0");
+  const [cost, setCost] = useState(() => initialValues?.cost ?? "");
   const [increasePercentage, setIncreasePercentage] = useState("");
+  const [costProfitPercentage, setCostProfitPercentage] = useState("");
+  const [pricingMode, setPricingMode] = useState<PricingMode>("manual");
   const isNewProduct = !initialValues;
   const calculatedSalePrice = calculateSalePriceIncrease(originalSalePrice, increasePercentage);
-  const pricePreview = calculatedSalePrice ?? parseEditableDecimal(salePrice);
-  const hasInvalidIncrease = Boolean(increasePercentage.trim()) && calculatedSalePrice === null;
+  const calculatedCostProfitPrice = calculatePriceFromCostProfit(cost, costProfitPercentage);
+  const activeCalculatedPrice =
+    pricingMode === "sale-price-increase"
+      ? calculatedSalePrice
+      : pricingMode === "cost-profit"
+        ? calculatedCostProfitPrice
+        : null;
+  const pricePreview = activeCalculatedPrice ?? parseEditableDecimal(salePrice);
+  const hasInvalidIncrease =
+    pricingMode === "sale-price-increase" &&
+    Boolean(increasePercentage.trim()) &&
+    calculatedSalePrice === null;
+  const hasInvalidCostProfit =
+    pricingMode === "cost-profit" &&
+    Boolean(costProfitPercentage.trim()) &&
+    calculatedCostProfitPrice === null;
+  const currentCost = parseEditableDecimal(cost);
 
   function handleUnitChange(value: string) {
     setUnitType(value);
@@ -109,12 +130,15 @@ export function ProductForm({
 
   function handleIncreasePercentageChange(value: string) {
     setIncreasePercentage(value);
+    setCostProfitPercentage("");
 
     if (!value.trim()) {
+      setPricingMode("manual");
       setSalePrice(originalSalePrice);
       return;
     }
 
+    setPricingMode("sale-price-increase");
     const calculated = calculateSalePriceIncrease(originalSalePrice, value);
     if (calculated === null) {
       return;
@@ -127,7 +151,39 @@ export function ProductForm({
 
   function handleSalePriceChange(value: string) {
     setSalePrice(value);
+    setPricingMode("manual");
     setIncreasePercentage("");
+    setCostProfitPercentage("");
+  }
+
+  function handleCostChange(value: string) {
+    setCost(value);
+
+    if (pricingMode !== "cost-profit" || !costProfitPercentage.trim()) {
+      return;
+    }
+
+    const calculated = calculatePriceFromCostProfit(value, costProfitPercentage);
+    if (calculated !== null) {
+      setSalePrice(formatEditableMoney(calculated));
+    }
+  }
+
+  function handleCostProfitPercentageChange(value: string) {
+    setCostProfitPercentage(value);
+    setIncreasePercentage("");
+
+    if (!value.trim()) {
+      setPricingMode("manual");
+      setSalePrice(originalSalePrice);
+      return;
+    }
+
+    setPricingMode("cost-profit");
+    const calculated = calculatePriceFromCostProfit(cost, value);
+    if (calculated !== null) {
+      setSalePrice(formatEditableMoney(calculated));
+    }
   }
 
   function verifyBarcode(value: string) {
@@ -266,7 +322,12 @@ export function ProductForm({
             />
           </Field>
           <Field label="Costo">
-            <Input name="cost" inputMode="decimal" defaultValue={initialValues?.cost ?? ""} />
+            <Input
+              name="cost"
+              inputMode="decimal"
+              value={cost}
+              onChange={(event) => handleCostChange(event.target.value)}
+            />
           </Field>
           {!isNewProduct ? (
             <>
@@ -289,10 +350,40 @@ export function ProductForm({
                     : "Se calcula sobre el precio original al abrir el formulario."}
                 </span>
               </Field>
+              <Field label="Ganancia sobre costo (%)">
+                <div className="flex overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[color:var(--primary-soft)] dark:border-[#344457] dark:bg-[#0B1015]">
+                  <Input
+                    value={costProfitPercentage}
+                    onChange={(event) => handleCostProfitPercentageChange(event.target.value)}
+                    inputMode="decimal"
+                    aria-describedby="cost-profit-help"
+                    className="min-w-0 border-0 bg-transparent shadow-none focus:ring-0 dark:bg-transparent"
+                  />
+                  <span className="grid w-11 place-items-center border-l border-gray-300 text-sm font-bold text-gray-500 dark:border-[#344457] dark:text-[#A9B6C2]">
+                    %
+                  </span>
+                </div>
+                <span id="cost-profit-help" className="block text-xs text-gray-500 dark:text-[#7F8D9A]">
+                  {hasInvalidCostProfit
+                    ? currentCost === null
+                      ? "Ingresá un costo valido para calcular la ganancia."
+                      : "Ingresá una ganancia valida mayor o igual a cero."
+                    : currentCost === 0 && pricingMode === "cost-profit"
+                      ? "El costo es $0, por lo que el precio calculado tambien sera $0."
+                      : "Calcula el precio de venta sumando este porcentaje al costo actual."}
+                </span>
+              </Field>
               <div className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-3">
                 <p className="text-xs font-medium text-[var(--text-secondary)]">Nuevo precio calculado</p>
                 <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">
                   {pricePreview === null ? "-" : formatARS(pricePreview)}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  {pricingMode === "sale-price-increase"
+                    ? `Base: precio original ${formatARS(originalSalePrice)} + ${increasePercentage || "0"}%`
+                    : pricingMode === "cost-profit" && currentCost !== null
+                      ? `Base: costo ${formatARS(currentCost)} + ${costProfitPercentage || "0"}% de ganancia`
+                      : "Edicion manual"}
                 </p>
               </div>
             </>
