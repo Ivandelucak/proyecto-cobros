@@ -333,6 +333,7 @@ export async function getSuggestedCashProductsAction() {
     where: {
       businessId: user.businessId!,
       active: true,
+      quickAccess: true,
       deletedAt: null,
       ...(cashSetting.allowNegativeStock ? {} : { stock: { gt: 0 } })
     },
@@ -341,7 +342,7 @@ export async function getSuggestedCashProductsAction() {
         select: { name: true }
       }
     },
-    orderBy: [{ quickAccess: "desc" }, { updatedAt: "desc" }],
+    orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     take: cashSetting.quickProductsLimit
   });
 

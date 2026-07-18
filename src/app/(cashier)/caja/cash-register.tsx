@@ -417,6 +417,9 @@ export function CashRegister({
     displayGeneralSurchargeAmount > 0 || displayFinancingSurchargeAmount > 0;
   const paymentsMatch = cart.length > 0 && Math.abs(balance) < 0.01;
   const isOfflineCashMode = offlineConnection === "OFFLINE";
+  const quickProducts = isOfflineCashMode
+    ? offlineCatalogProducts.filter((product) => product.active && product.quickAccess)
+    : suggestedProducts;
   const canOperateOffline =
     isOfflineCashMode && offlinePrepared && Boolean(offlineContext);
   const effectiveAllowNegativeStock = allowNegativeStock || canOperateOffline;
@@ -2390,9 +2393,10 @@ export function CashRegister({
           ) : (
             <ProductGrid
               title="Productos rapidos"
-              products={suggestedProducts}
+              products={quickProducts}
               compact={compactProducts}
               offlineStock={isOfflineCashMode}
+              emptyMessage="No hay productos configurados como acceso rapido."
               onAddProduct={addProduct}
             />
           )}
@@ -4723,6 +4727,7 @@ function ProductGrid({
   products,
   compact,
   offlineStock = false,
+  emptyMessage,
   selectedIndex,
   onAddProduct
 }: {
@@ -4730,11 +4735,28 @@ function ProductGrid({
   products: CashProductResult[];
   compact: boolean;
   offlineStock?: boolean;
+  emptyMessage?: string;
   selectedIndex?: number;
   onAddProduct: (product: CashProductResult) => void;
 }) {
   if (products.length === 0) {
-    return null;
+    if (!emptyMessage) {
+      return null;
+    }
+
+    return (
+      <div className={cn("cash-product-section", compact ? "mt-2" : "mt-4")}>
+        <h2
+          className={cn(
+            "font-black uppercase tracking-[0.12em] text-[var(--text-primary)]",
+            compact ? "text-[11px]" : "text-sm"
+          )}
+        >
+          {title}
+        </h2>
+        <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">{emptyMessage}</p>
+      </div>
+    );
   }
 
   return (

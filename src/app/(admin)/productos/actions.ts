@@ -101,6 +101,7 @@ export async function createProductAction(
   }
 
   revalidatePath("/productos");
+  revalidatePath("/caja");
   redirect(submitIntent === "createAnother" ? "/productos/nuevo" : "/productos");
 }
 
@@ -159,6 +160,7 @@ export async function updateProductAction(
 
   revalidatePath("/productos");
   revalidatePath(`/productos/${productId}/editar`);
+  revalidatePath("/caja");
   redirect("/productos");
 }
 
@@ -186,6 +188,7 @@ export async function setProductActiveAction(productId: string, active: boolean)
   });
 
   revalidatePath("/productos");
+  revalidatePath("/caja");
 }
 
 export async function checkProductBarcodeAction(
