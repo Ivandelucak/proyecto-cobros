@@ -146,6 +146,28 @@ export function getArgentinaDateRange(from: string, to: string): ArgentinaDateRa
   };
 }
 
+export function getArgentinaDayRange(value: string = formatArgentinaDateInput()) {
+  return getArgentinaDateRange(value, value);
+}
+
+export function getArgentinaTodayRange() {
+  return getArgentinaDayRange();
+}
+
+export function getArgentinaYesterdayRange() {
+  return getArgentinaDayRange(addArgentinaCalendarDays(formatArgentinaDateInput(), -1));
+}
+
+export function getArgentinaLastCalendarDaysRange(days: number) {
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error("La cantidad de dias debe ser un entero positivo.");
+  }
+
+  const today = formatArgentinaDateInput();
+  // Includes today plus the preceding calendar days, never a rolling-hour window.
+  return getArgentinaDateRange(addArgentinaCalendarDays(today, -(days - 1)), today);
+}
+
 function parseArgentinaDateInput(value: string): Pick<ArgentinaCalendarParts, "year" | "month" | "day"> {
   if (!isArgentinaDateInput(value)) {
     throw new Error("Ingresá una fecha válida en formato AAAA-MM-DD.");

@@ -1,15 +1,11 @@
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
-import { ComparisonBadge } from "@/components/reports/comparison-badge";
-import type { Comparison } from "@/lib/reports/report-service";
 import { cn } from "@/lib/ui";
 
 type MetricCardProps = {
   label: string;
   value: string;
   detail?: ReactNode;
-  comparison?: Comparison;
-  comparisonContext?: ReactNode;
   tone?: "default" | "green" | "amber" | "red" | "blue";
   compact?: boolean;
 };
@@ -18,8 +14,6 @@ export function MetricCard({
   label,
   value,
   detail,
-  comparison,
-  comparisonContext,
   tone = "default",
   compact = false
 }: MetricCardProps) {
@@ -37,11 +31,11 @@ export function MetricCard({
       >
         {value}
       </p>
-      <div className="mt-3 flex min-h-5 flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-[#7F8D9A]">
-        {comparison ? <ComparisonBadge comparison={comparison} compact /> : null}
-        {comparisonContext ? <span className="min-w-0 break-words">{comparisonContext}</span> : null}
-        {detail ? <span className="min-w-0 break-words">{detail}</span> : null}
-      </div>
+      {detail ? (
+        <div className="mt-3 text-xs text-slate-500 dark:text-[#7F8D9A]">
+          <span className="min-w-0 break-words">{detail}</span>
+        </div>
+      ) : null}
     </Card>
   );
 }

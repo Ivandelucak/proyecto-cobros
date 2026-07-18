@@ -1,15 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/ui";
 
 type MobilePageHeaderProps = {
   title: string;
   subtitle?: string;
+  subtitleClassName?: string;
   fallbackUrl?: string;
   rightAction?: React.ReactNode;
 };
 
-export function MobilePageHeader({ title, subtitle, fallbackUrl = "/m", rightAction }: MobilePageHeaderProps) {
+export function MobilePageHeader({
+  title,
+  subtitle,
+  subtitleClassName,
+  fallbackUrl = "/m",
+  rightAction
+}: MobilePageHeaderProps) {
   const router = useRouter();
 
   const handleBack = () => {
@@ -36,7 +44,11 @@ export function MobilePageHeader({ title, subtitle, fallbackUrl = "/m", rightAct
         </button>
         <div className="min-w-0">
           <h1 className="truncate text-xl font-extrabold leading-tight text-[#F3F7FA]">{title}</h1>
-          {subtitle && <p className="mt-0.5 truncate text-sm text-[#A9B6C2]">{subtitle}</p>}
+          {subtitle && (
+            <p className={cn("mt-0.5 text-sm text-[#A9B6C2]", subtitleClassName ?? "truncate")}>
+              {subtitle}
+            </p>
+          )}
         </div>
       </div>
       {rightAction && <div className="shrink-0">{rightAction}</div>}

@@ -1,8 +1,13 @@
 import type { Comparison } from "@/lib/reports/report-service";
 import { cn } from "@/lib/ui";
 
+export type ComparisonPresentation = Pick<
+  Comparison,
+  "direction" | "percent" | "state" | "tone"
+>;
+
 type ComparisonBadgeProps = {
-  comparison: Comparison;
+  comparison: ComparisonPresentation;
   compact?: boolean;
 };
 
@@ -32,11 +37,11 @@ const tones = {
     "border-slate-200 bg-slate-50 text-slate-700 dark:border-[#344457] dark:bg-[#273342] dark:text-[#A9B6C2]"
 };
 
-function getTone(tone: Comparison["tone"]) {
+function getTone(tone: ComparisonPresentation["tone"]) {
   return tone;
 }
 
-function formatComparison(comparison: Comparison) {
+function formatComparison(comparison: ComparisonPresentation) {
   if (comparison.state === "no-data" || comparison.state === "no-change") {
     return "Sin variacion";
   }

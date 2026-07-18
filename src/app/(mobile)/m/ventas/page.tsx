@@ -6,7 +6,13 @@ import { requireMobileAuth } from "@/lib/admin-auth";
 import { formatARS } from "@/lib/money";
 import { formatInternalSaleNumber } from "@/lib/sale-numbering";
 import { prisma } from "@/lib/prisma";
-import { formatDateTimeStable } from "@/lib/date-format";
+import {
+  getArgentinaLastCalendarDaysRange,
+  getArgentinaTodayRange,
+  getArgentinaYesterdayRange,
+  formatDateTimeStable
+} from "@/lib/date-format";
+import { buildOperationalSaleDateWhere } from "@/lib/sale-date-range";
 
 import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
 
@@ -23,36 +29,20 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
   const businessId = user.businessId!;
 
   const params = await searchParams;
-  const period = params.period ?? "today";
+  const period = parseMobileSalesPeriod(params.period);
 
-  let dateFilter = {};
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (period === "today") {
-    const end = new Date(today);
-    end.setDate(end.getDate() + 1);
-    dateFilter = { gte: today, lt: end };
-  } else if (period === "yesterday") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 1);
-    dateFilter = { gte: start, lt: today };
-  } else if (period === "week") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 7);
-    dateFilter = { gte: start };
-  }
+  const dateRange = getSalesPeriodRange(period);
 
   const sales = await prisma.sale.findMany({
     where: {
       businessId,
-      ...(period !== "all" ? { createdAt: dateFilter } : {})
+      ...(dateRange ? buildOperationalSaleDateWhere(dateRange) : {})
     },
     include: {
       payments: { select: { id: true, amount: true, method: true } },
       user: { select: { name: true } }
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }, { id: "desc" }]
   });
 
   return (
@@ -85,7 +75,9 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
                 <div className="flex justify-between items-start">
                   <div>
                   <h4 className="font-bold text-sm text-[#F3F7FA]">Venta #{formatInternalSaleNumber(sale)}</h4>
-                    <p className="text-[11px] text-[#A9B6C2] mt-0.5">{formatDateTimeStable(sale.createdAt)}</p>
+                    <p className="text-[11px] text-[#A9B6C2] mt-0.5">
+                      {formatDateTimeStable(sale.occurredAt ?? sale.createdAt)}
+                    </p>
                   </div>
                   <div className="text-right">
                     <span className="block font-bold text-sm text-[#F3F7FA]">{formatARS(sale.total)}</span>
@@ -105,6 +97,32 @@ export default async function MobileVentasPage({ searchParams }: VentasMobilePag
       </div>
     </div>
   );
+}
+
+type MobileSalesPeriod = "today" | "yesterday" | "week" | "all";
+
+function parseMobileSalesPeriod(value: string | undefined): MobileSalesPeriod {
+  if (value === "yesterday" || value === "week" || value === "all") {
+    return value;
+  }
+
+  return "today";
+}
+
+function getSalesPeriodRange(period: MobileSalesPeriod) {
+  if (period === "today") {
+    return getArgentinaTodayRange();
+  }
+
+  if (period === "yesterday") {
+    return getArgentinaYesterdayRange();
+  }
+
+  if (period === "week") {
+    return getArgentinaLastCalendarDaysRange(7);
+  }
+
+  return null;
 }
 
 function FilterLink({ active, href, label }: { active: boolean; href: string; label: string }) {

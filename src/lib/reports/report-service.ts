@@ -19,6 +19,7 @@ import { fallbackPaymentLabels } from "@/lib/payment-display";
 import { getPaymentMethodSettings } from "@/lib/payment-settings";
 import { prisma } from "@/lib/prisma";
 import { formatInternalSaleNumber } from "@/lib/sale-numbering";
+import { buildOperationalSaleDateWhere } from "@/lib/sale-date-range";
 
 export type ReportFilters = {
   from: string;
@@ -57,6 +58,7 @@ export type ReportDashboardData = {
     cancelledSalesCount: number;
     cancellationRate: number;
     hasIncompleteCosts: boolean;
+    missingCostProductCount: number;
     averageTicket: ReportMetric;
     itemsSold: Prisma.Decimal;
     unitsSold: ReportMetric;
@@ -65,16 +67,21 @@ export type ReportDashboardData = {
     topProductByQuantity: string | null;
     topProductByProfit: string | null;
     leadingCategory: string | null;
-    currentAccountSales: Prisma.Decimal;
+    currentAccountSales: ReportMetric;
     pendingCustomerBalance: Prisma.Decimal;
     purchasesTotal: Prisma.Decimal;
+    purchasesCount: number;
     salesMinusPurchases: Prisma.Decimal;
+    lowStockCount: number;
+    outOfStockCount: number;
   };
   paymentBreakdown: PaymentBreakdownItem[];
   paymentLabels: Record<PaymentMethod, string>;
   dailySales: DailySalesItem[];
+  hourlySales: HourlySalesItem[];
   topProductsByRevenue: ProductReportItem[];
   topProductsByQuantity: ProductReportItem[];
+  topProductsByQuantityExtended: ProductReportItem[];
   topProductsByProfit: ProductReportItem[];
   lowStockProducts: LowStockProductItem[];
   categories: CategoryReportItem[];
@@ -99,6 +106,13 @@ export type PaymentBreakdownItem = {
 
 export type DailySalesItem = {
   date: string;
+  label: string;
+  total: Prisma.Decimal;
+  count: number;
+};
+
+export type HourlySalesItem = {
+  hour: number;
   label: string;
   total: Prisma.Decimal;
   count: number;
@@ -194,6 +208,12 @@ export type ReportAlert = {
 
 const ZERO = new Prisma.Decimal(0);
 
+const argentinaHourFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  hour: "2-digit",
+  hourCycle: "h23"
+});
+
 export const reportPaymentLabels: Record<PaymentMethod, string> = {
   ...fallbackPaymentLabels
 };
@@ -259,10 +279,12 @@ export async function getReportDashboardData(
     sales,
     previousSales,
     cancelledSales,
-    previousCancelledSales,
+    cancelledSummary,
+    previousCancelledSummary,
     productsForAlerts,
     recentSales,
     purchases,
+    purchaseSummary,
     customerMovements,
     accountPayments,
     paymentMethodSettings,
@@ -291,6 +313,7 @@ export async function getReportDashboardData(
     prisma.sale.findMany({
       where: previousSaleWhere,
       include: {
+        payments: { select: { method: true, amount: true } },
         items: {
           include: {
             product: { select: { cost: true } }
@@ -307,15 +330,28 @@ export async function getReportDashboardData(
       orderBy: { occurredAt: "desc" },
       take: 10
     }),
-    prisma.sale.findMany({
+    prisma.sale.aggregate({
+      where: cancelledWhere,
+      _sum: { total: true },
+      _count: true
+    }),
+    prisma.sale.aggregate({
       where: previousCancelledWhere,
-      select: { total: true }
+      _sum: { total: true }
     }),
     prisma.product.findMany({
       where: { deletedAt: null, active: true, businessId },
-      include: { category: { select: { name: true } } },
-      orderBy: { stock: "asc" },
-      take: 200
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        minStock: true,
+        cost: true,
+        taxTreatment: true,
+        unitType: true,
+        category: { select: { name: true } }
+      },
+      orderBy: { stock: "asc" }
     }),
     prisma.sale.findMany({
       where: saleWhere,
@@ -331,6 +367,11 @@ export async function getReportDashboardData(
       include: { supplier: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 25
+    }),
+    prisma.purchase.aggregate({
+      where: purchaseWhere,
+      _sum: { total: true },
+      _count: true
     }),
     prisma.customerAccountMovement.findMany({
       where: {
@@ -390,10 +431,10 @@ export async function getReportDashboardData(
 
   const currentMetrics = summarizeSales(sales);
   const previousMetrics = summarizeSales(previousSales);
-  const cancelledTotal = sum(cancelledSales.map((sale) => sale.total));
-  const previousCancelledTotal = sum(previousCancelledSales.map((sale) => sale.total));
+  const cancelledTotal = cancelledSummary._sum.total ?? ZERO;
+  const previousCancelledTotal = previousCancelledSummary._sum.total ?? ZERO;
   const paidSalesCount = sales.length;
-  const cancelledSalesCount = cancelledSales.length;
+  const cancelledSalesCount = cancelledSummary._count;
   const grossSold = currentMetrics.totalSold.plus(cancelledTotal);
   const cancellationRate =
     paidSalesCount + cancelledSalesCount > 0
@@ -406,9 +447,12 @@ export async function getReportDashboardData(
   );
   const products = buildProductReports(sales);
   const hasIncompleteCosts = products.all.some((product) => product.missingCost);
+  const missingCostProductCount = products.all.filter((product) => product.missingCost).length;
   const categories = buildCategoryReports(products, currentMetrics.totalSold);
-  const lowStockProducts = productsForAlerts
-    .filter((product) => product.stock.lte(product.minStock))
+  const lowStockCandidates = productsForAlerts.filter((product) =>
+    product.stock.lte(product.minStock)
+  );
+  const lowStockProducts = lowStockCandidates
     .slice(0, 10)
     .map((product) => ({
       id: product.id,
@@ -422,7 +466,8 @@ export async function getReportDashboardData(
   const debtors = buildDebtors(customerMovements);
   const pendingCustomerBalance = sum(debtors.map((debtor) => debtor.balance));
   const accountPaymentsTotal = sum(accountPayments.map((movement) => movement.amount));
-  const purchasesTotal = sum(purchases.map((purchase) => purchase.total));
+  const purchasesTotal = purchaseSummary._sum.total ?? ZERO;
+  const purchasesCount = purchaseSummary._count;
   const suppliers = buildSupplierReports(purchases);
   const recentSaleItems = recentSales.map((sale) => ({
     id: sale.id,
@@ -474,6 +519,7 @@ export async function getReportDashboardData(
       cancelledSalesCount,
       cancellationRate,
       hasIncompleteCosts,
+      missingCostProductCount,
       averageTicket: metric(currentMetrics.averageTicket, previousMetrics.averageTicket, "higher-is-better"),
       itemsSold: new Prisma.Decimal(
         sales.reduce((count, sale) => count + sale.items.length, 0)
@@ -484,18 +530,25 @@ export async function getReportDashboardData(
       topProductByQuantity: products.byQuantity[0]?.name ?? null,
       topProductByProfit: products.byProfit[0]?.name ?? null,
       leadingCategory: categories.find((category) => category.revenue.gt(0))?.categoryName ?? null,
-      currentAccountSales:
-        paymentBreakdown.find((item) => item.method === PaymentMethod.CURRENT_ACCOUNT)
-          ?.total ?? ZERO,
+      currentAccountSales: metric(
+        getPaymentMethodTotal(sales, PaymentMethod.CURRENT_ACCOUNT),
+        getPaymentMethodTotal(previousSales, PaymentMethod.CURRENT_ACCOUNT),
+        "neutral"
+      ),
       pendingCustomerBalance,
       purchasesTotal,
-      salesMinusPurchases: currentMetrics.totalSold.minus(purchasesTotal)
+      purchasesCount,
+      salesMinusPurchases: currentMetrics.totalSold.minus(purchasesTotal),
+      lowStockCount: lowStockCandidates.length,
+      outOfStockCount: productsForAlerts.filter((product) => product.stock.lte(0)).length
     },
     paymentBreakdown,
     paymentLabels,
     dailySales: buildDailySales(sales, period),
+    hourlySales: buildHourlySales(sales),
     topProductsByRevenue: products.byRevenue,
     topProductsByQuantity: products.byQuantity,
+    topProductsByQuantityExtended: products.byQuantityExtended,
     topProductsByProfit: products.byProfit,
     lowStockProducts,
     categories,
@@ -539,7 +592,10 @@ function buildSaleWhere(
   return {
     status,
     businessId,
-    occurredAt: { gte: period.start, lt: period.end },
+    ...buildOperationalSaleDateWhere({
+      startUtc: period.start,
+      endUtcExclusive: period.end
+    }),
     ...(method ? { payments: { some: { method } } } : {})
   };
 }
@@ -624,6 +680,21 @@ function buildPaymentBreakdown(
     .sort((left, right) => right.total.comparedTo(left.total));
 }
 
+function getPaymentMethodTotal(
+  sales: Array<{ payments: Array<{ method: PaymentMethod; amount: Prisma.Decimal }> }>,
+  method: PaymentMethod
+) {
+  return sales.reduce(
+    (total, sale) =>
+      total.plus(
+        sale.payments
+          .filter((payment) => payment.method === method)
+          .reduce((saleTotal, payment) => saleTotal.plus(payment.amount), ZERO)
+      ),
+    ZERO
+  );
+}
+
 function buildDailySales(
   sales: Array<{ createdAt: Date; occurredAt: Date | null; total: Prisma.Decimal }>,
   period: ReportPeriod
@@ -653,6 +724,31 @@ function buildDailySales(
   }
 
   return [...days.values()];
+}
+
+function buildHourlySales(
+  sales: Array<{ createdAt: Date; occurredAt: Date | null; total: Prisma.Decimal }>
+) {
+  const hours = Array.from({ length: 24 }, (_, hour): HourlySalesItem => ({
+    hour,
+    label: `${String(hour).padStart(2, "0")}:00`,
+    total: ZERO,
+    count: 0
+  }));
+
+  for (const sale of sales) {
+    const occurredAt = sale.occurredAt ?? sale.createdAt;
+    const hour = Number(argentinaHourFormatter.format(occurredAt));
+    const current = hours[hour];
+    if (!current) {
+      continue;
+    }
+
+    current.total = current.total.plus(sale.total);
+    current.count += 1;
+  }
+
+  return hours;
 }
 
 function buildProductReports(
@@ -712,6 +808,9 @@ function buildProductReports(
     byQuantity: [...products]
       .sort((left, right) => right.quantity.comparedTo(left.quantity))
       .slice(0, 8),
+    byQuantityExtended: [...products]
+      .sort((left, right) => right.quantity.comparedTo(left.quantity))
+      .slice(0, 20),
     byProfit: [...products]
       .filter((product) => product.estimatedProfit !== null)
       .sort((left, right) =>
