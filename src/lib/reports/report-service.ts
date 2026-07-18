@@ -31,7 +31,11 @@ export type Comparison = {
   absolute: Prisma.Decimal | number | null;
   percent: number | null;
   direction: "up" | "down" | "flat" | "none";
+  state: "no-data" | "no-activity" | "no-change" | "new-activity" | "increase" | "decrease";
+  tone: "positive" | "negative" | "neutral";
 };
+
+export type MetricSemanticDirection = "higher-is-better" | "lower-is-better" | "neutral";
 
 export type ReportMetric = {
   value: Prisma.Decimal | number;
@@ -46,15 +50,16 @@ export type ReportDashboardData = {
   executive: {
     netSold: ReportMetric;
     grossSold: Prisma.Decimal;
-    cancelledTotal: Prisma.Decimal;
+    cancelledTotal: ReportMetric;
     estimatedProfit: ReportMetric;
     marginPercent: ReportMetric;
     paidSalesCount: ReportMetric;
     cancelledSalesCount: number;
     cancellationRate: number;
+    hasIncompleteCosts: boolean;
     averageTicket: ReportMetric;
     itemsSold: Prisma.Decimal;
-    unitsSold: Prisma.Decimal;
+    unitsSold: ReportMetric;
     bestPaymentMethod: PaymentMethod | null;
     topProductByRevenue: string | null;
     topProductByQuantity: string | null;
@@ -238,6 +243,12 @@ export async function getReportDashboardData(
   const saleWhere = buildSaleWhere(period, filters.method, SaleStatus.PAID, businessId);
   const cancelledWhere = buildSaleWhere(period, filters.method, SaleStatus.CANCELLED, businessId);
   const previousSaleWhere = buildSaleWhere(previousPeriod, filters.method, SaleStatus.PAID, businessId);
+  const previousCancelledWhere = buildSaleWhere(
+    previousPeriod,
+    filters.method,
+    SaleStatus.CANCELLED,
+    businessId
+  );
   const purchaseWhere = {
     status: PurchaseStatus.RECEIVED,
     createdAt: { gte: period.start, lt: period.end },
@@ -248,6 +259,7 @@ export async function getReportDashboardData(
     sales,
     previousSales,
     cancelledSales,
+    previousCancelledSales,
     productsForAlerts,
     recentSales,
     purchases,
@@ -294,6 +306,10 @@ export async function getReportDashboardData(
       },
       orderBy: { occurredAt: "desc" },
       take: 10
+    }),
+    prisma.sale.findMany({
+      where: previousCancelledWhere,
+      select: { total: true }
     }),
     prisma.product.findMany({
       where: { deletedAt: null, active: true, businessId },
@@ -375,6 +391,7 @@ export async function getReportDashboardData(
   const currentMetrics = summarizeSales(sales);
   const previousMetrics = summarizeSales(previousSales);
   const cancelledTotal = sum(cancelledSales.map((sale) => sale.total));
+  const previousCancelledTotal = sum(previousCancelledSales.map((sale) => sale.total));
   const paidSalesCount = sales.length;
   const cancelledSalesCount = cancelledSales.length;
   const grossSold = currentMetrics.totalSold.plus(cancelledTotal);
@@ -388,6 +405,7 @@ export async function getReportDashboardData(
     paymentLabels
   );
   const products = buildProductReports(sales);
+  const hasIncompleteCosts = products.all.some((product) => product.missingCost);
   const categories = buildCategoryReports(products, currentMetrics.totalSold);
   const lowStockProducts = productsForAlerts
     .filter((product) => product.stock.lte(product.minStock))
@@ -443,24 +461,29 @@ export async function getReportDashboardData(
     periodLabel: formatPeriodLabel(period.from, period.to),
     previousPeriodLabel: formatPeriodLabel(previousPeriod.from, previousPeriod.to),
     executive: {
-      netSold: metric(currentMetrics.totalSold, previousMetrics.totalSold),
+      netSold: metric(currentMetrics.totalSold, previousMetrics.totalSold, "higher-is-better"),
       grossSold,
-      cancelledTotal,
-      estimatedProfit: metric(currentMetrics.estimatedProfit, previousMetrics.estimatedProfit),
-      marginPercent: metric(currentMetrics.marginPercent, previousMetrics.marginPercent),
-      paidSalesCount: metric(paidSalesCount, previousSales.length),
+      cancelledTotal: metric(cancelledTotal, previousCancelledTotal, "lower-is-better"),
+      estimatedProfit: metric(
+        currentMetrics.estimatedProfit,
+        previousMetrics.estimatedProfit,
+        "higher-is-better"
+      ),
+      marginPercent: metric(currentMetrics.marginPercent, previousMetrics.marginPercent, "higher-is-better"),
+      paidSalesCount: metric(paidSalesCount, previousSales.length, "higher-is-better"),
       cancelledSalesCount,
       cancellationRate,
-      averageTicket: metric(currentMetrics.averageTicket, previousMetrics.averageTicket),
+      hasIncompleteCosts,
+      averageTicket: metric(currentMetrics.averageTicket, previousMetrics.averageTicket, "higher-is-better"),
       itemsSold: new Prisma.Decimal(
         sales.reduce((count, sale) => count + sale.items.length, 0)
       ),
-      unitsSold: currentMetrics.unitsSold,
-      bestPaymentMethod: paymentBreakdown[0]?.method ?? null,
+      unitsSold: metric(currentMetrics.unitsSold, previousMetrics.unitsSold, "higher-is-better"),
+      bestPaymentMethod: paymentBreakdown.find((item) => item.total.gt(0) && item.count > 0)?.method ?? null,
       topProductByRevenue: products.byRevenue[0]?.name ?? null,
       topProductByQuantity: products.byQuantity[0]?.name ?? null,
       topProductByProfit: products.byProfit[0]?.name ?? null,
-      leadingCategory: categories[0]?.categoryName ?? null,
+      leadingCategory: categories.find((category) => category.revenue.gt(0))?.categoryName ?? null,
       currentAccountSales:
         paymentBreakdown.find((item) => item.method === PaymentMethod.CURRENT_ACCOUNT)
           ?.total ?? ZERO,
@@ -597,6 +620,7 @@ function buildPaymentBreakdown(
         percent: totalSold.gt(0) ? current.total.div(totalSold).mul(100).toNumber() : 0
       };
     })
+    .filter((item) => item.total.gt(0) || item.count > 0)
     .sort((left, right) => right.total.comparedTo(left.total));
 }
 
@@ -883,32 +907,99 @@ function buildAlerts(input: {
   return alerts.slice(0, 8);
 }
 
-function metric(
+export function getMetricComparison(
   current: Prisma.Decimal | number,
-  previous: Prisma.Decimal | number
-): ReportMetric {
+  previous: Prisma.Decimal | number,
+  semanticDirection: MetricSemanticDirection = "higher-is-better"
+): Comparison {
   const currentDecimal = toDecimal(current);
   const previousDecimal = toDecimal(previous);
   const absolute = currentDecimal.minus(previousDecimal);
-  const percent = previousDecimal.equals(0)
-    ? null
-    : absolute.div(previousDecimal).mul(100).toNumber();
+  const isCurrentZero = currentDecimal.equals(0);
+  const isPreviousZero = previousDecimal.equals(0);
 
+  if (isCurrentZero && isPreviousZero) {
+    return comparison(previous, absolute, null, "none", "no-data", "neutral");
+  }
+
+  if (isCurrentZero) {
+    return comparison(
+      previous,
+      absolute,
+      -100,
+      "down",
+      "no-activity",
+      semanticDirection === "lower-is-better" ? "positive" : "neutral"
+    );
+  }
+
+  if (isPreviousZero) {
+    return comparison(
+      previous,
+      absolute,
+      null,
+      "up",
+      "new-activity",
+      semanticTone("up", semanticDirection)
+    );
+  }
+
+  if (absolute.equals(0)) {
+    return comparison(previous, absolute, 0, "flat", "no-change", "neutral");
+  }
+
+  const direction = absolute.gt(0) ? "up" : "down";
+  return comparison(
+    previous,
+    absolute,
+    absolute.div(previousDecimal).mul(100).toNumber(),
+    direction,
+    direction === "up" ? "increase" : "decrease",
+    semanticTone(direction, semanticDirection)
+  );
+}
+
+function metric(
+  current: Prisma.Decimal | number,
+  previous: Prisma.Decimal | number,
+  semanticDirection: MetricSemanticDirection = "higher-is-better"
+): ReportMetric {
   return {
     value: current,
-    comparison: {
-      previousValue: previous,
-      absolute,
-      percent,
-      direction: previousDecimal.equals(0)
-        ? "none"
-        : absolute.gt(0)
-          ? "up"
-          : absolute.lt(0)
-            ? "down"
-            : "flat"
-    }
+    comparison: getMetricComparison(current, previous, semanticDirection)
   };
+}
+
+function comparison(
+  previous: Prisma.Decimal | number,
+  absolute: Prisma.Decimal,
+  percent: number | null,
+  direction: Comparison["direction"],
+  state: Comparison["state"],
+  tone: Comparison["tone"]
+): Comparison {
+  return {
+    previousValue: previous,
+    absolute,
+    percent,
+    direction,
+    state,
+    tone
+  };
+}
+
+function semanticTone(
+  direction: "up" | "down",
+  semanticDirection: MetricSemanticDirection
+): Comparison["tone"] {
+  if (semanticDirection === "neutral") {
+    return "neutral";
+  }
+
+  const isFavorable =
+    (semanticDirection === "higher-is-better" && direction === "up") ||
+    (semanticDirection === "lower-is-better" && direction === "down");
+  return isFavorable ? "positive" : "negative";
 }
 
 type ReportPeriod = {

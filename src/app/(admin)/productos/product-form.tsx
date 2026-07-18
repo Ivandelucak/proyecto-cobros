@@ -11,7 +11,7 @@ import {
   calculatePriceFromCostProfit,
   calculateSalePriceIncrease,
   formatEditableMoney,
-  parseEditableDecimal
+  parseEditableDecimal,
 } from "@/lib/product-price-adjustment";
 import { formatARS } from "@/lib/money";
 import { checkProductBarcodeAction, type ProductFormState } from "./actions";
@@ -41,7 +41,10 @@ type ProductFormValues = {
 };
 
 type ProductFormProps = {
-  action: (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
+  action: (
+    state: ProductFormState,
+    formData: FormData,
+  ) => Promise<ProductFormState>;
   categories: CategoryOption[];
   initialValues?: ProductFormValues;
   productId?: string;
@@ -60,19 +63,23 @@ const units = [
   ["METER", "Metro"],
   ["PACK", "Pack"],
   ["BOX", "Caja"],
-  ["OTHER", "Otro"]
+  ["OTHER", "Otro"],
 ];
 
 const decimalSuggestedUnits = new Set(["KG", "GR", "LITER", "METER"]);
 
 const fiscalTaxOptions = [
-  ["INHERIT", "Heredar configuracion fiscal", "Usa el IVA por defecto de configuracion fiscal."],
+  [
+    "INHERIT",
+    "Heredar configuracion fiscal",
+    "Usa el IVA por defecto de configuracion fiscal.",
+  ],
   ["TAXED_21", "Gravado 21%", "Codigo ARCA 5."],
   ["TAXED_10_5", "Gravado 10.5%", "Codigo ARCA 4."],
   ["TAXED_27", "Gravado 27%", "Codigo ARCA 6."],
   ["TAXED_0", "Gravado 0%", "Codigo ARCA 3."],
   ["EXEMPT", "Exento", "Suma en importe exento."],
-  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado."]
+  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado."],
 ] as const;
 
 export function ProductForm({
@@ -80,7 +87,7 @@ export function ProductForm({
   categories,
   initialValues,
   productId,
-  submitLabel
+  submitLabel,
 }: ProductFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [isCheckingBarcode, startCheckingBarcode] = useTransition();
@@ -92,18 +99,28 @@ export function ProductForm({
   } | null>(null);
   const [unitType, setUnitType] = useState(initialValues?.unitType ?? "UNIT");
   const [allowsDecimal, setAllowsDecimal] = useState(
-    Boolean(initialValues?.allowsDecimalQuantity)
+    Boolean(initialValues?.allowsDecimalQuantity),
   );
-  const [fiscalTax, setFiscalTax] = useState(productFiscalTaxValue(initialValues));
+  const [fiscalTax, setFiscalTax] = useState(
+    productFiscalTaxValue(initialValues),
+  );
   const [originalSalePrice] = useState(() => initialValues?.salePrice ?? "0");
-  const [salePrice, setSalePrice] = useState(() => initialValues?.salePrice ?? "0");
+  const [salePrice, setSalePrice] = useState(
+    () => initialValues?.salePrice ?? "0",
+  );
   const [cost, setCost] = useState(() => initialValues?.cost ?? "");
   const [increasePercentage, setIncreasePercentage] = useState("");
   const [costProfitPercentage, setCostProfitPercentage] = useState("");
   const [pricingMode, setPricingMode] = useState<PricingMode>("manual");
   const isNewProduct = !initialValues;
-  const calculatedSalePrice = calculateSalePriceIncrease(originalSalePrice, increasePercentage);
-  const calculatedCostProfitPrice = calculatePriceFromCostProfit(cost, costProfitPercentage);
+  const calculatedSalePrice = calculateSalePriceIncrease(
+    originalSalePrice,
+    increasePercentage,
+  );
+  const calculatedCostProfitPrice = calculatePriceFromCostProfit(
+    cost,
+    costProfitPercentage,
+  );
   const activeCalculatedPrice =
     pricingMode === "sale-price-increase"
       ? calculatedSalePrice
@@ -145,7 +162,9 @@ export function ProductForm({
     }
 
     setSalePrice(
-      parseEditableDecimal(value) === 0 ? originalSalePrice : formatEditableMoney(calculated)
+      parseEditableDecimal(value) === 0
+        ? originalSalePrice
+        : formatEditableMoney(calculated),
     );
   }
 
@@ -163,7 +182,10 @@ export function ProductForm({
       return;
     }
 
-    const calculated = calculatePriceFromCostProfit(value, costProfitPercentage);
+    const calculated = calculatePriceFromCostProfit(
+      value,
+      costProfitPercentage,
+    );
     if (calculated !== null) {
       setSalePrice(formatEditableMoney(calculated));
     }
@@ -198,7 +220,7 @@ export function ProductForm({
       if (result.status === "available") {
         setBarcodeNotice({
           message: "Codigo disponible.",
-          tone: "ok"
+          tone: "ok",
         });
         return;
       }
@@ -206,7 +228,7 @@ export function ProductForm({
       if (result.status === "current") {
         setBarcodeNotice({
           message: "Es el codigo actual de este producto.",
-          tone: "info"
+          tone: "info",
         });
         return;
       }
@@ -219,7 +241,7 @@ export function ProductForm({
       setBarcodeNotice({
         message: `Codigo ya existe en otro producto: ${result.product.name} (${stateLabel}).`,
         tone: "error",
-        productId: result.product.id
+        productId: result.product.id,
       });
     });
   }
@@ -229,7 +251,7 @@ export function ProductForm({
     onScan: (code) => {
       setBarcode(code);
       verifyBarcode(code);
-    }
+    },
   });
 
   return (
@@ -247,10 +269,18 @@ export function ProductForm({
         />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Nombre">
-            <Input name="name" defaultValue={initialValues?.name ?? ""} required />
+            <Input
+              name="name"
+              defaultValue={initialValues?.name ?? ""}
+              required
+            />
           </Field>
           <Field label="Categoria">
-            <Select name="categoryId" defaultValue={initialValues?.categoryId ?? ""} required>
+            <Select
+              name="categoryId"
+              defaultValue={initialValues?.categoryId ?? ""}
+              required
+            >
               <option value="">Seleccionar</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
@@ -335,7 +365,9 @@ export function ProductForm({
                 <div className="flex overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[color:var(--primary-soft)] dark:border-[#344457] dark:bg-[#0B1015]">
                   <Input
                     value={increasePercentage}
-                    onChange={(event) => handleIncreasePercentageChange(event.target.value)}
+                    onChange={(event) =>
+                      handleIncreasePercentageChange(event.target.value)
+                    }
                     inputMode="decimal"
                     aria-describedby="sale-price-increase-help"
                     className="min-w-0 border-0 bg-transparent shadow-none focus:ring-0 dark:bg-transparent"
@@ -344,17 +376,22 @@ export function ProductForm({
                     %
                   </span>
                 </div>
-                <span id="sale-price-increase-help" className="block text-xs text-gray-500 dark:text-[#7F8D9A]">
+                <span
+                  id="sale-price-increase-help"
+                  className="block text-xs text-gray-500 dark:text-[#7F8D9A]"
+                >
                   {hasInvalidIncrease
-                    ? "Ingresá un porcentaje válido mayor o igual a cero."
-                    : "Se calcula sobre el precio original al abrir el formulario."}
+                    ? "Ingresa un porcentaje valido mayor o igual a cero."
+                    : "Calcula el precio de venta aplicando este porcentaje al precio original."}
                 </span>
               </Field>
               <Field label="Ganancia sobre costo (%)">
                 <div className="flex overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[color:var(--primary-soft)] dark:border-[#344457] dark:bg-[#0B1015]">
                   <Input
                     value={costProfitPercentage}
-                    onChange={(event) => handleCostProfitPercentageChange(event.target.value)}
+                    onChange={(event) =>
+                      handleCostProfitPercentageChange(event.target.value)
+                    }
                     inputMode="decimal"
                     aria-describedby="cost-profit-help"
                     className="min-w-0 border-0 bg-transparent shadow-none focus:ring-0 dark:bg-transparent"
@@ -363,7 +400,10 @@ export function ProductForm({
                     %
                   </span>
                 </div>
-                <span id="cost-profit-help" className="block text-xs text-gray-500 dark:text-[#7F8D9A]">
+                <span
+                  id="cost-profit-help"
+                  className="block text-xs text-gray-500 dark:text-[#7F8D9A]"
+                >
                   {hasInvalidCostProfit
                     ? currentCost === null
                       ? "Ingresá un costo valido para calcular la ganancia."
@@ -374,7 +414,9 @@ export function ProductForm({
                 </span>
               </Field>
               <div className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-3">
-                <p className="text-xs font-medium text-[var(--text-secondary)]">Nuevo precio calculado</p>
+                <p className="text-xs font-medium text-[var(--text-secondary)]">
+                  Nuevo precio calculado
+                </p>
                 <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">
                   {pricePreview === null ? "-" : formatARS(pricePreview)}
                 </p>
@@ -530,34 +572,42 @@ function productFiscalTaxValue(initialValues?: ProductFormValues) {
 }
 
 function fiscalTaxHelp(value: string) {
-  return fiscalTaxOptions.find(([optionValue]) => optionValue === value)?.[2] ?? "";
+  return (
+    fiscalTaxOptions.find(([optionValue]) => optionValue === value)?.[2] ?? ""
+  );
 }
 
 function SectionTitle({
   title,
-  description
+  description,
 }: {
   title: string;
   description: string;
 }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">{description}</p>
+      <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
+        {title}
+      </h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
+        {description}
+      </p>
     </div>
   );
 }
 
 function Field({
   label,
-  children
+  children,
 }: {
   label: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
+      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">
+        {label}
+      </span>
       {children}
     </label>
   );
@@ -569,7 +619,7 @@ function CheckCard({
   description,
   checked,
   defaultChecked,
-  onChange
+  onChange,
 }: {
   name: string;
   title: string;
@@ -589,7 +639,9 @@ function CheckCard({
         className="mt-0.5 h-4 w-4 accent-brand-600"
       />
       <span>
-        <span className="block font-medium text-gray-950 dark:text-[#F3F7FA]">{title}</span>
+        <span className="block font-medium text-gray-950 dark:text-[#F3F7FA]">
+          {title}
+        </span>
         <span className="mt-1 block text-xs text-gray-500 dark:text-[#7F8D9A]">
           {description}
         </span>

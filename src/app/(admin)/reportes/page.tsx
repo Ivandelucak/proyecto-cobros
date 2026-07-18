@@ -15,6 +15,7 @@ import { formatARS } from "@/lib/money";
 import {
   buildReportFilters,
   getReportDashboardData,
+  type Comparison,
   type ReportAlert
 } from "@/lib/reports/report-service";
 import { formatStock } from "@/lib/stock-format";
@@ -93,19 +94,34 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
         </div>
       </Card>
 
+      {toNumber(executive.paidSalesCount.value) === 0 ? (
+        <div
+          role="status"
+          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-[#344457] dark:bg-[#1A2430] dark:text-[#C6D1DB]"
+        >
+          No se registraron ventas pagadas en el periodo seleccionado. Los indicadores se muestran sin variaciones forzadas.
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Venta neta"
           value={formatARS(executive.netSold.value)}
           detail="Ventas pagadas, sin anuladas."
           comparison={executive.netSold.comparison}
+          comparisonContext={comparisonPreviousValue(executive.netSold.comparison, formatARS)}
           tone="blue"
         />
         <MetricCard
           label="Ganancia estimada"
           value={formatARS(executive.estimatedProfit.value)}
-          detail="Calculada con costos cargados."
+          detail={
+            executive.hasIncompleteCosts
+              ? "Estimacion parcial: hay productos sin costo cargado."
+              : "Calculada con costos cargados."
+          }
           comparison={executive.estimatedProfit.comparison}
+          comparisonContext={comparisonPreviousValue(executive.estimatedProfit.comparison, formatARS)}
           tone="green"
         />
         <MetricCard
@@ -113,12 +129,17 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
           value={formatARS(executive.averageTicket.value)}
           detail="Promedio por venta pagada."
           comparison={executive.averageTicket.comparison}
+          comparisonContext={comparisonPreviousValue(executive.averageTicket.comparison, formatARS)}
         />
         <MetricCard
           label="Ventas pagadas"
           value={formatInteger(executive.paidSalesCount.value)}
           detail={`${executive.cancelledSalesCount} anuladas`}
           comparison={executive.paidSalesCount.comparison}
+          comparisonContext={comparisonPreviousValue(
+            executive.paidSalesCount.comparison,
+            formatInteger
+          )}
         />
       </div>
 
@@ -131,9 +152,11 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
         />
         <MetricCard
           label="Total anulado"
-          value={formatARS(executive.cancelledTotal)}
+          value={formatARS(executive.cancelledTotal.value)}
           detail={`${formatPercent(executive.cancellationRate)} de operaciones`}
           tone={executive.cancelledSalesCount > 0 ? "red" : "default"}
+          comparison={executive.cancelledTotal.comparison}
+          comparisonContext={comparisonPreviousValue(executive.cancelledTotal.comparison, formatARS)}
           compact
         />
         <MetricCard
@@ -141,24 +164,35 @@ export default async function ReportesPage({ searchParams }: ReportesPageProps) 
           value={formatPercentNumber(executive.marginPercent.value)}
           detail="Ganancia sobre venta neta."
           comparison={executive.marginPercent.comparison}
+          comparisonContext={comparisonPreviousValue(
+            executive.marginPercent.comparison,
+            formatPercentNumber
+          )}
           compact
         />
         <MetricCard
           label="Unidades vendidas"
-          value={formatDecimal(executive.unitsSold, 3)}
+          value={formatDecimal(executive.unitsSold.value, 3)}
           detail={`${formatInteger(executive.itemsSold)} lineas de productos`}
+          comparison={executive.unitsSold.comparison}
+          comparisonContext={comparisonPreviousValue(
+            executive.unitsSold.comparison,
+            (value) => formatDecimal(value, 3)
+          )}
           compact
         />
         <MetricCard
           label="Mejor medio"
           value={executive.bestPaymentMethod ? paymentLabels[executive.bestPaymentMethod] : "-"}
-          detail="Por importe cobrado."
+          detail={
+            executive.bestPaymentMethod ? "Por importe cobrado." : "Sin operaciones en el periodo."
+          }
           compact
         />
         <MetricCard
           label="Categoria lider"
           value={executive.leadingCategory ?? "-"}
-          detail="Por facturacion."
+          detail={executive.leadingCategory ? "Por facturacion." : "Sin operaciones en el periodo."}
           compact
         />
         <MetricCard
@@ -578,6 +612,17 @@ function formatPercent(value: number) {
       maximumFractionDigits: 1
     }).format(value) + "%"
   );
+}
+
+function comparisonPreviousValue(
+  comparison: Comparison,
+  formatter: (value: Prisma.Decimal | number) => string
+) {
+  if (comparison.state !== "no-activity" || comparison.previousValue === null) {
+    return null;
+  }
+
+  return `Anterior: ${formatter(comparison.previousValue)}`;
 }
 
 function toNumber(value: Prisma.Decimal | number) {
