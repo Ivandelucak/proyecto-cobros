@@ -81,11 +81,42 @@ export function calculateSalePriceIncrease(originalSalePrice: string, percentage
 }
 
 export function calculatePriceFromCostProfit(cost: string, profitPercentage: string) {
-  if (!profitPercentage.trim()) {
+  const parsedCost = parseEditableDecimal(cost);
+  const parsedPercentage = parseEditableDecimal(profitPercentage);
+
+  if (
+    !profitPercentage.trim() ||
+    parsedCost === null ||
+    parsedPercentage === null ||
+    parsedCost <= 0 ||
+    parsedPercentage < -100
+  ) {
     return null;
   }
 
-  return calculatePercentagePrice(cost, profitPercentage, "increase");
+  return roundMoney(parsedCost * (1 + parsedPercentage / 100));
+}
+
+export function calculateProfitPercentageFromCost(
+  salePrice: string | number,
+  cost: string | number
+) {
+  const parsedSalePrice = parseEditableDecimal(salePrice);
+  const parsedCost = parseEditableDecimal(cost);
+
+  if (parsedSalePrice === null || parsedCost === null || parsedCost <= 0) {
+    return null;
+  }
+
+  return roundMoney(((parsedSalePrice - parsedCost) / parsedCost) * 100);
+}
+
+export function formatEditablePercentage(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "";
+  }
+
+  return roundMoney(value).toFixed(2).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(".", ",");
 }
 
 export function applyPriceRounding(value: number, rounding: PriceRounding) {

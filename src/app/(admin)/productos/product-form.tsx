@@ -8,8 +8,10 @@ import { Input, Select } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/link-button";
 import { useBarcodeScanner } from "@/lib/barcode/use-barcode-scanner";
 import {
+  calculateProfitPercentageFromCost,
   calculatePriceFromCostProfit,
   calculateSalePriceIncrease,
+  formatEditablePercentage,
   formatEditableMoney,
   parseEditableDecimal,
 } from "@/lib/product-price-adjustment";
@@ -110,7 +112,13 @@ export function ProductForm({
   );
   const [cost, setCost] = useState(() => initialValues?.cost ?? "");
   const [increasePercentage, setIncreasePercentage] = useState("");
-  const [costProfitPercentage, setCostProfitPercentage] = useState("");
+  const [costProfitPercentage, setCostProfitPercentage] = useState(() =>
+    getInformativeCostProfitPercentage(
+      initialValues?.salePrice ?? "0",
+      initialValues?.cost ?? "",
+    ),
+  );
+  const [isCostProfitEdited, setIsCostProfitEdited] = useState(false);
   const [pricingMode, setPricingMode] = useState<PricingMode>("manual");
   const isNewProduct = !initialValues;
   const calculatedSalePrice = calculateSalePriceIncrease(
@@ -137,6 +145,17 @@ export function ProductForm({
     Boolean(costProfitPercentage.trim()) &&
     calculatedCostProfitPrice === null;
   const currentCost = parseEditableDecimal(cost);
+  const isActiveCostProfit = pricingMode === "cost-profit" && isCostProfitEdited;
+
+  function setInformativeCostProfitPercentage(
+    nextSalePrice: string,
+    nextCost: string,
+  ) {
+    setCostProfitPercentage(
+      getInformativeCostProfitPercentage(nextSalePrice, nextCost),
+    );
+    setIsCostProfitEdited(false);
+  }
 
   function handleUnitChange(value: string) {
     setUnitType(value);
@@ -147,38 +166,46 @@ export function ProductForm({
 
   function handleIncreasePercentageChange(value: string) {
     setIncreasePercentage(value);
-    setCostProfitPercentage("");
+    setIsCostProfitEdited(false);
 
     if (!value.trim()) {
       setPricingMode("manual");
       setSalePrice(originalSalePrice);
+      setInformativeCostProfitPercentage(originalSalePrice, cost);
       return;
     }
 
     setPricingMode("sale-price-increase");
     const calculated = calculateSalePriceIncrease(originalSalePrice, value);
     if (calculated === null) {
+      setCostProfitPercentage("");
       return;
     }
 
-    setSalePrice(
+    const nextSalePrice =
       parseEditableDecimal(value) === 0
         ? originalSalePrice
-        : formatEditableMoney(calculated),
-    );
+        : formatEditableMoney(calculated);
+    setSalePrice(nextSalePrice);
+    setInformativeCostProfitPercentage(nextSalePrice, cost);
   }
 
   function handleSalePriceChange(value: string) {
     setSalePrice(value);
     setPricingMode("manual");
     setIncreasePercentage("");
-    setCostProfitPercentage("");
+    setInformativeCostProfitPercentage(value, cost);
   }
 
   function handleCostChange(value: string) {
     setCost(value);
 
-    if (pricingMode !== "cost-profit" || !costProfitPercentage.trim()) {
+    if (
+      pricingMode !== "cost-profit" ||
+      !isCostProfitEdited ||
+      !costProfitPercentage.trim()
+    ) {
+      setInformativeCostProfitPercentage(salePrice, value);
       return;
     }
 
@@ -192,15 +219,17 @@ export function ProductForm({
   }
 
   function handleCostProfitPercentageChange(value: string) {
-    setCostProfitPercentage(value);
     setIncreasePercentage("");
 
     if (!value.trim()) {
       setPricingMode("manual");
       setSalePrice(originalSalePrice);
+      setInformativeCostProfitPercentage(originalSalePrice, cost);
       return;
     }
 
+    setCostProfitPercentage(value);
+    setIsCostProfitEdited(true);
     setPricingMode("cost-profit");
     const calculated = calculatePriceFromCostProfit(cost, value);
     if (calculated !== null) {
@@ -405,12 +434,14 @@ export function ProductForm({
                   className="block text-xs text-gray-500 dark:text-[#7F8D9A]"
                 >
                   {hasInvalidCostProfit
-                    ? currentCost === null
-                      ? "Ingresá un costo valido para calcular la ganancia."
-                      : "Ingresá una ganancia valida mayor o igual a cero."
-                    : currentCost === 0 && pricingMode === "cost-profit"
-                      ? "El costo es $0, por lo que el precio calculado tambien sera $0."
-                      : "Calcula el precio de venta sumando este porcentaje al costo actual."}
+                    ? currentCost === null || currentCost <= 0
+                      ? "Ingresa un costo valido mayor a cero para calcular la ganancia."
+                      : "Ingresa una ganancia valida mayor o igual a -100%."
+                    : isActiveCostProfit
+                      ? "Calcula el precio de venta sumando este porcentaje al costo actual."
+                      : costProfitPercentage
+                        ? "Porcentaje actual calculado segun el precio de venta y el costo."
+                        : "No hay un porcentaje valido mientras el costo sea cero, vacio o invalido."}
                 </span>
               </Field>
               <div className="rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] p-3">
@@ -574,6 +605,15 @@ function productFiscalTaxValue(initialValues?: ProductFormValues) {
 function fiscalTaxHelp(value: string) {
   return (
     fiscalTaxOptions.find(([optionValue]) => optionValue === value)?.[2] ?? ""
+  );
+}
+
+function getInformativeCostProfitPercentage(
+  salePrice: string | null | undefined,
+  cost: string | null | undefined
+) {
+  return formatEditablePercentage(
+    calculateProfitPercentageFromCost(salePrice ?? "", cost ?? "")
   );
 }
 
