@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import {
@@ -45,25 +46,14 @@ export function ArcaStatusPanel({
     : setting.arcaLastConnectionStatus ?? setting.arcaLastWsfeStatus;
 
   return (
-    <details className="group app-panel-secondary rounded-lg p-4">
-      <summary className="cursor-pointer list-none text-sm font-bold text-[var(--text-primary)]">
-        <span className="inline-flex items-center gap-2">
-          Opciones avanzadas
-          <span className="text-xs font-semibold text-[var(--text-muted)]">
-            <span className="group-open:hidden">Abrir</span>
-            <span className="hidden group-open:inline">Cerrar</span>
-          </span>
-        </span>
-      </summary>
-
-      <div className="mt-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">
-            Herramientas tecnicas ARCA
+            Conexion ARCA homologacion
           </h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-[#A9B6C2]">
-            Pruebas de conexion y consultas de soporte.
+            Pruebas tecnicas sin emision de comprobantes ni solicitud de CAE.
           </p>
         </div>
         <StatusPill status={connectionStatus} />
@@ -165,8 +155,7 @@ export function ArcaStatusPanel({
           <ActionResult state={voucherState} />
         </div>
       </div>
-      </div>
-    </details>
+    </Card>
   );
 }
 

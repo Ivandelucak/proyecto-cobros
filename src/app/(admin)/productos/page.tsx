@@ -12,7 +12,6 @@ import {
   calculateProductUtility,
   formatUtilityPercentage
 } from "@/lib/product-utility";
-import { canImportExportProducts } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { formatStock, shouldUseDecimalQuantity } from "@/lib/stock-format";
 import { setProductActiveAction } from "./actions";
@@ -58,7 +57,6 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
   const user = await requireOperationalUser();
   const businessId = user.businessId!;
   const canViewCosts = user.role === Role.OWNER || user.role === Role.ADMIN;
-  const canManageProductFiles = canImportExportProducts(user.role);
 
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -131,13 +129,9 @@ export default async function ProductosPage({ searchParams }: ProductsPageProps)
         description="Listado y administracion de productos, precios, unidades y estado."
         actions={
           <>
-            {canManageProductFiles ? (
-              <LinkButton href="/productos/plantilla">Plantilla</LinkButton>
-            ) : null}
+            <LinkButton href="/productos/plantilla">Plantilla</LinkButton>
             <LinkButton href="/productos/importar">Importar Excel</LinkButton>
-            {canManageProductFiles ? (
-              <LinkButton href="/productos/exportar">Exportar</LinkButton>
-            ) : null}
+            <LinkButton href="/productos/exportar">Exportar</LinkButton>
             <LinkButton href="/productos/ajuste-precios">Ajuste de precios</LinkButton>
             <LinkButton href="/productos/nuevo" variant="primary">
               Nuevo producto

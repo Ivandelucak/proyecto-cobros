@@ -371,27 +371,6 @@ export async function testArcaWsfeStatusAction(
   }
 }
 
-export async function verifyArcaConnectionAction(
-  _prevState: ArcaTestState,
-  _formData: FormData
-): Promise<ArcaTestState> {
-  const wsaaResult = await testArcaWsaaAction({}, new FormData());
-  if (wsaaResult.error) {
-    return {
-      error: "No se pudo verificar la conexion con ARCA. Revisá los datos fiscales y las credenciales."
-    };
-  }
-
-  const wsfeResult = await testArcaWsfeStatusAction({}, new FormData());
-  if (wsfeResult.error) {
-    return {
-      error: "La conexion se autorizo, pero no se pudo validar el servicio de comprobantes. Intentá nuevamente."
-    };
-  }
-
-  return { success: "Conexion con ARCA verificada correctamente." };
-}
-
 export async function queryLastArcaVoucherAction(
   _prevState: ArcaTestState,
   formData: FormData
