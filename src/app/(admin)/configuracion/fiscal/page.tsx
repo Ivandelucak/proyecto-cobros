@@ -12,11 +12,11 @@ export default async function ConfiguracionFiscalPage() {
 
   return (
     <div className="space-y-5">
+      <FiscalSettingsForm setting={setting} />
       <ArcaStatusPanel
         setting={setting}
         voucherTypeOptions={VOUCHER_TYPE_OPTIONS}
       />
-      <FiscalSettingsForm setting={setting} />
     </div>
   );
 }

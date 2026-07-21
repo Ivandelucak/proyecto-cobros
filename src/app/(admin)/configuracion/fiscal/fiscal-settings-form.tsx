@@ -52,13 +52,13 @@ const identityTypeLabels = {
   OTHER: "Otro"
 };
 const fiscalTaxOptions = [
-  ["", "Sin definir", "La pre-emision pedira configurar tratamiento fiscal."],
-  ["TAXED_21", "Gravado 21%", "Codigo ARCA 5"],
-  ["TAXED_10_5", "Gravado 10.5%", "Codigo ARCA 4"],
-  ["TAXED_27", "Gravado 27%", "Codigo ARCA 6"],
-  ["TAXED_0", "Gravado 0%", "Codigo ARCA 3"],
-  ["EXEMPT", "Exento", "Suma en importe exento"],
-  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado"]
+  ["", "Sin definir"],
+  ["TAXED_21", "Gravado 21%"],
+  ["TAXED_10_5", "Gravado 10.5%"],
+  ["TAXED_27", "Gravado 27%"],
+  ["TAXED_0", "Gravado 0%"],
+  ["EXEMPT", "Exento"],
+  ["NON_TAXABLE", "No gravado"]
 ] as const;
 
 export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
@@ -69,19 +69,20 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
 
   return (
     <form action={formAction} className="space-y-5">
-      <Card className="border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100">
-        Esta etapa solo prepara la conexion de homologacion. No emite comprobantes
-        reales en ARCA.
+      <Card className="p-4">
+        <SectionTitle title="Activacion" />
+        <div className="mt-3 max-w-md">
+          <Toggle
+            name="enabled"
+            label="Habilitar facturacion fiscal"
+            value={setting.enabled}
+          />
+        </div>
       </Card>
 
       <Card className="p-5">
         <SectionTitle title="Datos fiscales del emisor" />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Toggle
-            name="enabled"
-            label="Habilitar preparacion fiscal"
-            value={setting.enabled}
-          />
           <Field label="Ambiente">
             <Select name="environment" defaultValue={setting.environment}>
               {Object.entries(environmentLabels).map(([value, label]) => (
@@ -118,6 +119,12 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               defaultValue={setting.pointOfSale ?? ""}
             />
           </Field>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle title="Configuracion fiscal" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Letra por defecto">
             <Select
               name="defaultInvoiceLetter"
@@ -142,12 +149,6 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               ))}
             </Select>
           </Field>
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionTitle title="IVA por defecto" />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="Tratamiento y alicuota por defecto">
             <Select
               name="defaultFiscalTax"
@@ -160,21 +161,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               ))}
             </Select>
           </Field>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
-            <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
-              Codigo ARCA asociado
-            </span>
-            <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
-              {defaultFiscalTaxHelp(defaultFiscalTaxValue(setting))}
-            </span>
-          </div>
         </div>
-        {setting.fiscalCondition === "MONOTRIBUTO" ? (
-          <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
-            En Factura C no se discrimina IVA. La previsualizacion conserva el
-            total como importe neto interno.
-          </p>
-        ) : null}
       </Card>
 
       <Card className="p-5">
@@ -196,29 +183,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             />
           </Field>
         </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionTitle title="Pendientes y anulaciones" />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field label="Minutos para advertencia">
-            <Input
-              name="pendingWarningMinutes"
-              type="number"
-              min={1}
-              max={1440}
-              defaultValue={setting.pendingWarningMinutes}
-            />
-          </Field>
-          <Field label="Minutos para alerta critica">
-            <Input
-              name="pendingCriticalMinutes"
-              type="number"
-              min={1}
-              max={1440}
-              defaultValue={setting.pendingCriticalMinutes}
-            />
-          </Field>
           <Toggle
             name="allowCancelBeforeIssue"
             label="Permitir anular antes de emitir"
@@ -230,19 +195,36 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             value={setting.requireCustomerForInvoiceA}
           />
         </div>
+        <details className="mt-4 rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--text-primary)]">
+            Ajustes de alertas
+          </summary>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <Field label="Minutos para advertencia">
+              <Input
+                name="pendingWarningMinutes"
+                type="number"
+                min={1}
+                max={1440}
+                defaultValue={setting.pendingWarningMinutes}
+              />
+            </Field>
+            <Field label="Minutos para alerta critica">
+              <Input
+                name="pendingCriticalMinutes"
+                type="number"
+                min={1}
+                max={1440}
+                defaultValue={setting.pendingCriticalMinutes}
+              />
+            </Field>
+          </div>
+        </details>
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="Credenciales ARCA homologacion" />
+        <SectionTitle title="Credenciales" />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <CredentialStatus
-            label="Certificado cargado"
-            value={setting.hasArcaCertificatePem}
-          />
-          <CredentialStatus
-            label="Clave privada cargada"
-            value={setting.hasArcaPrivateKeyPem}
-          />
           <Field label="Certificado PEM">
             <Textarea
               name="arcaCertificatePem"
@@ -263,8 +245,8 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
           </Field>
         </div>
         <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
-          Las credenciales se guardan para pruebas locales de homologacion y no se
-          vuelven a mostrar despues de guardar.
+          Se usan para conectar el comercio con ARCA y no se vuelven a mostrar
+          despues de guardar.
         </p>
       </Card>
 
@@ -317,11 +299,6 @@ function defaultFiscalTaxValue(setting: FiscalSettingView) {
   return "TAXED_21";
 }
 
-function defaultFiscalTaxHelp(value: string) {
-  const option = fiscalTaxOptions.find(([optionValue]) => optionValue === value);
-  return option?.[2] ?? "Sin codigo";
-}
-
 function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) {
   return (
     <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
@@ -333,19 +310,6 @@ function Toggle({ name, label, value }: { name: string; label: string; value: bo
       />
       <span className="font-medium text-gray-800 dark:text-[#F3F7FA]">{label}</span>
     </label>
-  );
-}
-
-function CredentialStatus({ label, value }: { label: string; value: boolean }) {
-  return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
-      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
-        {label}
-      </span>
-      <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
-        {value ? "Si" : "No"}
-      </span>
-    </div>
   );
 }
 
