@@ -1,6 +1,6 @@
-import { Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { writeProductsExportBuffer } from "@/lib/excel/products-export";
+import { canImportExportProducts } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -9,12 +9,13 @@ export async function GET() {
     return new Response("No autorizado.", { status: 401 });
   }
 
-  if (user.role !== Role.ADMIN) {
-    return new Response("No autorizado.", { status: 403 });
+  if (!canImportExportProducts(user.role) || !user.businessId) {
+    return new Response("Acceso denegado.", { status: 403 });
   }
 
   const products = await prisma.product.findMany({
     where: {
+      businessId: user.businessId,
       active: true,
       deletedAt: null
     },
