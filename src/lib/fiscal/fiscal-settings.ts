@@ -7,6 +7,7 @@ import {
   type FiscalDocumentLetter,
   type Prisma
 } from "@prisma/client";
+import { X509Certificate } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 export const FISCAL_SETTING_ID = "default";
@@ -33,6 +34,8 @@ export type FiscalSettingView = {
   defaultVatArcaCode: number | null;
   defaultTaxTreatment: FiscalTaxTreatment | null;
   hasArcaCertificatePem: boolean;
+  arcaCertificateExpiresAt: Date | null;
+  arcaCertificateIsExpired: boolean;
   hasArcaPrivateKeyPem: boolean;
   hasArcaWsaaToken: boolean;
   hasArcaWsaaSign: boolean;
@@ -66,6 +69,8 @@ export function getDefaultFiscalSetting(): FiscalSettingView {
     defaultVatArcaCode: null,
     defaultTaxTreatment: null,
     hasArcaCertificatePem: false,
+    arcaCertificateExpiresAt: null,
+    arcaCertificateIsExpired: false,
     hasArcaPrivateKeyPem: false,
     hasArcaWsaaToken: false,
     hasArcaWsaaSign: false,
@@ -124,6 +129,8 @@ export async function getFiscalSettingOrDefault(
     return getDefaultFiscalSetting();
   }
 
+  const arcaCertificateExpiresAt = getCertificateExpiration(setting.arcaCertificatePem);
+
   return {
     enabled: setting.enabled,
     environment: setting.environment,
@@ -144,6 +151,10 @@ export async function getFiscalSettingOrDefault(
     defaultVatArcaCode: setting.defaultVatArcaCode,
     defaultTaxTreatment: setting.defaultTaxTreatment,
     hasArcaCertificatePem: Boolean(setting.arcaCertificatePem),
+    arcaCertificateExpiresAt,
+    arcaCertificateIsExpired: Boolean(
+      arcaCertificateExpiresAt && arcaCertificateExpiresAt.getTime() <= Date.now()
+    ),
     hasArcaPrivateKeyPem: Boolean(setting.arcaPrivateKeyPem),
     hasArcaWsaaToken: Boolean(setting.arcaWsaaToken),
     hasArcaWsaaSign: Boolean(setting.arcaWsaaSign),
@@ -160,6 +171,19 @@ export async function getFiscalSettingOrDefault(
     arcaLastWsfeTestAt: setting.arcaLastWsfeTestAt,
     arcaLastError: setting.arcaLastError
   };
+}
+
+function getCertificateExpiration(certificatePem: string | null) {
+  if (!certificatePem?.trim()) {
+    return null;
+  }
+
+  try {
+    const expiration = new Date(new X509Certificate(certificatePem).validTo);
+    return Number.isNaN(expiration.getTime()) ? null : expiration;
+  } catch {
+    return null;
+  }
 }
 
 export function normalizePendingMinutes(value: number, fallback: number) {
