@@ -1,5 +1,6 @@
 import {
   FiscalDocumentStatus,
+  FiscalConnectionMode,
   FiscalStatus,
   SaleStatus,
   Prisma
@@ -90,6 +91,10 @@ export async function emitFiscalDocument(saleId: string, userId: string) {
   }
 
   const setting = await getFiscalSettingOrDefault(businessId);
+  if (setting.connectionMode === FiscalConnectionMode.PROVIDER_DELEGATION) {
+    throw new Error("La emisión fiscal por delegación todavía no está habilitada.");
+  }
+
   if (
     !setting.enabled ||
     !setting.cuit ||
@@ -346,4 +351,3 @@ export async function emitFiscalDocument(saleId: string, userId: string) {
     throw new ArcaError(normalized.userMessage, normalized.technicalMessage);
   }
 }
-

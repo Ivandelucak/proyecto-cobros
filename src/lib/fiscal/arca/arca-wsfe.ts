@@ -1,4 +1,4 @@
-import { FiscalEnvironment } from "@prisma/client";
+import { FiscalConnectionMode, FiscalEnvironment } from "@prisma/client";
 import {
   ARCA_ENDPOINTS,
   WSFEV1_NAMESPACE
@@ -12,6 +12,7 @@ import {
   extractTag
 } from "@/lib/fiscal/arca/arca-xml";
 import { getArcaAuthToken, type ArcaAuthToken } from "@/lib/fiscal/arca/arca-wsaa";
+import { prisma } from "@/lib/prisma";
 
 type WsfeCatalogItem = {
   id: string;
@@ -24,6 +25,7 @@ export async function getWsfeServerStatus(businessId: string) {
   const auth = await getArcaAuthToken(businessId);
   const xml = await callWsfe({
     environment: auth.environment,
+    connectionMode: auth.connectionMode,
     operation: "FEDummy",
     body: "<ar:FEDummy/>"
   });
@@ -45,6 +47,7 @@ export async function getLastAuthorizedVoucher(
   const auth = await getArcaAuthToken(businessId);
   const xml = await callWsfe({
     environment: auth.environment,
+    connectionMode: auth.connectionMode,
     operation: "FECompUltimoAutorizado",
     body: [
       "<ar:FECompUltimoAutorizado>",
@@ -78,10 +81,46 @@ export async function getVatTypes(businessId: string) {
   return getCatalog(businessId, "FEParamGetTiposIva", "IvaTipo");
 }
 
+export async function verifyProviderDelegationConnection(businessId: string) {
+  const auth = await getArcaAuthToken(businessId);
+  if (auth.connectionMode !== FiscalConnectionMode.PROVIDER_DELEGATION) {
+    throw new ArcaError("La conexión delegada no está habilitada para este comercio.");
+  }
+
+  const pointOfSale = await getBusinessPointOfSale(businessId);
+  const xml = await callWsfe({
+    environment: auth.environment,
+    connectionMode: auth.connectionMode,
+    operation: "FEParamGetPtosVenta",
+    body: [
+      "<ar:FEParamGetPtosVenta>",
+      buildAuthXml(auth),
+      "</ar:FEParamGetPtosVenta>"
+    ].join("")
+  });
+
+  throwIfWsfeError(xml);
+  const pointOfSales = extractItems(xml, "PtoVenta")
+    .map((item) => Number(extractTag(item, "Nro")))
+    .filter(Number.isFinite);
+
+  if (!pointOfSales.includes(pointOfSale)) {
+    throw new ArcaError("El punto de venta no está habilitado para la conexión delegada.");
+  }
+
+  return {
+    pointOfSale,
+    environment: auth.environment,
+    tokenExpiresAt: auth.expirationTime,
+    tokenFromCache: auth.fromCache
+  };
+}
+
 async function getCatalog(businessId: string, operation: string, itemTag: string): Promise<WsfeCatalogItem[]> {
   const auth = await getArcaAuthToken(businessId);
   const xml = await callWsfe({
     environment: auth.environment,
+    connectionMode: auth.connectionMode,
     operation,
     body: [
       `<ar:${operation}>`,
@@ -100,10 +139,14 @@ async function getCatalog(businessId: string, operation: string, itemTag: string
 
 async function callWsfe(input: {
   environment: FiscalEnvironment;
+  connectionMode: FiscalConnectionMode;
   operation: string;
   body: string;
 }) {
-  if (input.environment !== FiscalEnvironment.HOMOLOGACION) {
+  if (
+    input.connectionMode === FiscalConnectionMode.LEGACY_PER_BUSINESS &&
+    input.environment !== FiscalEnvironment.HOMOLOGACION
+  ) {
     throw new ArcaError("Esta etapa solo permite WSFEv1 homologacion.");
   }
 
@@ -132,6 +175,37 @@ function buildAuthXml(auth: ArcaAuthToken) {
   ].join("");
 }
 
+async function getBusinessPointOfSale(businessId: string): Promise<number> {
+  const setting = await prisma.fiscalSetting.findUnique({
+    where: { businessId },
+    select: { pointOfSale: true }
+  });
+
+  if (!setting?.pointOfSale) {
+    throw new ArcaError("Falta el punto de venta del comercio.");
+  }
+
+  return setting.pointOfSale;
+}
+
+function throwIfWsfeError(xml: string) {
+  const soapFault = extractSoapFault(xml);
+  if (soapFault) {
+    throw new ArcaError("ARCA rechazó la verificación.", soapFault);
+  }
+
+  const errorsBlock = extractTag(xml, "Errors");
+  if (!errorsBlock) {
+    return;
+  }
+
+  const errors = extractItems(errorsBlock, "Err")
+    .map((item) => extractTag(item, "Msg"))
+    .filter(Boolean)
+    .join(" | ");
+  throw new ArcaError("ARCA rechazó la verificación.", errors || undefined);
+}
+
 export async function requestCae(
   businessId: string,
   input: {
@@ -153,6 +227,10 @@ export async function requestCae(
   }
 ) {
   const auth = await getArcaAuthToken(businessId);
+
+  if (auth.connectionMode === FiscalConnectionMode.PROVIDER_DELEGATION) {
+    throw new ArcaError("La emisión fiscal por delegación todavía no está habilitada.");
+  }
 
   const ivaXml = input.iva.length > 0
     ? `<ar:Iva>${input.iva
@@ -203,6 +281,7 @@ export async function requestCae(
 
   const responseXml = await callWsfe({
     environment: auth.environment,
+    connectionMode: auth.connectionMode,
     operation: "FECAESolicitar",
     body: bodyXml
   });
@@ -283,6 +362,7 @@ export async function consultFiscalDocumentInArca(
   const auth = await getArcaAuthToken(businessId);
   const xml = await callWsfe({
     environment: auth.environment,
+    connectionMode: auth.connectionMode,
     operation: "FECompConsultar",
     body: [
       "<ar:FECompConsultar>",

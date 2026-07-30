@@ -1,7 +1,9 @@
 import {
+  FiscalConnectionMode,
   FiscalDocumentIdentityType,
   FiscalEnvironment,
   FiscalIssueMode,
+  FiscalProviderVerificationStatus,
   type FiscalTaxTreatment,
   type FiscalCustomerCondition,
   type FiscalDocumentLetter,
@@ -14,7 +16,14 @@ export const FISCAL_SETTING_ID = "default";
 type FiscalSettingsClient = Prisma.TransactionClient | typeof prisma;
 
 export type FiscalSettingView = {
+  exists: boolean;
   enabled: boolean;
+  connectionMode: FiscalConnectionMode;
+  delegationDeclaredAt: Date | null;
+  providerVerificationStatus: FiscalProviderVerificationStatus;
+  providerVerifiedAt: Date | null;
+  providerLastVerificationAt: Date | null;
+  providerLastErrorCode: string | null;
   environment: FiscalEnvironment;
   cuit: string | null;
   legalName: string | null;
@@ -47,7 +56,14 @@ export type FiscalSettingView = {
 
 export function getDefaultFiscalSetting(): FiscalSettingView {
   return {
+    exists: false,
     enabled: false,
+    connectionMode: FiscalConnectionMode.LEGACY_PER_BUSINESS,
+    delegationDeclaredAt: null,
+    providerVerificationStatus: FiscalProviderVerificationStatus.PENDING,
+    providerVerifiedAt: null,
+    providerLastVerificationAt: null,
+    providerLastErrorCode: null,
     environment: FiscalEnvironment.HOMOLOGACION,
     cuit: null,
     legalName: null,
@@ -90,6 +106,12 @@ export async function getFiscalSettingOrDefault(
     where: { businessId },
     select: {
       enabled: true,
+      connectionMode: true,
+      delegationDeclaredAt: true,
+      providerVerificationStatus: true,
+      providerVerifiedAt: true,
+      providerLastVerificationAt: true,
+      providerLastErrorCode: true,
       environment: true,
       cuit: true,
       legalName: true,
@@ -125,7 +147,14 @@ export async function getFiscalSettingOrDefault(
   }
 
   return {
+    exists: true,
     enabled: setting.enabled,
+    connectionMode: setting.connectionMode,
+    delegationDeclaredAt: setting.delegationDeclaredAt,
+    providerVerificationStatus: setting.providerVerificationStatus,
+    providerVerifiedAt: setting.providerVerifiedAt,
+    providerLastVerificationAt: setting.providerLastVerificationAt,
+    providerLastErrorCode: setting.providerLastErrorCode,
     environment: setting.environment,
     cuit: setting.cuit,
     legalName: setting.legalName,

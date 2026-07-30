@@ -176,6 +176,17 @@ enum FiscalEnvironment {
   PRODUCCION
 }
 
+enum FiscalConnectionMode {
+  LEGACY_PER_BUSINESS
+  PROVIDER_DELEGATION
+}
+
+enum FiscalProviderVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
 enum FiscalIssueMode {
   ASK
   AUTO
@@ -488,8 +499,29 @@ model FiscalSetting {
   arcaLastWsfeStatus         String?
   arcaLastWsfeTestAt         DateTime?
   arcaLastError              String?                    @db.Text
+  connectionMode             FiscalConnectionMode       @default(LEGACY_PER_BUSINESS)
+  delegationDeclaredAt       DateTime?
+  providerVerificationStatus FiscalProviderVerificationStatus @default(PENDING)
+  providerVerifiedAt         DateTime?
+  providerLastVerificationAt DateTime?
+  providerLastErrorCode      String?                    @db.VarChar(120)
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
+}
+
+model FiscalProviderAuthCache {
+  id                     String            @id @default(cuid())
+  certificateFingerprint String            @db.VarChar(128)
+  environment            FiscalEnvironment
+  service                String            @db.VarChar(80)
+  encryptedToken         String            @db.Text
+  encryptedSign          String            @db.Text
+  expiresAt              DateTime
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  @@unique([certificateFingerprint, environment, service])
+  @@index([expiresAt])
 }
 
 model FiscalDocument {

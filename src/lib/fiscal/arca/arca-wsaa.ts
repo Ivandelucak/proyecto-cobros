@@ -1,5 +1,5 @@
 import forge from "node-forge";
-import { FiscalEnvironment } from "@prisma/client";
+import { FiscalConnectionMode, FiscalEnvironment } from "@prisma/client";
 import {
   ARCA_ENDPOINTS,
   ARCA_WSAA_SERVICE
@@ -14,21 +14,23 @@ import {
   extractTag,
   formatArcaDate
 } from "@/lib/fiscal/arca/arca-xml";
-import { FISCAL_SETTING_ID } from "@/lib/fiscal/fiscal-settings";
+import {
+  getCachedProviderAuth,
+  saveCachedProviderAuth,
+  type CachedProviderAuth
+} from "@/lib/fiscal/provider-auth-cache.server";
+import { assertProviderTokenEncryptionReady } from "@/lib/fiscal/provider-token-crypto.server";
+import {
+  resolveFiscalCredentials,
+  type LegacyFiscalCredentials,
+  type ProviderDelegationCredentials
+} from "@/lib/fiscal/fiscal-credentials.server";
 import { prisma } from "@/lib/prisma";
 
-type ArcaSettingWithSecrets = {
-  id: string;
-  environment: FiscalEnvironment;
-  cuit: string | null;
-  arcaCertificatePem: string | null;
-  arcaPrivateKeyPem: string | null;
-  arcaWsaaToken: string | null;
-  arcaWsaaSign: string | null;
-  arcaTokenExpiresAt: Date | null;
-};
-
 const TOKEN_REFRESH_SAFETY_MS = 10 * 60 * 1000;
+const PROVIDER_CACHE_RETRY_MS = 150;
+const PROVIDER_CACHE_RETRY_ATTEMPTS = 4;
+const providerAuthRefreshes = new Map<string, Promise<CachedProviderAuth>>();
 
 export type ArcaAuthToken = {
   token: string;
@@ -36,27 +38,200 @@ export type ArcaAuthToken = {
   expirationTime: Date;
   cuit: string;
   environment: FiscalEnvironment;
+  connectionMode: FiscalConnectionMode;
   fromCache: boolean;
   alreadyAuthenticated: boolean;
 };
 
-export async function getArcaAuthToken(businessId: string, options: { forceRefresh?: boolean } = {}) {
-  const setting = await getArcaSettingWithSecrets(businessId);
-  validateArcaWsaaSetting(setting);
+export async function getArcaAuthToken(
+  businessId: string,
+  options: { forceRefresh?: boolean } = {}
+) {
+  const credentials = await resolveFiscalCredentials({ businessId });
 
-  if (!options.forceRefresh && isCachedTokenUsable(setting)) {
-    return buildCachedAuthToken(setting, {
-      alreadyAuthenticated: false
-    });
+  if (credentials.connectionMode === FiscalConnectionMode.PROVIDER_DELEGATION) {
+    return getProviderDelegationAuthToken(credentials, options);
   }
 
-  const endpoint = ARCA_ENDPOINTS[setting.environment].wsaa;
-  const tra = createLoginTicketRequestXml(ARCA_WSAA_SERVICE);
+  return getLegacyArcaAuthToken(credentials, options);
+}
+
+async function getLegacyArcaAuthToken(
+  credentials: LegacyFiscalCredentials,
+  options: { forceRefresh?: boolean }
+): Promise<ArcaAuthToken> {
+  if (credentials.environment !== FiscalEnvironment.HOMOLOGACION) {
+    throw new ArcaError("Esta etapa solo permite ARCA homologacion.");
+  }
+
+  if (!options.forceRefresh && isLegacyCachedTokenUsable(credentials)) {
+    return buildLegacyCachedAuthToken(credentials, false);
+  }
+
+  const response = await requestLoginCms({
+    environment: credentials.environment,
+    certificatePem: credentials.certificatePem,
+    privateKeyPem: credentials.privateKeyPem,
+    service: ARCA_WSAA_SERVICE
+  });
+
+  if (response.alreadyAuthenticated) {
+    if (isLegacyCachedTokenFuture(credentials)) {
+      return buildLegacyCachedAuthToken(credentials, true);
+    }
+
+    throw new ArcaError(
+      "ARCA informa que ya existe un Ticket de Acceso valido para este servicio."
+    );
+  }
+
+  await prisma.fiscalSetting.update({
+    where: { id: credentials.fiscalSettingId },
+    data: {
+      arcaWsaaToken: response.token,
+      arcaWsaaSign: response.sign,
+      arcaTokenExpiresAt: response.expirationTime,
+      arcaLastConnectionStatus: "OK",
+      arcaLastConnectionTestAt: new Date(),
+      arcaLastError: null
+    }
+  });
+
+  return {
+    token: response.token,
+    sign: response.sign,
+    expirationTime: response.expirationTime,
+    cuit: credentials.representedCuit,
+    environment: credentials.environment,
+    connectionMode: FiscalConnectionMode.LEGACY_PER_BUSINESS,
+    fromCache: false,
+    alreadyAuthenticated: false
+  };
+}
+
+async function getProviderDelegationAuthToken(
+  credentials: ProviderDelegationCredentials,
+  options: { forceRefresh?: boolean }
+): Promise<ArcaAuthToken> {
+  assertProviderTokenEncryptionReady();
+
+  const cacheKey = {
+    certificateFingerprint: credentials.certificateFingerprint,
+    environment: credentials.environment,
+    service: credentials.service
+  };
+
+  if (!options.forceRefresh) {
+    const cached = await getCachedProviderAuth(cacheKey);
+    if (cached) {
+      return buildProviderAuthToken(credentials, cached, { fromCache: true, alreadyAuthenticated: false });
+    }
+  }
+
+  const cached = await refreshProviderAuth(credentials, cacheKey);
+
+  return buildProviderAuthToken(credentials, cached, { fromCache: false, alreadyAuthenticated: false });
+}
+
+async function refreshProviderAuth(
+  credentials: ProviderDelegationCredentials,
+  cacheKey: {
+    certificateFingerprint: string;
+    environment: FiscalEnvironment;
+    service: string;
+  }
+): Promise<CachedProviderAuth> {
+  const refreshKey = [
+    cacheKey.certificateFingerprint,
+    cacheKey.environment,
+    cacheKey.service
+  ].join(":");
+  const activeRefresh = providerAuthRefreshes.get(refreshKey);
+  if (activeRefresh) {
+    return activeRefresh;
+  }
+
+  const refresh = requestProviderAuthRefresh(credentials, cacheKey);
+  providerAuthRefreshes.set(refreshKey, refresh);
+
+  try {
+    return await refresh;
+  } finally {
+    if (providerAuthRefreshes.get(refreshKey) === refresh) {
+      providerAuthRefreshes.delete(refreshKey);
+    }
+  }
+}
+
+async function requestProviderAuthRefresh(
+  credentials: ProviderDelegationCredentials,
+  cacheKey: {
+    certificateFingerprint: string;
+    environment: FiscalEnvironment;
+    service: string;
+  }
+): Promise<CachedProviderAuth> {
+  const response = await requestLoginCms({
+    environment: credentials.environment,
+    certificatePem: credentials.certificatePem,
+    privateKeyPem: credentials.privateKeyPem,
+    service: credentials.service
+  });
+
+  if (response.alreadyAuthenticated) {
+    const cached = await waitForProviderAuthCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    throw new ArcaError(
+      "ARCA informa que ya existe un Ticket de Acceso valido para este servicio. Intentá nuevamente cuando se renueve."
+    );
+  }
+
+  const cached = {
+    token: response.token,
+    sign: response.sign,
+    expirationTime: response.expirationTime
+  };
+  await saveCachedProviderAuth(cacheKey, cached);
+  return cached;
+}
+
+async function waitForProviderAuthCache(cacheKey: {
+  certificateFingerprint: string;
+  environment: FiscalEnvironment;
+  service: string;
+}) {
+  for (let attempt = 0; attempt < PROVIDER_CACHE_RETRY_ATTEMPTS; attempt += 1) {
+    const cached = await getCachedProviderAuth(cacheKey, { allowNearExpiry: true });
+    if (cached) {
+      return cached;
+    }
+    if (attempt + 1 < PROVIDER_CACHE_RETRY_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, PROVIDER_CACHE_RETRY_MS));
+    }
+  }
+
+  return null;
+}
+
+async function requestLoginCms(input: {
+  environment: FiscalEnvironment;
+  certificatePem: string;
+  privateKeyPem: string;
+  service: string;
+}): Promise<
+  | { token: string; sign: string; expirationTime: Date; alreadyAuthenticated: false }
+  | { alreadyAuthenticated: true }
+> {
+  const endpoint = ARCA_ENDPOINTS[input.environment].wsaa;
+  const tra = createLoginTicketRequestXml(input.service);
   validateGeneratedTraXml(tra);
-  const cms = signLoginTicketRequest(tra, setting);
+  const cms = signLoginTicketRequest(tra, input);
   logWsaaDebug("Solicitud LoginCms generada.", {
     endpoint,
-    service: ARCA_WSAA_SERVICE,
+    service: input.service,
     traXml: tra,
     cmsBase64Length: cms.length
   });
@@ -80,27 +255,12 @@ export async function getArcaAuthToken(businessId: string, options: { forceRefre
 
     logWsaaDebug("Respuesta LoginCms fallida.", {
       endpoint,
-      service: ARCA_WSAA_SERVICE,
+      service: input.service,
       rawSoap: sanitizeArcaDetail(arcaError.details) ?? arcaError.message
     });
 
     if (isWsaaAlreadyAuthenticatedError(arcaError)) {
-      if (isCachedTokenFuture(setting)) {
-        logWsaaDebug("ARCA informa TA vigente; se reutiliza token guardado.", {
-          endpoint,
-          service: ARCA_WSAA_SERVICE,
-          expirationTime: setting.arcaTokenExpiresAt?.toISOString()
-        });
-
-        return buildCachedAuthToken(setting, {
-          alreadyAuthenticated: true
-        });
-      }
-
-      throw new ArcaError(
-        "ARCA informa que ya existe un Ticket de Acceso válido para este servicio.",
-        arcaError.details
-      );
+      return { alreadyAuthenticated: true };
     }
 
     if (isWsaaXmlSchemaError(arcaError)) {
@@ -114,7 +274,6 @@ export async function getArcaAuthToken(businessId: string, options: { forceRefre
   }
 
   const loginCmsReturn = extractTag(responseXml, "loginCmsReturn");
-
   if (!loginCmsReturn) {
     throw new ArcaError("No se pudo obtener token WSAA.", "Respuesta WSAA sin loginCmsReturn.");
   }
@@ -122,12 +281,8 @@ export async function getArcaAuthToken(businessId: string, options: { forceRefre
   const token = extractTag(loginCmsReturn, "token");
   const sign = extractTag(loginCmsReturn, "sign");
   const expiration = extractTag(loginCmsReturn, "expirationTime");
-
   if (!token || !sign || !expiration) {
-    throw new ArcaError(
-      "No se pudo obtener token WSAA.",
-      "Respuesta WSAA incompleta."
-    );
+    throw new ArcaError("No se pudo obtener token WSAA.", "Respuesta WSAA incompleta.");
   }
 
   const expirationTime = new Date(expiration);
@@ -135,98 +290,56 @@ export async function getArcaAuthToken(businessId: string, options: { forceRefre
     throw new ArcaError("No se pudo obtener token WSAA.", "Vencimiento WSAA invalido.");
   }
 
-  await prisma.fiscalSetting.update({
-    where: { id: setting.id },
-    data: {
-      arcaWsaaToken: token,
-      arcaWsaaSign: sign,
-      arcaTokenExpiresAt: expirationTime,
-      arcaLastConnectionStatus: "OK",
-      arcaLastConnectionTestAt: new Date(),
-      arcaLastError: null
-    }
-  });
-
-  return {
-    token,
-    sign,
-    expirationTime,
-    cuit: onlyDigits(setting.cuit),
-    environment: setting.environment,
-    fromCache: false,
-    alreadyAuthenticated: false
-  } satisfies ArcaAuthToken;
+  return { token, sign, expirationTime, alreadyAuthenticated: false };
 }
 
-async function getArcaSettingWithSecrets(businessId: string) {
-  const setting = await prisma.fiscalSetting.findUnique({
-    where: { businessId },
-    select: {
-      id: true,
-      environment: true,
-      cuit: true,
-      arcaCertificatePem: true,
-      arcaPrivateKeyPem: true,
-      arcaWsaaToken: true,
-      arcaWsaaSign: true,
-      arcaTokenExpiresAt: true
-    }
-  });
-
-  if (!setting) {
-    throw new ArcaError("Falta configuracion fiscal.");
-  }
-
-  return setting;
-}
-
-function validateArcaWsaaSetting(setting: ArcaSettingWithSecrets) {
-  if (setting.environment !== FiscalEnvironment.HOMOLOGACION) {
-    throw new ArcaError("Esta etapa solo permite ARCA homologacion.");
-  }
-
-  if (!onlyDigits(setting.cuit)) {
-    throw new ArcaError("Falta CUIT emisor.");
-  }
-
-  if (!setting.arcaCertificatePem?.trim()) {
-    throw new ArcaError("Falta certificado.");
-  }
-
-  if (!setting.arcaPrivateKeyPem?.trim()) {
-    throw new ArcaError("Falta clave privada.");
-  }
-}
-
-function isCachedTokenUsable(setting: ArcaSettingWithSecrets) {
-  if (!setting.arcaWsaaToken || !setting.arcaWsaaSign || !setting.arcaTokenExpiresAt) {
+function isLegacyCachedTokenUsable(credentials: LegacyFiscalCredentials) {
+  if (!credentials.token || !credentials.sign || !credentials.tokenExpiresAt) {
     return false;
   }
 
-  return setting.arcaTokenExpiresAt.getTime() > Date.now() + TOKEN_REFRESH_SAFETY_MS;
+  return credentials.tokenExpiresAt.getTime() > Date.now() + TOKEN_REFRESH_SAFETY_MS;
 }
 
-function isCachedTokenFuture(setting: ArcaSettingWithSecrets) {
-  if (!setting.arcaWsaaToken || !setting.arcaWsaaSign || !setting.arcaTokenExpiresAt) {
+function isLegacyCachedTokenFuture(credentials: LegacyFiscalCredentials) {
+  if (!credentials.token || !credentials.sign || !credentials.tokenExpiresAt) {
     return false;
   }
 
-  return setting.arcaTokenExpiresAt.getTime() > Date.now();
+  return credentials.tokenExpiresAt.getTime() > Date.now();
 }
 
-function buildCachedAuthToken(
-  setting: ArcaSettingWithSecrets,
-  options: { alreadyAuthenticated: boolean }
-) {
+function buildLegacyCachedAuthToken(
+  credentials: LegacyFiscalCredentials,
+  alreadyAuthenticated: boolean
+): ArcaAuthToken {
   return {
-    token: setting.arcaWsaaToken!,
-    sign: setting.arcaWsaaSign!,
-    expirationTime: setting.arcaTokenExpiresAt!,
-    cuit: onlyDigits(setting.cuit),
-    environment: setting.environment,
+    token: credentials.token!,
+    sign: credentials.sign!,
+    expirationTime: credentials.tokenExpiresAt!,
+    cuit: credentials.representedCuit,
+    environment: credentials.environment,
+    connectionMode: FiscalConnectionMode.LEGACY_PER_BUSINESS,
     fromCache: true,
+    alreadyAuthenticated
+  };
+}
+
+function buildProviderAuthToken(
+  credentials: ProviderDelegationCredentials,
+  cached: { token: string; sign: string; expirationTime: Date },
+  options: { fromCache: boolean; alreadyAuthenticated: boolean }
+): ArcaAuthToken {
+  return {
+    token: cached.token,
+    sign: cached.sign,
+    expirationTime: cached.expirationTime,
+    cuit: credentials.representedCuit,
+    environment: credentials.environment,
+    connectionMode: FiscalConnectionMode.PROVIDER_DELEGATION,
+    fromCache: options.fromCache,
     alreadyAuthenticated: options.alreadyAuthenticated
-  } satisfies ArcaAuthToken;
+  };
 }
 
 function createLoginTicketRequestXml(service: string) {
@@ -250,16 +363,11 @@ function createLoginTicketRequestXml(service: string) {
 
 export function validateGeneratedTraXml(traXml: string) {
   if (!/<loginTicketRequest\b[^>]*\bversion="1\.0"[^>]*>/i.test(traXml)) {
-    throw new ArcaError(
-      "TRA WSAA invalido.",
-      "Falta loginTicketRequest con version=\"1.0\"."
-    );
+    throw new ArcaError("TRA WSAA invalido.", "Falta loginTicketRequest con version=\"1.0\".");
   }
-
   if (!extractTag(traXml, "header")) {
     throw new ArcaError("TRA WSAA invalido.", "Falta header.");
   }
-
   if (!extractTag(traXml, "uniqueId")) {
     throw new ArcaError("TRA WSAA invalido.", "Falta uniqueId.");
   }
@@ -279,16 +387,18 @@ export function validateGeneratedTraXml(traXml: string) {
     throw new ArcaError("TRA WSAA invalido.", "expirationTime supera 24 horas.");
   }
 
-  const service = extractTag(traXml, "service");
-  if (service !== ARCA_WSAA_SERVICE) {
+  if (extractTag(traXml, "service") !== ARCA_WSAA_SERVICE) {
     throw new ArcaError("TRA WSAA invalido.", "service debe ser wsfe.");
   }
 }
 
-function signLoginTicketRequest(traXml: string, setting: ArcaSettingWithSecrets) {
+function signLoginTicketRequest(
+  traXml: string,
+  credentials: { certificatePem: string; privateKeyPem: string }
+) {
   try {
-    const certificate = forge.pki.certificateFromPem(setting.arcaCertificatePem ?? "");
-    const privateKey = forge.pki.privateKeyFromPem(setting.arcaPrivateKeyPem ?? "");
+    const certificate = forge.pki.certificateFromPem(credentials.certificatePem);
+    const privateKey = forge.pki.privateKeyFromPem(credentials.privateKeyPem);
     const p7 = forge.pkcs7.createSignedData();
     p7.content = forge.util.createBuffer(traXml, "utf8");
     p7.addCertificate(certificate);
@@ -297,16 +407,9 @@ function signLoginTicketRequest(traXml: string, setting: ArcaSettingWithSecrets)
       certificate,
       digestAlgorithm: forge.pki.oids.sha256,
       authenticatedAttributes: [
-        {
-          type: forge.pki.oids.contentType,
-          value: forge.pki.oids.data
-        },
-        {
-          type: forge.pki.oids.messageDigest
-        },
-        {
-          type: forge.pki.oids.signingTime
-        }
+        { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
+        { type: forge.pki.oids.messageDigest },
+        { type: forge.pki.oids.signingTime }
       ]
     });
     p7.sign({ detached: false });
@@ -336,26 +439,18 @@ function buildLoginCmsSoapEnvelope(cms: string) {
   ].join("\n");
 }
 
-function onlyDigits(value: string | null) {
-  return value?.replace(/\D/g, "") ?? "";
-}
-
 function isWsaaXmlSchemaError(error: ArcaError) {
-  const text = `${error.message}\n${error.details ?? ""}`.toLowerCase();
-
-  return text.includes("xml.bad");
+  return `${error.message}\n${error.details ?? ""}`.toLowerCase().includes("xml.bad");
 }
 
 function isWsaaAlreadyAuthenticatedError(error: ArcaError) {
-  const text = `${error.message}\n${error.details ?? ""}`.toLowerCase();
-
-  return text.includes("coe.alreadyauthenticated");
+  return `${error.message}\n${error.details ?? ""}`
+    .toLowerCase()
+    .includes("coe.alreadyauthenticated");
 }
 
 function logWsaaDebug(message: string, payload: Record<string, unknown>) {
-  if (process.env.NODE_ENV !== "development") {
-    return;
+  if (process.env.NODE_ENV === "development") {
+    console.info("[ARCA WSAA]", message, payload);
   }
-
-  console.info("[ARCA WSAA]", message, payload);
 }
