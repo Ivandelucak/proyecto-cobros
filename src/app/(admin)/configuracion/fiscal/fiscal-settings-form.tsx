@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { AppModal } from "@/components/ui/overlay";
 import type { FiscalSettingView } from "@/lib/fiscal/fiscal-settings";
 import {
   updateFiscalSettingsAction,
@@ -15,13 +16,9 @@ type FiscalSettingsFormProps = {
 };
 
 const initialState: FiscalSettingsState = {};
-const environmentLabels = {
-  HOMOLOGACION: "Homologacion",
-  PRODUCCION: "Produccion"
-};
 const issueModeLabels = {
   ASK: "Preguntar",
-  AUTO: "Automatico",
+  AUTO: "Automático",
   NEVER: "Nunca"
 };
 const fiscalConditionLabels = {
@@ -52,13 +49,13 @@ const identityTypeLabels = {
   OTHER: "Otro"
 };
 const fiscalTaxOptions = [
-  ["", "Sin definir", "La pre-emision pedira configurar tratamiento fiscal."],
-  ["TAXED_21", "Gravado 21%", "Codigo ARCA 5"],
-  ["TAXED_10_5", "Gravado 10.5%", "Codigo ARCA 4"],
-  ["TAXED_27", "Gravado 27%", "Codigo ARCA 6"],
-  ["TAXED_0", "Gravado 0%", "Codigo ARCA 3"],
-  ["EXEMPT", "Exento", "Suma en importe exento"],
-  ["NON_TAXABLE", "No gravado", "Suma en importe no gravado"]
+  ["", "Sin definir"],
+  ["TAXED_21", "Gravado 21%"],
+  ["TAXED_10_5", "Gravado 10.5%"],
+  ["TAXED_27", "Gravado 27%"],
+  ["TAXED_0", "Gravado 0%"],
+  ["EXEMPT", "Exento"],
+  ["NON_TAXABLE", "No gravado"]
 ] as const;
 
 export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
@@ -66,42 +63,54 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
     updateFiscalSettingsAction,
     initialState
   );
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const [certificatePem, setCertificatePem] = useState("");
+  const [privateKeyPem, setPrivateKeyPem] = useState("");
+
+  const closeConnection = () => {
+    setCertificatePem("");
+    setPrivateKeyPem("");
+    setConnectionOpen(false);
+  };
+
+  const credentialsReady = setting.hasArcaCertificatePem && setting.hasArcaPrivateKeyPem;
 
   return (
     <form action={formAction} className="space-y-5">
-      <Card className="border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100">
-        Esta etapa solo prepara la conexion de homologacion. No emite comprobantes
-        reales en ARCA.
+      <input type="hidden" name="environment" value={setting.environment} />
+      <input
+        type="hidden"
+        name="pendingWarningMinutes"
+        value={setting.pendingWarningMinutes}
+      />
+      <input
+        type="hidden"
+        name="pendingCriticalMinutes"
+        value={setting.pendingCriticalMinutes}
+      />
+
+      <Card className="p-5">
+        <SectionTitle title="Activación" />
+        <div className="mt-4 max-w-md">
+          <Toggle
+            name="enabled"
+            label="Habilitar facturación electrónica"
+            value={setting.enabled}
+          />
+        </div>
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="Datos fiscales del emisor" />
+        <SectionTitle title="Datos fiscales" />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Toggle
-            name="enabled"
-            label="Habilitar preparacion fiscal"
-            value={setting.enabled}
-          />
-          <Field label="Ambiente">
-            <Select name="environment" defaultValue={setting.environment}>
-              {Object.entries(environmentLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
           <Field label="CUIT emisor">
             <Input name="cuit" defaultValue={setting.cuit ?? ""} />
           </Field>
-          <Field label="Razon social">
+          <Field label="Razón social">
             <Input name="legalName" defaultValue={setting.legalName ?? ""} />
           </Field>
-          <Field label="Condicion fiscal comercio">
-            <Select
-              name="fiscalCondition"
-              defaultValue={setting.fiscalCondition ?? ""}
-            >
+          <Field label="Condición fiscal">
+            <Select name="fiscalCondition" defaultValue={setting.fiscalCondition ?? ""}>
               {Object.entries(fiscalConditionLabels).map(([value, label]) => (
                 <option key={value || "empty"} value={value}>
                   {label}
@@ -118,7 +127,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               defaultValue={setting.pointOfSale ?? ""}
             />
           </Field>
-          <Field label="Letra por defecto">
+          <Field label="Letra de comprobante predeterminada">
             <Select
               name="defaultInvoiceLetter"
               defaultValue={setting.defaultInvoiceLetter ?? ""}
@@ -131,10 +140,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             </Select>
           </Field>
           <Field label="Documento consumidor final">
-            <Select
-              name="defaultCustomerDocType"
-              defaultValue={setting.defaultCustomerDocType}
-            >
+            <Select name="defaultCustomerDocType" defaultValue={setting.defaultCustomerDocType}>
               {Object.entries(identityTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -146,13 +152,10 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="IVA por defecto" />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field label="Tratamiento y alicuota por defecto">
-            <Select
-              name="defaultFiscalTax"
-              defaultValue={defaultFiscalTaxValue(setting)}
-            >
+        <SectionTitle title="Configuración fiscal" />
+        <div className="mt-4 max-w-xl">
+          <Field label="Tratamiento y alícuota de IVA predeterminados">
+            <Select name="defaultFiscalTax" defaultValue={defaultFiscalTaxValue(setting)}>
               {fiscalTaxOptions.map(([value, label]) => (
                 <option key={value || "empty"} value={value}>
                   {label}
@@ -160,30 +163,16 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
               ))}
             </Select>
           </Field>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
-            <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
-              Codigo ARCA asociado
-            </span>
-            <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
-              {defaultFiscalTaxHelp(defaultFiscalTaxValue(setting))}
-            </span>
-          </div>
         </div>
-        {setting.fiscalCondition === "MONOTRIBUTO" ? (
-          <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
-            En Factura C no se discrimina IVA. La previsualizacion conserva el
-            total como importe neto interno.
-          </p>
-        ) : null}
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="Politica de emision" />
+        <SectionTitle title="Política de emisión" />
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <Field label="Efectivo">
             <IssueModeSelect name="cashIssueMode" value={setting.cashIssueMode} />
           </Field>
-          <Field label="Medios electronicos">
+          <Field label="Medios electrónicos">
             <IssueModeSelect
               name="electronicPaymentIssueMode"
               value={setting.electronicPaymentIssueMode}
@@ -196,29 +185,7 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             />
           </Field>
         </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionTitle title="Pendientes y anulaciones" />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field label="Minutos para advertencia">
-            <Input
-              name="pendingWarningMinutes"
-              type="number"
-              min={1}
-              max={1440}
-              defaultValue={setting.pendingWarningMinutes}
-            />
-          </Field>
-          <Field label="Minutos para alerta critica">
-            <Input
-              name="pendingCriticalMinutes"
-              type="number"
-              min={1}
-              max={1440}
-              defaultValue={setting.pendingCriticalMinutes}
-            />
-          </Field>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Toggle
             name="allowCancelBeforeIssue"
             label="Permitir anular antes de emitir"
@@ -233,20 +200,53 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
       </Card>
 
       <Card className="p-5">
-        <SectionTitle title="Credenciales ARCA homologacion" />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <CredentialStatus
-            label="Certificado cargado"
-            value={setting.hasArcaCertificatePem}
-          />
-          <CredentialStatus
-            label="Clave privada cargada"
-            value={setting.hasArcaPrivateKeyPem}
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <SectionTitle title="Conexión con ARCA" />
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {credentialsReady ? "Credenciales cargadas." : "Credenciales pendientes."}
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => setConnectionOpen(true)}>
+            Configurar conexión
+          </Button>
+        </div>
+      </Card>
+
+      <StateMessage state={state} />
+
+      <div className="flex justify-end">
+        <Button type="submit" variant="primary" className="min-w-48" disabled={pending}>
+          {pending ? "Guardando..." : "Guardar configuración"}
+        </Button>
+      </div>
+
+      <AppModal
+        open={connectionOpen}
+        title="Conexión con ARCA"
+        description="Estas credenciales permiten conectar Fox Point con ARCA."
+        onClose={closeConnection}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={closeConnection} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" disabled={pending}>
+              {pending ? "Guardando..." : "Guardar configuración"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-[var(--text-secondary)]">
+          El certificado y la clave privada son distintos del CUIT.
+        </p>
+        <div className="mt-4 grid gap-4">
           <Field label="Certificado PEM">
             <Textarea
               name="arcaCertificatePem"
               rows={7}
+              value={certificatePem}
+              onChange={(event) => setCertificatePem(event.target.value)}
               spellCheck={false}
               placeholder="Pegar nuevo certificado PEM para reemplazar"
               className="font-mono text-xs"
@@ -256,25 +256,16 @@ export function FiscalSettingsForm({ setting }: FiscalSettingsFormProps) {
             <Textarea
               name="arcaPrivateKeyPem"
               rows={7}
+              value={privateKeyPem}
+              onChange={(event) => setPrivateKeyPem(event.target.value)}
               spellCheck={false}
               placeholder="Pegar nueva clave privada PEM para reemplazar"
               className="font-mono text-xs"
             />
           </Field>
         </div>
-        <p className="mt-3 text-xs text-gray-500 dark:text-[#7F8D9A]">
-          Las credenciales se guardan para pruebas locales de homologacion y no se
-          vuelven a mostrar despues de guardar.
-        </p>
-      </Card>
-
-      <StateMessage state={state} />
-
-      <div className="flex justify-end">
-        <Button type="submit" variant="primary" className="min-w-44" disabled={pending}>
-          {pending ? "Guardando..." : "Guardar fiscal"}
-        </Button>
-      </div>
+        {connectionOpen ? <StateMessage state={state} className="mt-4" /> : null}
+      </AppModal>
     </form>
   );
 }
@@ -317,40 +308,22 @@ function defaultFiscalTaxValue(setting: FiscalSettingView) {
   return "TAXED_21";
 }
 
-function defaultFiscalTaxHelp(value: string) {
-  const option = fiscalTaxOptions.find(([optionValue]) => optionValue === value);
-  return option?.[2] ?? "Sin codigo";
-}
-
 function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) {
   return (
-    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
+    <label className="flex items-center gap-2 rounded-md border border-[color:var(--panel-border)] bg-[var(--panel-bg-secondary)] px-3 py-2 text-sm">
       <input
         type="checkbox"
         name={name}
         defaultChecked={value}
         className="h-4 w-4 rounded border-slate-300 text-brand-600"
       />
-      <span className="font-medium text-gray-800 dark:text-[#F3F7FA]">{label}</span>
+      <span className="font-medium text-[var(--text-primary)]">{label}</span>
     </label>
   );
 }
 
-function CredentialStatus({ label, value }: { label: string; value: boolean }) {
-  return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-[#273342] dark:bg-[#121922]">
-      <span className="block text-xs uppercase tracking-wide text-gray-500 dark:text-[#7F8D9A]">
-        {label}
-      </span>
-      <span className="mt-1 block font-semibold text-gray-950 dark:text-[#F3F7FA]">
-        {value ? "Si" : "No"}
-      </span>
-    </div>
-  );
-}
-
 function SectionTitle({ title }: { title: string }) {
-  return <h2 className="text-sm font-semibold text-gray-950 dark:text-[#F3F7FA]">{title}</h2>;
+  return <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>;
 }
 
 function Field({
@@ -362,24 +335,30 @@ function Field({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-medium text-gray-700 dark:text-[#A9B6C2]">{label}</span>
+      <span className="text-sm font-medium text-[var(--text-secondary)]">{label}</span>
       {children}
     </label>
   );
 }
 
-function StateMessage({ state }: { state: FiscalSettingsState }) {
+function StateMessage({
+  state,
+  className
+}: {
+  state: FiscalSettingsState;
+  className?: string;
+}) {
   if (!state.error && !state.success) {
     return null;
   }
 
   return (
     <p
-      className={
+      className={`rounded-md border px-3 py-2 text-sm ${className ?? ""} ${
         state.error
-          ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-          : "rounded-md border border-[#BFE3D2] bg-[#E8F6EF] px-3 py-2 text-sm text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
-      }
+          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
+          : "border-[#BFE3D2] bg-[#E8F6EF] text-[#1F8F63] dark:border-[#28A36A]/55 dark:bg-[#28A36A]/14 dark:text-[#D4F2E1]"
+      }`}
     >
       {state.error ?? state.success}
     </p>
