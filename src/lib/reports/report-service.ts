@@ -583,6 +583,117 @@ export async function getReportDashboardData(
   };
 }
 
+export async function getMobileReportDashboardData(
+  filters: ReportFilters,
+  businessId: string
+) {
+  const period = buildPeriod(filters);
+  const saleWhere = buildSaleWhere(period, filters.method, SaleStatus.PAID, businessId);
+  const cancelledWhere = buildSaleWhere(period, filters.method, SaleStatus.CANCELLED, businessId);
+  const purchaseWhere = {
+    status: PurchaseStatus.RECEIVED,
+    createdAt: { gte: period.start, lt: period.end },
+    businessId
+  } satisfies Prisma.PurchaseWhereInput;
+
+  const [sales, cancelledSummary, productsForAlerts, purchaseSummary, paymentMethodSettings] =
+    await Promise.all([
+      prisma.sale.findMany({
+        where: saleWhere,
+        include: {
+          payments: { select: { method: true, amount: true } },
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  cost: true,
+                  category: { select: { name: true } }
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.sale.aggregate({
+        where: cancelledWhere,
+        _sum: { total: true },
+        _count: true
+      }),
+      prisma.product.findMany({
+        where: { deletedAt: null, active: true, businessId },
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+          minStock: true,
+          unitType: true,
+          category: { select: { name: true } }
+        },
+        orderBy: { stock: "asc" }
+      }),
+      prisma.purchase.aggregate({
+        where: purchaseWhere,
+        _sum: { total: true },
+        _count: true
+      }),
+      getPaymentMethodSettings(businessId)
+    ]);
+
+  const paymentLabels = {
+    ...reportPaymentLabels,
+    ...Object.fromEntries(
+      paymentMethodSettings.map((setting) => [setting.method, setting.label])
+    )
+  } as Record<PaymentMethod, string>;
+  const metrics = summarizeSales(sales);
+  const cancelledTotal = cancelledSummary._sum.total ?? ZERO;
+  const paidSalesCount = sales.length;
+  const products = buildProductReports(sales);
+  const hasIncompleteCosts = products.all.some((product) => product.missingCost);
+  const missingCostProductCount = products.all.filter((product) => product.missingCost).length;
+  const categories = buildCategoryReports(products, metrics.totalSold);
+  const lowStockCandidates = productsForAlerts.filter((product) =>
+    product.stock.lte(product.minStock)
+  );
+  const purchasesTotal = purchaseSummary._sum.total ?? ZERO;
+
+  return {
+    paymentLabels,
+    executive: {
+      netSold: metrics.totalSold,
+      cancelledTotal,
+      estimatedProfit: metrics.estimatedProfit,
+      marginPercent: metrics.marginPercent,
+      paidSalesCount,
+      averageTicket: metrics.averageTicket,
+      unitsSold: metrics.unitsSold,
+      currentAccountSales: getPaymentMethodTotal(sales, PaymentMethod.CURRENT_ACCOUNT),
+      hasIncompleteCosts,
+      missingCostProductCount,
+      purchasesTotal,
+      purchasesCount: purchaseSummary._count,
+      salesMinusPurchases: metrics.totalSold.minus(purchasesTotal),
+      lowStockCount: lowStockCandidates.length,
+      outOfStockCount: productsForAlerts.filter((product) => product.stock.lte(0)).length
+    },
+    paymentBreakdown: buildPaymentBreakdown(sales, metrics.totalSold, paymentLabels),
+    dailySales: buildDailySales(sales, period),
+    hourlySales: buildHourlySales(sales),
+    topProductsByQuantityExtended: products.byQuantityExtended,
+    lowStockProducts: lowStockCandidates.slice(0, 10).map((product) => ({
+      id: product.id,
+      name: product.name,
+      categoryName: product.category.name,
+      stock: product.stock,
+      minStock: product.minStock,
+      unitType: product.unitType
+    })),
+    categories
+  };
+}
+
 function buildSaleWhere(
   period: ReportPeriod,
   method: PaymentMethod | null,

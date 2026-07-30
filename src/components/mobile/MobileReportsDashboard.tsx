@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ComparisonBadge, type ComparisonPresentation } from "@/components/reports/comparison-badge";
 import { MobilePageHeader } from "@/components/mobile/MobilePageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,8 +14,6 @@ type MobileMetric = {
   label: string;
   value: string;
   detail: string;
-  comparison: ComparisonPresentation;
-  previousLabel?: string;
   tone?: "default" | "blue" | "green" | "amber" | "red";
 };
 
@@ -214,9 +211,8 @@ export function MobileReportsDashboard({
       ) : null}
 
       <section aria-labelledby="mobile-report-summary">
-        <div className="mb-2 flex items-baseline justify-between gap-3">
+        <div className="mb-2">
           <h2 id="mobile-report-summary" className="text-base font-extrabold text-[#F3F7FA]">Resumen</h2>
-          <span className="text-xs font-medium text-[#7F8D9A]">Vs. periodo anterior</span>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           {metrics.map((metric) => (
@@ -425,9 +421,7 @@ function MobileMetricCard({ metric }: { metric: MobileMetric }) {
       <p className={cn("mt-1.5 break-words text-xl font-black leading-tight", metricValueTones[metric.tone ?? "default"])}>
         {metric.value}
       </p>
-      <div className="mt-2 min-h-5 space-y-1">
-        <ComparisonBadge comparison={metric.comparison} compact />
-        {metric.previousLabel ? <p className="text-[11px] leading-4 text-[#7F8D9A]">Anterior: {metric.previousLabel}</p> : null}
+      <div className="mt-2 min-h-5">
         <p className="text-[11px] leading-4 text-[#A9B6C2]">{metric.detail}</p>
       </div>
     </Card>

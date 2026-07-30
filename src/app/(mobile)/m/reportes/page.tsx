@@ -1,6 +1,5 @@
 import { PaymentMethod, Prisma } from "@prisma/client";
 import { MobileReportsDashboard } from "@/components/mobile/MobileReportsDashboard";
-import type { ComparisonPresentation } from "@/components/reports/comparison-badge";
 import { requireMobileAuth } from "@/lib/admin-auth";
 import {
   addArgentinaCalendarDays,
@@ -10,9 +9,7 @@ import {
 import { formatARS } from "@/lib/money";
 import {
   buildReportFilters,
-  getReportDashboardData,
-  type Comparison,
-  type ReportMetric
+  getMobileReportDashboardData
 } from "@/lib/reports/report-service";
 import { formatStock } from "@/lib/stock-format";
 
@@ -33,7 +30,7 @@ export default async function MobileReportesPage({ searchParams }: MobileReporte
   const user = await requireMobileAuth();
   const params = await searchParams;
   const { filters, range, filterError } = resolveMobileFilters(params);
-  const data = await getReportDashboardData(filters, user.businessId!);
+  const data = await getMobileReportDashboardData(filters, user.businessId!);
   const executive = data.executive;
   const paymentMethodLabel = filters.method ? data.paymentLabels[filters.method] : "Todos los pagos";
   const trendItems = range === "today" ? data.hourlySales : data.dailySales;
@@ -58,25 +55,25 @@ export default async function MobileReportesPage({ searchParams }: MobileReporte
           executive.hasIncompleteCosts ? "Estimacion parcial por costos incompletos." : "Con costos cargados.",
           "green"
         ),
-        metricView("Ticket promedio", executive.averageTicket, formatARS, "Por venta pagada."),
+        metricView("Ticket promedio", executive.averageTicket, formatARS, "Promedio por venta pagada."),
         metricView(
           "Ventas pagadas",
           executive.paidSalesCount,
           formatInteger,
-          `${executive.cancelledSalesCount} anuladas`
+          "Operaciones pagadas."
         ),
         metricView("Margen estimado", executive.marginPercent, formatPercent, "Sobre venta neta."),
         metricView(
           "Unidades vendidas",
           executive.unitsSold,
           (value) => formatDecimal(value, 3),
-          `${formatInteger(executive.itemsSold)} lineas`
+          "Unidades registradas."
         ),
         metricView(
           "Total anulado",
           executive.cancelledTotal,
           formatARS,
-          `${formatPercent(executive.cancellationRate)} de operaciones`
+          "Ventas anuladas."
         ),
         metricView("Ventas a cuenta", executive.currentAccountSales, formatARS, "Operaciones financiadas.", "amber")
       ]}
@@ -117,12 +114,12 @@ export default async function MobileReportesPage({ searchParams }: MobileReporte
         quantityLabel: `${formatDecimal(category.quantity, 3)} unidades`
       }))}
       profitability={{
-        netSold: formatARS(executive.netSold.value),
+        netSold: formatARS(executive.netSold),
         estimatedCost: executive.hasIncompleteCosts
           ? "Costos incompletos"
-          : formatARS(decimal(executive.netSold.value).minus(decimal(executive.estimatedProfit.value))),
-        estimatedProfit: formatARS(executive.estimatedProfit.value),
-        margin: formatPercent(executive.marginPercent.value),
+          : formatARS(decimal(executive.netSold).minus(decimal(executive.estimatedProfit))),
+        estimatedProfit: formatARS(executive.estimatedProfit),
+        margin: formatPercent(executive.marginPercent),
         hasIncompleteCosts: executive.hasIncompleteCosts,
         missingCostProductCount: executive.missingCostProductCount
       }}
@@ -193,30 +190,16 @@ function mobileRangeDates(
 
 function metricView(
   label: string,
-  metric: ReportMetric,
+  metric: Prisma.Decimal | number,
   formatter: (value: Prisma.Decimal | number) => string,
   detail: string,
   tone?: "default" | "blue" | "green" | "amber" | "red"
 ) {
   return {
     label,
-    value: formatter(metric.value),
+    value: formatter(metric),
     detail,
-    comparison: comparisonView(metric.comparison),
-    previousLabel:
-      metric.comparison.state === "no-activity" && metric.comparison.previousValue !== null
-        ? formatter(metric.comparison.previousValue)
-        : undefined,
     tone
-  };
-}
-
-function comparisonView(comparison: Comparison): ComparisonPresentation {
-  return {
-    direction: comparison.direction,
-    percent: comparison.percent,
-    state: comparison.state,
-    tone: comparison.tone
   };
 }
 

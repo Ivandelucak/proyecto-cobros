@@ -65,7 +65,7 @@ export function MobileAppShell({ children, businessName, logoUrl }: MobileAppShe
   return (
     <div className="mobile-app min-h-[100dvh] w-full overflow-x-hidden bg-[#0B1015] font-sans text-[#F3F7FA] antialiased">
       <header className="sticky top-0 z-40 min-h-[68px] border-b border-[#273342] bg-[#121922]/98 px-4 py-3 shadow-[0_6px_18px_rgba(0,0,0,0.22)] backdrop-blur">
-        <div className="flex min-h-10 items-center justify-between gap-3">
+        <div className="flex min-h-10 items-center gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border border-[#344657] bg-[#1D3140] text-sm font-black text-[#8CA3B7]">
               {imageAvailable && logoUrl ? (
@@ -83,24 +83,6 @@ export function MobileAppShell({ children, businessName, logoUrl }: MobileAppShe
               <p className="truncate text-[15px] font-extrabold leading-tight text-[#F3F7FA]">{businessName}</p>
               <p className="mt-0.5 text-xs font-semibold text-[#A9B6C2]">Vista móvil</p>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href="/admin"
-              aria-label="Ir a escritorio"
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#344657] bg-[#1D3140] px-2.5 text-xs font-bold text-[#D6E4EE] transition-colors hover:bg-[#263C4F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C7FA3]"
-            >
-              <MobileIcon name="desktop" className="h-5 w-5 min-[360px]:mr-1.5" />
-              <span className="hidden min-[360px]:inline">Escritorio</span>
-            </Link>
-            <Link
-              href="/caja"
-              aria-label="Ir a caja"
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#2F8B64]/45 bg-[#1F8F63]/15 px-2.5 text-xs font-bold text-[#6ED4A4] transition-colors hover:bg-[#1F8F63]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28A36A]"
-            >
-              <MobileIcon name="cash" className="h-5 w-5 min-[360px]:mr-1.5" />
-              <span className="hidden min-[360px]:inline">Caja</span>
-            </Link>
           </div>
         </div>
       </header>
