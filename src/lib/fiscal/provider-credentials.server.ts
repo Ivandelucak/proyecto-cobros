@@ -49,12 +49,20 @@ export function getProviderCredentials(): ProviderCredentials {
 }
 
 export function getProviderCredentialsPublicStatus(): ProviderCredentialsPublicStatus {
+  const providerCuit = onlyDigits(process.env.ARCA_PROVIDER_CUIT);
+
   try {
-    const credentials = getProviderCredentials();
+    getProviderCredentials();
     assertProviderTokenEncryptionReady();
-    return { configured: true, providerCuit: credentials.providerCuit };
+    return {
+      configured: true,
+      providerCuit: /^\d{11}$/.test(providerCuit) ? providerCuit : null
+    };
   } catch {
-    return { configured: false, providerCuit: null };
+    return {
+      configured: false,
+      providerCuit: /^\d{11}$/.test(providerCuit) ? providerCuit : null
+    };
   }
 }
 

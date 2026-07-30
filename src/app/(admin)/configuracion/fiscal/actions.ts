@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  FiscalConnectionMode,
   FiscalCustomerCondition,
   FiscalDocumentIdentityType,
   FiscalDocumentLetter,
@@ -52,6 +53,12 @@ export async function updateFiscalSettingsAction(
   const user = await requireAdminPage();
 
   try {
+    const existing = await prisma.fiscalSetting.findUnique({
+      where: { businessId: user.businessId! },
+      select: { connectionMode: true, environment: true }
+    });
+    const connectionMode =
+      existing?.connectionMode ?? FiscalConnectionMode.LEGACY_PER_BUSINESS;
     const pendingWarningMinutes = normalizePendingMinutes(
       readInt(formData, "pendingWarningMinutes", 30),
       30
@@ -65,15 +72,14 @@ export async function updateFiscalSettingsAction(
       throw new Error("La alerta critica debe ser mayor o igual a la advertencia.");
     }
 
-    const credentialUpdate = parseArcaCredentialUpdate(formData);
+    const credentialUpdate =
+      connectionMode === FiscalConnectionMode.LEGACY_PER_BUSINESS
+        ? parseArcaCredentialUpdate(formData)
+        : {};
     const defaultTax = taxSelectionFromOption(readText(formData, "defaultFiscalTax"));
     const baseData = {
       enabled: isChecked(formData, "enabled"),
-      environment: parseEnum(
-        formData.get("environment"),
-        FiscalEnvironment,
-        FiscalEnvironment.HOMOLOGACION
-      ),
+      environment: existing?.environment ?? FiscalEnvironment.HOMOLOGACION,
       cuit: readOptionalText(formData, "cuit"),
       legalName: readOptionalText(formData, "legalName"),
       fiscalCondition: parseOptionalEnum(formData.get("fiscalCondition"), FiscalCustomerCondition),
@@ -119,6 +125,7 @@ export async function updateFiscalSettingsAction(
       },
       create: {
         businessId: user.businessId!,
+        connectionMode,
         ...baseData,
         arcaCertificatePem: credentialUpdate.arcaCertificatePem ?? null,
         arcaPrivateKeyPem: credentialUpdate.arcaPrivateKeyPem ?? null
@@ -133,6 +140,7 @@ export async function updateFiscalSettingsAction(
       description: "Actualizo configuracion fiscal preparatoria.",
       metadata: {
         enabled: setting.enabled,
+        connectionMode: setting.connectionMode,
         environment: setting.environment,
         pointOfSale: setting.pointOfSale,
         defaultTaxTreatment: setting.defaultTaxTreatment,
@@ -181,12 +189,17 @@ export async function testArcaWsaaAction(
       where: { businessId },
       select: {
         id: true,
+        connectionMode: true,
         cuit: true,
         arcaCertificatePem: true,
         arcaPrivateKeyPem: true,
         environment: true
       }
     });
+
+    if (setting?.connectionMode !== FiscalConnectionMode.LEGACY_PER_BUSINESS) {
+      return { error: "Esta prueba técnica sólo está disponible para la conexión configurada por comercio." };
+    }
 
     if (
       !setting ||
@@ -279,6 +292,7 @@ export async function testArcaWsfeStatusAction(
       where: { businessId },
       select: {
         id: true,
+        connectionMode: true,
         cuit: true,
         environment: true,
         arcaWsaaToken: true,
@@ -286,6 +300,10 @@ export async function testArcaWsfeStatusAction(
         arcaTokenExpiresAt: true
       }
     });
+
+    if (setting?.connectionMode !== FiscalConnectionMode.LEGACY_PER_BUSINESS) {
+      return { error: "Esta prueba técnica sólo está disponible para la conexión configurada por comercio." };
+    }
 
     const hasToken = Boolean(
       setting?.arcaWsaaToken &&
@@ -387,6 +405,7 @@ export async function queryLastArcaVoucherAction(
       where: { businessId },
       select: {
         id: true,
+        connectionMode: true,
         cuit: true,
         pointOfSale: true,
         fiscalCondition: true,
@@ -396,6 +415,10 @@ export async function queryLastArcaVoucherAction(
         arcaTokenExpiresAt: true
       }
     });
+
+    if (setting?.connectionMode !== FiscalConnectionMode.LEGACY_PER_BUSINESS) {
+      return { error: "Esta consulta técnica sólo está disponible para la conexión configurada por comercio." };
+    }
 
     const hasToken = Boolean(
       setting?.arcaWsaaToken &&
