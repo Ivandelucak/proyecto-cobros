@@ -18,7 +18,7 @@ CREATE TABLE `FiscalProviderAuthCache` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `FiscalProviderAuthCache_certificateFingerprint_environment_service_key`(`certificateFingerprint`, `environment`, `service`),
-    INDEX `FiscalProviderAuthCache_expiresAt_idx`(`expiresAt`),
+    UNIQUE INDEX `fp_auth_scope_uq`(`certificateFingerprint`, `environment`, `service`),
+    INDEX `fp_auth_expires_idx`(`expiresAt`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

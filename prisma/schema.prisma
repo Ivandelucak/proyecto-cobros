@@ -520,8 +520,8 @@ model FiscalProviderAuthCache {
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
 
-  @@unique([certificateFingerprint, environment, service])
-  @@index([expiresAt])
+  @@unique([certificateFingerprint, environment, service], map: "fp_auth_scope_uq")
+  @@index([expiresAt], map: "fp_auth_expires_idx")
 }
 
 model FiscalDocument {
