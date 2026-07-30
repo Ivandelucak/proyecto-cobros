@@ -105,7 +105,8 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
   };
 
   return (
-    <form action={formAction} className="space-y-5">
+    <>
+      <form action={formAction} className="space-y-5">
       <input type="hidden" name="environment" value={setting.environment} />
       <input
         type="hidden"
@@ -326,6 +327,7 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
           <StateMessage state={state} className="mt-4" />
         </AppModal>
       ) : null}
+      </form>
 
       <AppModal
         open={providerChangeOpen}
@@ -333,21 +335,28 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
         description="Confirmá cómo querés conectar este comercio con ARCA."
         onClose={() => setProviderChangeOpen(false)}
         footer={
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setProviderChangeOpen(false)}>
+          <form
+            action={providerModeAction}
+            className="flex justify-end gap-2"
+            onSubmit={() => setProviderChangeOpen(false)}
+          >
+            <input type="hidden" name="confirmProviderDelegation" value="true" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProviderChangeOpen(false)}
+              disabled={providerModePending}
+            >
               Cancelar
             </Button>
             <Button
               type="submit"
               variant="primary"
-              formAction={providerModeAction}
-              name="confirmProviderDelegation"
-              value="true"
               disabled={providerModePending}
             >
               {providerModePending ? "Cambiando..." : "Confirmar conexión"}
             </Button>
-          </div>
+          </form>
         }
       >
         <p className="text-sm leading-6 text-[var(--text-secondary)]">
@@ -364,21 +373,24 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
         description="Confirmá el cambio de modalidad."
         onClose={() => setLegacyChangeOpen(false)}
         footer={
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setLegacyChangeOpen(false)}>
+          <form action={legacyModeAction} className="flex justify-end gap-2">
+            <input type="hidden" name="confirmLegacyConnection" value="true" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLegacyChangeOpen(false)}
+              disabled={legacyModePending}
+            >
               Cancelar
             </Button>
             <Button
               type="submit"
               variant="primary"
-              formAction={legacyModeAction}
-              name="confirmLegacyConnection"
-              value="true"
               disabled={legacyModePending}
             >
               {legacyModePending ? "Cambiando..." : "Volver a conexión anterior"}
             </Button>
-          </div>
+          </form>
         }
       >
         <p className="text-sm leading-6 text-[var(--text-secondary)]">
@@ -387,7 +399,7 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
         </p>
         <StateMessage state={legacyModeState} className="mt-4" />
       </AppModal>
-    </form>
+    </>
   );
 }
 
