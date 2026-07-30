@@ -10,7 +10,7 @@
     "electron:pack": "electron-builder --projectDir electron --dir",
     "electron:dist": "electron-builder --projectDir electron --win nsis",
     "dist:win": "electron-builder --projectDir electron --win nsis",
-    "build": "prisma migrate resolve --applied 20260730150000_add_fiscal_provider_delegation && prisma migrate deploy && prisma generate && next build",
+    "build": "prisma migrate deploy && prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
