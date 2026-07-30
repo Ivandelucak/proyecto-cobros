@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { checkDatabaseReadiness } from "@/lib/database-readiness";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
-  try {
-    // Simple light query to verify database connectivity
-    await prisma.$queryRaw`SELECT 1`;
-    
+  const databaseReady = await checkDatabaseReadiness();
+
+  if (databaseReady) {
     return NextResponse.json({
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -16,16 +16,14 @@ export async function GET() {
       status: 200,
       headers: { "Cache-Control": "no-store, max-age=0" }
     });
-  } catch (error) {
-    console.error("Healthcheck database connectivity error:", error);
-    
-    return NextResponse.json({
-      status: "error",
-      timestamp: new Date().toISOString(),
-      database: "down"
-    }, {
-      status: 500,
-      headers: { "Cache-Control": "no-store, max-age=0" }
-    });
   }
+
+  return NextResponse.json({
+    status: "error",
+    timestamp: new Date().toISOString(),
+    database: "down"
+  }, {
+    status: 503,
+    headers: { "Cache-Control": "no-store, max-age=0" }
+  });
 }
