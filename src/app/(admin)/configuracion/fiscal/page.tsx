@@ -19,7 +19,11 @@ export default async function ConfiguracionFiscalPage() {
         title="Configuración fiscal"
         description="Configurá los datos necesarios para emitir comprobantes electrónicos."
       />
-      <FiscalSettingsForm setting={setting} provider={provider} />
+      <FiscalSettingsForm
+        key={setting.updatedAt?.toISOString() ?? "new"}
+        setting={setting}
+        provider={provider}
+      />
     </div>
   );
 }

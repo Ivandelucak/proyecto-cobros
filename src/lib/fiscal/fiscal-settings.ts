@@ -17,6 +17,7 @@ type FiscalSettingsClient = Prisma.TransactionClient | typeof prisma;
 
 export type FiscalSettingView = {
   exists: boolean;
+  updatedAt: Date | null;
   enabled: boolean;
   connectionMode: FiscalConnectionMode;
   delegationDeclaredAt: Date | null;
@@ -57,6 +58,7 @@ export type FiscalSettingView = {
 export function getDefaultFiscalSetting(): FiscalSettingView {
   return {
     exists: false,
+    updatedAt: null,
     enabled: false,
     connectionMode: FiscalConnectionMode.LEGACY_PER_BUSINESS,
     delegationDeclaredAt: null,
@@ -105,6 +107,7 @@ export async function getFiscalSettingOrDefault(
   const setting = await client.fiscalSetting.findUnique({
     where: { businessId },
     select: {
+      updatedAt: true,
       enabled: true,
       connectionMode: true,
       delegationDeclaredAt: true,
@@ -148,6 +151,7 @@ export async function getFiscalSettingOrDefault(
 
   return {
     exists: true,
+    updatedAt: setting.updatedAt,
     enabled: setting.enabled,
     connectionMode: setting.connectionMode,
     delegationDeclaredAt: setting.delegationDeclaredAt,

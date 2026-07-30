@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -69,6 +70,7 @@ const fiscalTaxOptions = [
 ] as const;
 
 export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProps) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     updateFiscalSettingsAction,
     initialState
@@ -103,6 +105,12 @@ export function FiscalSettingsForm({ setting, provider }: FiscalSettingsFormProp
     setPrivateKeyPem("");
     setConnectionOpen(false);
   };
+
+  useEffect(() => {
+    if (state.success) {
+      router.refresh();
+    }
+  }, [router, state.success]);
 
   return (
     <>

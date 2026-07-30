@@ -77,17 +77,22 @@ export async function updateFiscalSettingsAction(
         ? parseArcaCredentialUpdate(formData)
         : {};
     const defaultTax = taxSelectionFromOption(readText(formData, "defaultFiscalTax"));
+    const fiscalCondition = parseOptionalEnum(
+      formData.get("fiscalCondition"),
+      FiscalCustomerCondition
+    );
+    const defaultInvoiceLetter = parseOptionalEnum(
+      formData.get("defaultInvoiceLetter"),
+      FiscalDocumentLetter
+    );
     const baseData = {
       enabled: isChecked(formData, "enabled"),
       environment: existing?.environment ?? FiscalEnvironment.HOMOLOGACION,
       cuit: readOptionalText(formData, "cuit"),
       legalName: readOptionalText(formData, "legalName"),
-      fiscalCondition: parseOptionalEnum(formData.get("fiscalCondition"), FiscalCustomerCondition),
+      fiscalCondition,
       pointOfSale: normalizePointOfSale(readOptionalInt(formData, "pointOfSale")),
-      defaultInvoiceLetter: parseOptionalEnum(
-        formData.get("defaultInvoiceLetter"),
-        FiscalDocumentLetter
-      ),
+      defaultInvoiceLetter,
       cashIssueMode: parseEnum(
         formData.get("cashIssueMode"),
         FiscalIssueMode,
@@ -131,6 +136,13 @@ export async function updateFiscalSettingsAction(
         arcaPrivateKeyPem: credentialUpdate.arcaPrivateKeyPem ?? null
       }
     });
+
+    if (
+      setting.fiscalCondition !== fiscalCondition ||
+      setting.defaultInvoiceLetter !== defaultInvoiceLetter
+    ) {
+      throw new Error("No se pudieron guardar los datos fiscales seleccionados.");
+    }
 
     await createAuditLog({
       userId: user.id,
